@@ -16,6 +16,8 @@ const pages = [
 
 const stateKey = 'faislabadi-pos-session';
 const queueKey = 'faislabadi-pos-offline-sales';
+const usersCacheKey = 'faislabadi-pos-users-cache';
+const bootstrapCacheKey = 'faislabadi-pos-bootstrap-cache';
 const money = value => `Rs ${Math.round(Number(value || 0)).toLocaleString('en-PK')}`;
 const loadJson = (key, fallback) => {
   try { return JSON.parse(localStorage.getItem(key)) || fallback; } catch (_) { return fallback; }
@@ -23,7 +25,7 @@ const loadJson = (key, fallback) => {
 const saveJson = (key, value) => localStorage.setItem(key, JSON.stringify(value));
 const friendlyError = error => {
   if (String(error?.message || '').includes('Failed to fetch')) {
-    return 'Cannot connect to the POS server. Open http://localhost:3000/ instead of opening frontend/index.html directly.';
+    return 'You are offline. Some features may be limited.';
   }
   return error.message || 'Request failed';
 };
@@ -59,6 +61,7 @@ function Login({ onLogin }) {
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const isOffline = !navigator.onLine;
   async function submit(event) {
     event.preventDefault();
     setError('');
@@ -71,9 +74,27 @@ function Login({ onLogin }) {
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || 'Login failed');
       saveJson(stateKey, payload);
+      var cachedUsers = loadJson(usersCacheKey, []);
+      var existing = cachedUsers.findIndex(function(u) { return u.id === payload.user.id; });
+      if (existing >= 0) cachedUsers[existing] = payload.user;
+      else cachedUsers.push(payload.user);
+      saveJson(usersCacheKey, cachedUsers);
       onLogin(payload);
     } catch (err) {
-      setError(friendlyError(err));
+      if (isOffline) {
+        var cachedUsers = loadJson(usersCacheKey, []);
+        var matched = cachedUsers.find(function(u) {
+          return u.email === login || u.phone === login;
+        });
+        if (matched) {
+          saveJson(stateKey, { token: 'offline-token', user: matched, permissions: matched.role === 'Admin' ? ['*'] : matched.role === 'Manager' ? ['dashboard', 'pos', 'products', 'inventory', 'purchases', 'customers', 'reports', 'settings', 'returns', 'backups'] : ['dashboard', 'pos', 'customers', 'reports:own', 'returns:create'] });
+          onLogin({ token: 'offline-token', user: matched });
+        } else {
+          setError('You are offline. No cached credentials found. Connect to the internet to log in for the first time.');
+        }
+      } else {
+        setError(friendlyError(err));
+      }
     }
   }
   return h('main', { className: 'login-page' },
@@ -81,6 +102,7 @@ function Login({ onLogin }) {
       h('div', { className: 'brand login-brand' }, h('span', { className: 'brand-logo' }, 'F'), h('div', null, h('strong', null, 'Faislabadi'), h('small', null, 'GENERAL STORE POS'))),
       h('p', { className: 'eyebrow' }, 'SECURE LOGIN'),
       h('h1', null, 'Sign in to POS'),
+      isOffline && h('div', { className: 'notice' }, 'Offline mode - using cached data'),
       h('label', null, 'Email or phone'),
       h('input', { value: login, onChange: event => setLogin(event.target.value), autoComplete: 'username', required: true }),
       h('label', null, 'Password'),
@@ -440,14 +462,27 @@ function App() {
       setError('');
       const payload = await client.get('/api/bootstrap');
       setData(payload);
+      saveJson(bootstrapCacheKey, payload);
+      if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({ type: 'CACHE_BOOTSTRAP', payload: payload });
+      }
     } catch (err) {
       if (String(err.message || '').includes('401') || String(err.message || '').includes('Authentication')) {
-        localStorage.removeItem(stateKey);
-        setSession(null);
-        return;
+        if (session.token !== 'offline-token') {
+          localStorage.removeItem(stateKey);
+          setSession(null);
+          return;
+        }
       }
-      setOnline(false);
-      setError(friendlyError(err));
+      var cached = loadJson(bootstrapCacheKey, null);
+      if (cached) {
+        setData(cached);
+        setOnline(false);
+        setError('Offline mode - showing cached data');
+      } else {
+        setOnline(false);
+        setError('Offline and no cached data. Connect to the internet first.');
+      }
     }
   }
 

@@ -1,0 +1,23 @@
+{
+  "name": "Faislabadi General Store POS",
+  "short_name": "Faislabadi POS",
+  "description": "Point of Sale system for Faislabadi General Store",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f7f4",
+  "theme_color": "#103d34",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='32' fill='%23103d34'/><text x='96' y='130' font-size='120' font-family='system-ui' font-weight='900' text-anchor='middle' fill='white'>F</text></svg>",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' rx='64' fill='%23103d34'/><text x='256' y='340' font-size='300' font-family='system-ui' font-weight='900' text-anchor='middle' fill='white'>F</text></svg>",
+      "sizes": "512x512",
+      "type": "image/svg+xml"
+    }
+  ],
+  "categories": ["business", "utilities"]
+}

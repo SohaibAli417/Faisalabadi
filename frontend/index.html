@@ -6,6 +6,8 @@
     <meta name="theme-color" content="#103d34" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="description" content="Faislabadi General Store - Point of Sale System" />
+    <link rel="manifest" href="manifest.json" />
     <title>Faislabadi General Store | POS</title>
     <link rel="stylesheet" href="styles.css" />
     <link rel="stylesheet" href="manual.css" />
@@ -15,5 +17,14 @@
     <script src="vendor/react.production.min.js"></script>
     <script src="vendor/react-dom.production.min.js"></script>
     <script src="app.js"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').then(function(reg) {
+          console.log('Service Worker registered');
+        }).catch(function(err) {
+          console.log('Service Worker failed:', err);
+        });
+      }
+    </script>
   </body>
 </html>
