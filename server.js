@@ -342,8 +342,11 @@ function csv(rows) {
 }
 
 async function handleApi(request, response) {
-  const db = await readDb();
-  if (!db) return json(response, 500, { error: 'Database not initialized' });
+  let db = await readDb();
+  if (!db) {
+    db = seedData();
+    await saveDb(db);
+  }
   const url = new URL(request.url, `http://${request.headers.host}`);
   const method = request.method;
 
