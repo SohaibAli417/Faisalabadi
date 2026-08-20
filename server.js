@@ -5,7 +5,7 @@ const crypto = require('crypto');
 
 const PORT = Number(process.env.PORT || 3000);
 const root = path.join(__dirname, 'frontend');
-const dbDir = path.join(__dirname, 'database');
+const dbDir = process.env.POS_DATA_DIR || (process.env.VERCEL ? path.join('/tmp', 'faislabadi-pos', 'database') : path.join(__dirname, 'database'));
 const backupDir = path.join(dbDir, 'backups');
 const dbFile = path.join(dbDir, 'pos-data.json');
 const types = {
@@ -33,7 +33,7 @@ const securityHeaders = {
   'Referrer-Policy': 'no-referrer',
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
   'Cross-Origin-Resource-Policy': 'same-origin',
-  'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
+  'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://*.vercel.app; style-src 'self' 'unsafe-inline' https://*.vercel.app; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
 };
 
 function now() {
@@ -58,6 +58,13 @@ function verifyPassword(password, stored) {
   if (!salt || !hash) return false;
   const candidate = hashPassword(password, salt).split(':')[1];
   return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(candidate, 'hex'));
+}
+
+function validatePassword(password) {
+  const value = String(password || '');
+  if (value.length < 8) return 'Password must be at least 8 characters.';
+  if (!/[A-Za-z]/.test(value) || !/\d/.test(value)) return 'Password must include letters and numbers.';
+  return '';
 }
 
 function seedData() {
@@ -382,6 +389,25 @@ async function handleApi(request, response) {
       });
     }
 
+    if (method === 'POST' && url.pathname === '/api/auth/password') {
+      const body = await parseBody(request);
+      const currentPassword = String(body.currentPassword || '');
+      const newPassword = String(body.newPassword || '');
+      const confirmPassword = String(body.confirmPassword || '');
+      if (!verifyPassword(currentPassword, actor.passwordHash)) {
+        return json(response, 400, { error: 'Current password is incorrect.' });
+      }
+      if (newPassword !== confirmPassword) {
+        return json(response, 400, { error: 'New password and confirmation do not match.' });
+      }
+      const validationError = validatePassword(newPassword);
+      if (validationError) return json(response, 400, { error: validationError });
+      actor.passwordHash = hashPassword(newPassword);
+      audit(db, actor, 'change-password', 'user', actor.id);
+      writeDb(db);
+      return json(response, 200, { ok: true });
+    }
+
     if (method === 'GET' && url.pathname === '/api/dashboard') {
       return json(response, 200, {
         day: calculateReport(db, 'day'),
@@ -607,6 +633,7 @@ module.exports.writeDb = writeDb;
 module.exports.seedData = seedData;
 module.exports.hashPassword = hashPassword;
 module.exports.verifyPassword = verifyPassword;
+module.exports.validatePassword = validatePassword;
 module.exports.calculateReport = calculateReport;
 module.exports.maskCnic = maskCnic;
 module.exports.restoreBackup = restoreBackup;

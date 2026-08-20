@@ -56,8 +56,8 @@ function apiClient(token, setOnline) {
 }
 
 function Login({ onLogin }) {
-  const [login, setLogin] = useState('admin@faislabadi.pk');
-  const [password, setPassword] = useState('admin123');
+  const [login, setLogin] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   async function submit(event) {
     event.preventDefault();
@@ -81,7 +81,6 @@ function Login({ onLogin }) {
       h('div', { className: 'brand login-brand' }, h('span', { className: 'brand-logo' }, 'F'), h('div', null, h('strong', null, 'Faislabadi'), h('small', null, 'GENERAL STORE POS'))),
       h('p', { className: 'eyebrow' }, 'SECURE LOGIN'),
       h('h1', null, 'Sign in to POS'),
-      h('p', { className: 'subtitle' }, 'Default setup users: admin@faislabadi.pk / admin123, manager@faislabadi.pk / manager123, cashier@faislabadi.pk / cashier123.'),
       h('label', null, 'Email or phone'),
       h('input', { value: login, onChange: event => setLogin(event.target.value), autoComplete: 'username', required: true }),
       h('label', null, 'Password'),
@@ -123,13 +122,14 @@ function POS({ client, data, refresh, online, setOnline }) {
   const [customerId, setCustomerId] = useState('cus_walkin');
   const [paymentType, setPaymentType] = useState('Cash');
   const [discount, setDiscount] = useState(0);
+  const [applyTax, setApplyTax] = useState(true);
   const [manual, setManual] = useState({ name: '', price: '', qty: '1', unit: 'pcs' });
   const [receipt, setReceipt] = useState(null);
   const [message, setMessage] = useState('');
   const products = data.products.filter(product => product.active);
   const shown = products.filter(product => `${product.name} ${product.sku} ${product.category}`.toLowerCase().includes(query.toLowerCase()));
   const subtotal = cart.reduce((sum, item) => sum + Number(item.price) * Number(item.qty), 0);
-  const tax = Math.round(Math.max(0, subtotal - discount) * Number(data.settings.taxRate));
+  const tax = applyTax ? Math.round(Math.max(0, subtotal - discount) * Number(data.settings.taxRate)) : 0;
   const total = Math.max(0, subtotal - discount) + tax;
 
   function addProduct(product) {
@@ -178,7 +178,7 @@ function POS({ client, data, refresh, online, setOnline }) {
   }
 
   async function charge() {
-    const payload = { clientId: `client_${Date.now()}`, customerId, paymentType, discount: Number(discount || 0), items: cart };
+    const payload = { clientId: `client_${Date.now()}`, customerId, paymentType, discount: Number(discount || 0), items: cart, taxRate: applyTax ? undefined : 0 };
     try {
       const sale = await client.post('/api/sales', payload);
       setReceipt(sale);
@@ -217,19 +217,64 @@ function POS({ client, data, refresh, online, setOnline }) {
       h('select', { className: 'customer-select', value: customerId, onChange: event => setCustomerId(event.target.value) }, data.customers.map(customer => h('option', { value: customer.id, key: customer.id }, `${customer.name}${customer.balance ? ` - Udhar ${money(customer.balance)}` : ''}`))),
       h('select', { className: 'customer-select', value: paymentType, onChange: event => setPaymentType(event.target.value) }, ['Cash', 'Card', 'Credit'].map(type => h('option', { key: type }, type))),
       h('div', { className: 'cart-list' }, cart.length ? cart.map((item, index) => h('div', { className: 'cart-line', key: `${item.productId || item.name}-${index}` }, h('div', { className: 'line-info' }, h('strong', null, item.name), h('small', null, `${money(item.price)} x ${item.qty}`), h('div', { className: 'quantity' }, h('button', { onClick: () => changeQty(index, -1) }, '-'), h('b', null, item.qty), h('button', { onClick: () => changeQty(index, 1) }, '+'))), h('strong', null, money(item.price * item.qty)))) : h('div', { className: 'empty' }, h('h3', null, 'Cart is empty'), h('p', null, 'Scan or select a product.'))),
-      h('div', { className: 'cart-footer' }, h('label', null, 'Discount'), h('input', { className: 'discount-input', type: 'number', min: '0', value: discount, onChange: event => setDiscount(Number(event.target.value)) }), h('div', { className: 'totals' }, h('div', null, h('span', null, 'Subtotal'), h('strong', null, money(subtotal))), h('div', null, h('span', null, 'Tax'), h('strong', null, money(tax))), h('div', { className: 'grand-total' }, h('span', null, 'Total'), h('strong', null, money(total)))), h('button', { className: 'charge', disabled: !cart.length, onClick: charge }, 'Charge payment'))),
-    receipt && h(ReceiptModal, { sale: receipt, customers: data.customers, onClose: () => setReceipt(null) }));
+      h('div', { className: 'cart-footer' }, h('label', null, 'Discount'), h('input', { className: 'discount-input', type: 'number', min: '0', value: discount, onChange: event => setDiscount(Number(event.target.value)) }), h('label', { className: 'tax-toggle' }, h('input', { type: 'checkbox', checked: applyTax, onChange: event => setApplyTax(event.target.checked) }), ' Tax (' + (data.settings.taxRate * 100).toFixed(0) + '%)'), h('div', { className: 'totals' }, h('div', null, h('span', null, 'Subtotal'), h('strong', null, money(subtotal))), applyTax && h('div', null, h('span', null, 'Tax'), h('strong', null, money(tax))), h('div', { className: 'grand-total' }, h('span', null, 'Total'), h('strong', null, money(total)))), h('button', { className: 'charge', disabled: !cart.length, onClick: charge }, 'Charge payment'))),
+    receipt && h(ReceiptModal, { sale: receipt, customers: data.customers, settings: data.settings, onClose: () => setReceipt(null) }));
 }
 
-function ReceiptModal({ sale, customers, onClose }) {
+function ReceiptModal({ sale, customers, settings, onClose }) {
   const customer = customers.find(item => item.id === sale.customerId);
-  return h('div', { className: 'modal' }, h('section', { className: 'receipt' },
-    h('h2', null, 'Faislabadi General Store'),
-    h('p', null, `Invoice ${sale.invoiceNo}`),
-    h('p', null, `Customer: ${customer?.name || 'Walk-in Customer'}`),
-    h('table', null, h('tbody', null, sale.items.map(item => h('tr', { key: `${item.name}-${item.qty}` }, h('td', null, item.name), h('td', null, item.qty), h('td', null, money(item.price * item.qty)))))),
-    h('h3', null, money(sale.total)),
-    h('div', { className: 'success-actions no-print' }, h('button', { className: 'secondary', onClick: () => window.print() }, 'Print receipt'), h('button', { className: 'primary', onClick: onClose }, 'Close'))));
+  const saleDate = new Date(sale.createdAt);
+  const dateStr = saleDate.toLocaleDateString('en-PK', { year: 'numeric', month: 'short', day: 'numeric' });
+  const timeStr = saleDate.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' });
+  const hasDiscount = sale.discount > 0;
+  const hasTax = sale.tax > 0;
+  const storeName = (settings && settings.storeName) || 'Faislabadi General Store';
+  const storePhone = (settings && settings.phone) || '';
+  const storeAddress = (settings && settings.address) || '';
+  var taxPercent = (settings && settings.taxRate) ? (settings.taxRate * 100).toFixed(0) : '18';
+  return h('div', { className: 'modal', onClick: onClose },
+    h('section', { className: 'receipt', onClick: function(e) { e.stopPropagation(); } },
+      h('div', { className: 'receipt-header' },
+        h('div', { className: 'receipt-brand' }, h('span', { className: 'receipt-logo' }, 'F')),
+        h('h2', null, storeName),
+        storeAddress && h('p', { className: 'receipt-info' }, storeAddress),
+        storePhone && h('p', { className: 'receipt-info' }, storePhone)),
+      h('div', { className: 'receipt-divider' }),
+      h('div', { className: 'receipt-meta' },
+        h('div', { className: 'receipt-row' }, h('span', null, 'Invoice'), h('span', null, sale.invoiceNo)),
+        h('div', { className: 'receipt-row' }, h('span', null, 'Date'), h('span', null, dateStr)),
+        h('div', { className: 'receipt-row' }, h('span', null, 'Time'), h('span', null, timeStr)),
+        h('div', { className: 'receipt-row' }, h('span', null, 'Cashier'), h('span', null, sale.createdBy || '-')),
+        h('div', { className: 'receipt-row' }, h('span', null, 'Customer'), h('span', null, (customer && customer.name) || 'Walk-in'))),
+      h('div', { className: 'receipt-divider' }),
+      h('div', { className: 'receipt-items-header' },
+        h('span', { className: 'ri-name' }, 'Item'),
+        h('span', { className: 'ri-qty' }, 'Qty'),
+        h('span', { className: 'ri-price' }, 'Rate'),
+        h('span', { className: 'ri-total' }, 'Total')),
+      h('div', { className: 'receipt-items' },
+        sale.items.map(function(item) {
+          return h('div', { className: 'receipt-item', key: item.name + '-' + item.qty },
+            h('span', { className: 'ri-name' }, item.name),
+            h('span', { className: 'ri-qty' }, item.qty),
+            h('span', { className: 'ri-price' }, money(item.price)),
+            h('span', { className: 'ri-total' }, money(item.price * item.qty)));
+        })),
+      h('div', { className: 'receipt-divider' }),
+      h('div', { className: 'receipt-totals' },
+        h('div', { className: 'receipt-row' }, h('span', null, 'Subtotal'), h('span', null, money(sale.subtotal))),
+        hasDiscount && h('div', { className: 'receipt-row receipt-discount' }, h('span', null, 'Discount'), h('span', null, '- ' + money(sale.discount))),
+        hasTax && h('div', { className: 'receipt-row' }, h('span', null, 'Tax (' + taxPercent + '%)'), h('span', null, money(sale.tax))),
+        h('div', { className: 'receipt-row receipt-grand' }, h('span', null, 'TOTAL'), h('span', null, money(sale.total)))),
+      h('div', { className: 'receipt-divider' }),
+      h('div', { className: 'receipt-paytype' },
+        h('span', { className: 'receipt-badge ' + (sale.paymentType === 'Credit' ? 'badge-credit' : 'badge-cash') }, sale.paymentType)),
+      h('div', { className: 'receipt-footer' },
+        h('p', null, 'Thank you for shopping with us!'),
+        h('p', { className: 'receipt-info' }, 'Goods once sold will not be exchanged or returned')),
+      h('div', { className: 'success-actions no-print' },
+        h('button', { className: 'secondary', onClick: function() { window.print(); } }, 'Print receipt'),
+        h('button', { className: 'primary', onClick: onClose }, 'Close'))));
 }
 
 function DataPage({ page, data, client, refresh }) {
@@ -324,6 +369,7 @@ function AuditLogs({ client }) {
 
 function Settings({ data, client }) {
   const [backups, setBackups] = useState([]);
+  const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [message, setMessage] = useState('');
   async function loadBackups() {
     try { setBackups(await client.get('/api/backups')); } catch (err) { setMessage(friendlyError(err)); }
@@ -348,8 +394,36 @@ function Settings({ data, client }) {
       setMessage(friendlyError(err));
     }
   }
+  async function changePassword(event) {
+    event.preventDefault();
+    setMessage('');
+    try {
+      await client.post('/api/auth/password', passwordForm);
+      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      setMessage('Password changed. Use the new password next time you sign in.');
+    } catch (err) {
+      setMessage(friendlyError(err));
+    }
+  }
   useEffect(() => { loadBackups(); }, [client]);
-  return h('div', { className: 'page' }, h('div', { className: 'page-title' }, h('div', null, h('p', { className: 'eyebrow' }, 'STORE SETTINGS'), h('h1', null, data.settings.storeName), h('p', { className: 'subtitle' }, `${data.settings.address} - Tax ${(data.settings.taxRate * 100).toFixed(0)}%`)), h('button', { className: 'primary', onClick: createBackup }, 'Create backup')), message && h('div', { className: 'notice' }, message), h('article', { className: 'panel' }, h('h2', null, 'Backups'), h('p', { className: 'subtitle' }, 'Backups are append-only from the POS. Delete is not available. Restore creates a safety backup first.'), backups.map(backup => h('div', { className: 'stock-row', key: backup.file }, h('strong', null, backup.file), h('button', { className: 'secondary', onClick: () => restoreBackup(backup.file) }, 'Restore')))));
+  return h('div', { className: 'page' },
+    h('div', { className: 'page-title' }, h('div', null, h('p', { className: 'eyebrow' }, 'STORE SETTINGS'), h('h1', null, data.settings.storeName), h('p', { className: 'subtitle' }, `${data.settings.address} - Tax ${(data.settings.taxRate * 100).toFixed(0)}%`)), h('button', { className: 'primary', onClick: createBackup }, 'Create backup')),
+    message && h('div', { className: 'notice' }, message),
+    h('section', { className: 'settings-grid' },
+      h('article', { className: 'panel' },
+        h('h2', null, 'Change password'),
+        h('form', { className: 'password-form', onSubmit: changePassword },
+          h('label', null, 'Current password'),
+          h('input', { type: 'password', value: passwordForm.currentPassword, autoComplete: 'current-password', onChange: event => setPasswordForm({ ...passwordForm, currentPassword: event.target.value }), required: true }),
+          h('label', null, 'New password'),
+          h('input', { type: 'password', minLength: 8, value: passwordForm.newPassword, autoComplete: 'new-password', onChange: event => setPasswordForm({ ...passwordForm, newPassword: event.target.value }), required: true }),
+          h('label', null, 'Confirm new password'),
+          h('input', { type: 'password', minLength: 8, value: passwordForm.confirmPassword, autoComplete: 'new-password', onChange: event => setPasswordForm({ ...passwordForm, confirmPassword: event.target.value }), required: true }),
+          h('button', { className: 'primary', type: 'submit' }, 'Update password'))),
+      h('article', { className: 'panel' },
+        h('h2', null, 'Backups'),
+        h('p', { className: 'subtitle' }, 'Backups are append-only from the POS. Delete is not available. Restore creates a safety backup first.'),
+        backups.map(backup => h('div', { className: 'stock-row', key: backup.file }, h('strong', null, backup.file), h('button', { className: 'secondary', onClick: () => restoreBackup(backup.file) }, 'Restore'))))));
 }
 
 function App() {
