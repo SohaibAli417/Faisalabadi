@@ -84,9 +84,9 @@ function seedData() {
       backupOnStartup: true
     },
     users: [
-      { id: 'usr_admin', name: 'Ahmed Hassan', email: 'admin@faislabadi.pk', phone: '0300-1111111', role: 'Admin', active: true, passwordHash: hashPassword('admin123') },
-      { id: 'usr_manager', name: 'Mariam Noor', email: 'manager@faislabadi.pk', phone: '0300-2222222', role: 'Manager', active: true, passwordHash: hashPassword('manager123') },
-      { id: 'usr_cashier', name: 'Sana Khan', email: 'cashier@faislabadi.pk', phone: '0300-3333333', role: 'Cashier', active: true, passwordHash: hashPassword('cashier123') }
+      { id: 'usr_admin', name: 'Akmal', email: 'akmal@faislabadi.pk', phone: '0300-1111111', role: 'Admin', active: true, passwordHash: hashPassword('Akmal@786#POS') },
+      { id: 'usr_manager', name: 'Akmal Manager', email: 'manager@faislabadi.pk', phone: '0300-2222222', role: 'Manager', active: true, passwordHash: hashPassword('Mgr@786#Fsd') },
+      { id: 'usr_cashier', name: 'Akmal Cashier', email: 'cashier@faislabadi.pk', phone: '0300-3333333', role: 'Cashier', active: true, passwordHash: hashPassword('Cash@786#Pos') }
     ],
     products: [
       { id: 'prd_1', name: 'Surf Excel 1kg', sku: '8961000100123', category: 'Household', price: 890, cost: 760, stock: 18, reorderLevel: 8, unit: 'pack', active: true },
