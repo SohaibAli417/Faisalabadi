@@ -118,7 +118,7 @@ function Metric({ title, value, note }) {
 function Dashboard({ data, go }) {
   const report = data.reports?.day || {};
   return h('div', { className: 'page dashboard' },
-    h('div', { className: 'page-title' }, h('div', null, h('p', { className: 'eyebrow' }, 'LIVE STORE OVERVIEW'), h('h1', null, 'Dashboard'), h('p', { className: 'subtitle' }, 'Sales, stock, credit and low-stock alerts from persisted data.')), h('button', { className: 'primary', onClick: () => go('pos') }, 'New sale')),
+    h('div', { className: 'page-title' }, h('div', null, h('p', { className: 'eyebrow' }, 'LIVE STORE OVERVIEW'), h('h1', null, 'Dashboard'), h('p', { className: 'subtitle' }, 'Sales, stock, credit and low-stock alerts from persisted data.')), h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } }, h('button', { className: 'primary', onClick: () => go('pos') }, 'New sale'), h('a', { className: 'secondary', href: '/api/reports/export.csv', download: true }, 'Export CSV'))),
     h('section', { className: 'metrics' },
       h(Metric, { title: 'Net sales today', value: money(report.netSales), note: `${report.salesCount || 0} invoices` }),
       h(Metric, { title: 'Gross profit', value: money(report.grossProfit), note: 'After product cost and discounts' }),
@@ -358,7 +358,7 @@ function Purchases({ data, client, refresh }) {
       setMessage(err.message);
     }
   }
-  return h('div', { className: 'page' }, h('div', { className: 'page-title' }, h('div', null, h('p', { className: 'eyebrow' }, 'SUPPLIERS'), h('h1', null, 'Purchases'))), message && h('div', { className: 'notice' }, message), h('form', { className: 'inline-form', onSubmit: submit }, h('select', { value: item.supplierId, onChange: e => setItem({ ...item, supplierId: e.target.value }) }, data.suppliers.map(s => h('option', { value: s.id, key: s.id }, s.name))), h('select', { value: item.productId, onChange: e => setItem({ ...item, productId: e.target.value }) }, data.products.map(p => h('option', { value: p.id, key: p.id }, p.name))), h('input', { type: 'number', min: '1', value: item.qty, onChange: e => setItem({ ...item, qty: e.target.value }) }), h('input', { type: 'number', min: '1', placeholder: 'Cost', value: item.cost, onChange: e => setItem({ ...item, cost: e.target.value }) }), h('button', { className: 'primary' }, 'Receive stock')));
+  return h('div', { className: 'page' }, h('div', { className: 'page-title' }, h('div', null, h('p', { className: 'eyebrow' }, 'SUPPLIERS'), h('h1', null, 'Purchases')), h('a', { className: 'secondary', href: '/api/reports/export.csv', download: true }, 'Export CSV')), message && h('div', { className: 'notice' }, message), h('form', { className: 'inline-form', onSubmit: submit }, h('select', { value: item.supplierId, onChange: e => setItem({ ...item, supplierId: e.target.value }) }, data.suppliers.map(s => h('option', { value: s.id, key: s.id }, s.name))), h('select', { value: item.productId, onChange: e => setItem({ ...item, productId: e.target.value }) }, data.products.map(p => h('option', { value: p.id, key: p.id }, p.name))), h('input', { type: 'number', min: '1', value: item.qty, onChange: e => setItem({ ...item, qty: e.target.value }) }), h('input', { type: 'number', min: '1', placeholder: 'Cost', value: item.cost, onChange: e => setItem({ ...item, cost: e.target.value }) }), h('button', { className: 'primary' }, 'Receive stock')));
 }
 
 function Reports({ data }) {
@@ -375,7 +375,7 @@ function AuditLogs({ client }) {
   const [error, setError] = useState('');
   useEffect(() => { client.get('/api/audit-logs').then(setLogs).catch(err => setError(friendlyError(err))); }, [client]);
   return h('div', { className: 'page' },
-    h('div', { className: 'page-title' }, h('div', null, h('p', { className: 'eyebrow' }, 'SECURITY'), h('h1', null, 'Users and Audit Logs'))),
+    h('div', { className: 'page-title' }, h('div', null, h('p', { className: 'eyebrow' }, 'SECURITY'), h('h1', null, 'Users and Audit Logs')), h('a', { className: 'secondary', href: '/api/reports/export.csv', download: true }, 'Export CSV')),
     error && h('div', { className: 'notice danger' }, error),
     h('article', { className: 'panel data-panel' },
       h('div', { className: 'table-wrap' },
