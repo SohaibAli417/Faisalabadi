@@ -2,12 +2,11 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { readDb, writeDb: saveDb, useSupabase } = require('./database');
 
 const PORT = Number(process.env.PORT || 3000);
 const root = path.join(__dirname, 'frontend');
-const dbDir = process.env.POS_DATA_DIR || (process.env.VERCEL ? path.join('/tmp', 'faislabadi-pos', 'database') : path.join(__dirname, 'database'));
-const backupDir = path.join(dbDir, 'backups');
-const dbFile = path.join(dbDir, 'pos-data.json');
+const backupDir = process.env.VERCEL ? path.join('/tmp', 'faislabadi-pos', 'backups') : path.join(__dirname, 'database', 'backups');
 const types = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
@@ -27,13 +26,19 @@ const permissions = {
   Cashier: ['dashboard', 'pos', 'customers', 'reports:own', 'returns:create']
 };
 
-const securityHeaders = {
+const isVercel = !!process.env.VERCEL;
+const securityHeaders = isVercel ? {
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'Referrer-Policy': 'no-referrer',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()'
+} : {
   'X-Content-Type-Options': 'nosniff',
   'X-Frame-Options': 'DENY',
   'Referrer-Policy': 'no-referrer',
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
   'Cross-Origin-Resource-Policy': 'same-origin',
-  'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://*.vercel.app; style-src 'self' 'unsafe-inline' https://*.vercel.app; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
+  'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
 };
 
 function now() {
@@ -116,31 +121,19 @@ function sanitizeUser(user) {
   return safe;
 }
 
-function readDb() {
-  ensureDir(dbDir);
-  if (!fs.existsSync(dbFile)) {
-    const data = seedData();
-    fs.writeFileSync(dbFile, JSON.stringify(data, null, 2));
-    return data;
-  }
-  return JSON.parse(fs.readFileSync(dbFile, 'utf8'));
-}
+const { readDbSync, writeDbSync, backupDir: configuredBackupDir } = require('./database');
+const resolvedBackupDir = configuredBackupDir || backupDir;
 
-function writeDb(db) {
-  db.meta.updatedAt = now();
-  fs.writeFileSync(dbFile, JSON.stringify(db, null, 2));
-}
-
-function createBackup(reason = 'manual') {
+async function createBackup(reason = 'manual') {
   ensureDir(backupDir);
-  const db = readDb();
+  const db = await readDb();
   const stamp = now().replace(/[:.]/g, '-');
   const file = path.join(backupDir, `pos-backup-${stamp}.json`);
   fs.writeFileSync(file, JSON.stringify({ reason, backedUpAt: now(), data: db }, null, 2));
   return { file: path.basename(file), createdAt: now(), reason };
 }
 
-function restoreBackup(fileName, actor) {
+async function restoreBackup(fileName, actor) {
   const safeName = path.basename(String(fileName || ''));
   if (!/^pos-backup-[\w.-]+\.json$/.test(safeName)) throw new Error('Invalid backup file name');
   const file = path.join(backupDir, safeName);
@@ -149,10 +142,10 @@ function restoreBackup(fileName, actor) {
   if (!parsed.data || !parsed.data.meta || !Array.isArray(parsed.data.products) || !Array.isArray(parsed.data.users)) {
     throw new Error('Backup file is not a valid POS backup');
   }
-  createBackup('before-restore');
+  await createBackup('before-restore');
   const restored = parsed.data;
   audit(restored, actor, 'restore', 'backup', safeName);
-  writeDb(restored);
+  await saveDb(restored);
   return { file: safeName, restoredAt: now() };
 }
 
@@ -349,7 +342,8 @@ function csv(rows) {
 }
 
 async function handleApi(request, response) {
-  const db = readDb();
+  const db = await readDb();
+  if (!db) return json(response, 500, { error: 'Database not initialized' });
   const url = new URL(request.url, `http://${request.headers.host}`);
   const method = request.method;
 
@@ -366,7 +360,7 @@ async function handleApi(request, response) {
       const token = crypto.randomBytes(32).toString('hex');
       sessions.set(token, { userId: user.id, createdAt: now() });
       audit(db, user, 'login', 'user', user.id);
-      writeDb(db);
+      await saveDb(db);
       return json(response, 200, { token, user: sanitizeUser(user), permissions: permissions[user.role] || [] });
     }
 
@@ -404,7 +398,7 @@ async function handleApi(request, response) {
       if (validationError) return json(response, 400, { error: validationError });
       actor.passwordHash = hashPassword(newPassword);
       audit(db, actor, 'change-password', 'user', actor.id);
-      writeDb(db);
+      await saveDb(db);
       return json(response, 200, { ok: true });
     }
 
@@ -434,7 +428,7 @@ async function handleApi(request, response) {
       product.stock = Number(product.stock || 0);
       db.products.unshift(product);
       audit(db, actor, 'create', 'product', product.id, { name: product.name });
-      writeDb(db);
+      await saveDb(db);
       return json(response, 201, product);
     }
 
@@ -448,7 +442,7 @@ async function handleApi(request, response) {
       product.cost = money(product.cost);
       product.stock = Number(product.stock || 0);
       audit(db, actor, 'update', 'product', product.id, { name: product.name });
-      writeDb(db);
+      await saveDb(db);
       return json(response, 200, product);
     }
 
@@ -462,14 +456,14 @@ async function handleApi(request, response) {
       const customer = { id: uid('cus'), name: body.name, phone: body.phone || '', cnic: body.cnic || '', creditLimit: money(body.creditLimit), balance: money(body.balance), active: true };
       db.customers.unshift(customer);
       audit(db, actor, 'create', 'customer', customer.id, { name: customer.name });
-      writeDb(db);
+      await saveDb(db);
       return json(response, 201, { ...customer, cnicMasked: maskCnic(customer.cnic), cnic: undefined });
     }
 
     if (method === 'POST' && url.pathname === '/api/sales') {
       if (!can(actor, 'pos')) return json(response, 403, { error: 'Permission denied' });
       const sale = createSale(db, await parseBody(request), actor, 'online');
-      writeDb(db);
+      await saveDb(db);
       return json(response, 201, sale);
     }
 
@@ -483,7 +477,7 @@ async function handleApi(request, response) {
         if (existing) results.push({ clientId: queued.clientId, status: 'duplicate', sale: existing });
         else results.push({ clientId: queued.clientId, status: 'created', sale: createSale(db, queued, actor, 'offline-sync') });
       }
-      writeDb(db);
+      await saveDb(db);
       return json(response, 200, { results });
     }
 
@@ -502,7 +496,7 @@ async function handleApi(request, response) {
         if (product) product.stock = Number(product.stock) + Number(item.qty);
       }
       audit(db, actor, 'void', 'sale', sale.id, { invoiceNo: sale.invoiceNo });
-      writeDb(db);
+      await saveDb(db);
       return json(response, 200, sale);
     }
 
@@ -521,7 +515,7 @@ async function handleApi(request, response) {
       const refund = { id: uid('ret'), saleId: sale.id, invoiceNo: sale.invoiceNo, createdAt: now(), createdBy: actor.id, items: refundItems, total, reason: body.reason || 'Customer return' };
       db.returns.unshift(refund);
       audit(db, actor, 'create', 'return', refund.id, { invoiceNo: sale.invoiceNo, total });
-      writeDb(db);
+      await saveDb(db);
       return json(response, 201, refund);
     }
 
@@ -559,7 +553,7 @@ async function handleApi(request, response) {
       }
       db.purchases.unshift(purchase);
       audit(db, actor, 'create', 'purchase', purchase.id, { total: purchase.total });
-      writeDb(db);
+      await saveDb(db);
       return json(response, 201, purchase);
     }
 
@@ -579,16 +573,16 @@ async function handleApi(request, response) {
 
     if (method === 'POST' && url.pathname === '/api/backups') {
       if (!can(actor, 'backups')) return json(response, 403, { error: 'Permission denied' });
-      const backup = createBackup('manual');
+      const backup = await createBackup('manual');
       audit(db, actor, 'create', 'backup', backup.file);
-      writeDb(db);
+      await saveDb(db);
       return json(response, 201, backup);
     }
 
     if (method === 'POST' && url.pathname.match(/^\/api\/backups\/[^/]+\/restore$/)) {
       if (!can(actor, 'backups')) return json(response, 403, { error: 'Permission denied' });
       const file = decodeURIComponent(url.pathname.split('/')[3]);
-      const restored = restoreBackup(file, actor);
+      const restored = await restoreBackup(file, actor);
       return json(response, 200, restored);
     }
 
@@ -614,22 +608,32 @@ function requestHandler(request, response) {
   return serveStatic(request, response);
 }
 
-function createServer() {
-  ensureDir(dbDir);
+async function initDb() {
   ensureDir(backupDir);
-  if (!fs.existsSync(dbFile)) writeDb(seedData());
-  createBackup('startup');
+  const existing = await readDb();
+  if (!existing) {
+    const data = seedData();
+    await saveDb(data);
+    console.log('Database seeded with initial data');
+  }
+  try { await createBackup('startup'); } catch (_) {}
+}
+
+function createServer() {
   return http.createServer(requestHandler);
 }
 
 if (require.main === module) {
-  createServer().listen(PORT, () => console.log(`Faislabadi POS is running on http://localhost:${PORT}`));
+  initDb().then(() => {
+    createServer().listen(PORT, () => console.log(`Faislabadi POS is running on http://localhost:${PORT}`));
+  }).catch(err => {
+    console.error('Failed to initialize database:', err.message);
+    process.exit(1);
+  });
 }
 
 module.exports = requestHandler;
 module.exports.createServer = createServer;
-module.exports.readDb = readDb;
-module.exports.writeDb = writeDb;
 module.exports.seedData = seedData;
 module.exports.hashPassword = hashPassword;
 module.exports.verifyPassword = verifyPassword;

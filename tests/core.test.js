@@ -1,11 +1,17 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { seedData, hashPassword, verifyPassword, calculateReport, maskCnic } = require('../server');
+const { seedData, hashPassword, verifyPassword, validatePassword, calculateReport, maskCnic } = require('../server');
 
 test('password hashes verify only the original password', () => {
   const stored = hashPassword('admin123');
   assert.equal(verifyPassword('admin123', stored), true);
   assert.equal(verifyPassword('wrong-password', stored), false);
+});
+
+test('password validation requires length plus letters and numbers', () => {
+  assert.equal(validatePassword('secure123'), '');
+  assert.equal(validatePassword('short1'), 'Password must be at least 8 characters.');
+  assert.equal(validatePassword('onlyletters'), 'Password must include letters and numbers.');
 });
 
 test('CNIC is masked before customer data is returned to the UI', () => {

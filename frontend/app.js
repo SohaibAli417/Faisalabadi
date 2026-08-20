@@ -441,6 +441,11 @@ function App() {
       const payload = await client.get('/api/bootstrap');
       setData(payload);
     } catch (err) {
+      if (String(err.message || '').includes('401') || String(err.message || '').includes('Authentication')) {
+        localStorage.removeItem(stateKey);
+        setSession(null);
+        return;
+      }
       setOnline(false);
       setError(friendlyError(err));
     }
