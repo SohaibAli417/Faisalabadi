@@ -655,167 +655,187 @@ td {
 /* MOBILE: up to 760px */
 @media (max-width: 760px) {
   .app-shell {
-    display: flex;
-    flex-direction: column;
+    display: flex !important;
+    flex-direction: column !important;
     min-height: 100vh;
     min-height: 100dvh;
   }
 
+  /* Hide sidebar brand and footer on mobile */
+  .sidebar .brand,
+  .sidebar .sidebar-footer {
+    display: none !important;
+  }
+
   /* Bottom nav bar */
   .sidebar {
-    width: 100%;
-    flex: none;
-    order: 2;
-    flex-direction: row;
-    padding: 8px 6px;
+    width: 100% !important;
+    flex: none !important;
+    order: 2 !important;
+    display: flex !important;
+    flex-direction: row !important;
+    padding: 8px 6px !important;
     overflow-x: auto;
     overflow-y: hidden;
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    z-index: 100;
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    top: auto !important;
+    z-index: 100 !important;
     border-top: 1px solid #2d6054;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
+    min-height: 60px;
   }
 
   .sidebar::-webkit-scrollbar { display: none; }
-  .brand { display: none; }
 
   .sidebar nav {
-    display: flex;
-    gap: 4px;
-    flex: 1;
+    display: flex !important;
+    gap: 4px !important;
+    flex: 1 !important;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
+    align-items: stretch;
   }
 
   .sidebar nav::-webkit-scrollbar { display: none; }
 
   .nav-item {
-    white-space: nowrap;
-    padding: 8px 14px;
-    font-size: 11px;
-    border-radius: 8px;
-    flex-shrink: 0;
-    flex-direction: column;
-    gap: 2px;
-    text-align: center;
-    min-width: auto;
+    white-space: nowrap !important;
+    padding: 8px 12px !important;
+    font-size: 10px !important;
+    border-radius: 8px !important;
+    flex-shrink: 0 !important;
+    flex-direction: row !important;
+    gap: 4px !important;
+    text-align: center !important;
+    min-width: auto !important;
+    width: auto !important;
+    justify-content: center !important;
+    align-items: center !important;
+    color: #bad0c4 !important;
+    background: transparent !important;
   }
 
-  .nav-item.active { background: #2a6759; color: #fff; }
+  .nav-item span {
+    display: inline !important;
+    font-size: 10px !important;
+  }
 
-  .sidebar-footer { display: none; }
+  .nav-item.active {
+    background: #2a6759 !important;
+    color: #fff !important;
+  }
 
   .main-area {
-    width: 100%;
-    order: 1;
-    padding-bottom: 70px;
+    width: 100% !important;
+    order: 1 !important;
+    padding-bottom: 70px !important;
     overflow-x: hidden;
   }
 
   .topbar {
-    height: 52px;
-    padding: 0 14px;
+    height: 48px !important;
+    padding: 0 12px !important;
   }
 
-  .crumb { font-size: 11px; }
-  .top-actions { gap: 8px; }
-  .sync-status { font-size: 11px; }
+  .crumb { font-size: 11px !important; }
+  .top-actions { gap: 6px !important; }
+  .sync-status { font-size: 11px !important; }
+  .top-actions .secondary { padding: 6px 12px !important; font-size: 12px !important; }
 
-  .page { padding: 16px 14px; }
+  .page { padding: 14px 12px !important; }
 
   .page-title {
-    flex-direction: column;
-    gap: 10px;
+    flex-direction: column !important;
+    gap: 10px !important;
   }
 
-  .page-title h1 { font-size: 18px; }
-  .page-title .primary, .page-title .secondary { width: 100%; text-align: center; }
+  .page-title h1 { font-size: 18px !important; }
+  .page-title .primary, .page-title .secondary { width: 100% !important; text-align: center !important; }
 
-  .metrics { grid-template-columns: 1fr 1fr; gap: 10px; }
-  .metric-card { padding: 14px; }
-  .metric-card h3 { font-size: 18px; }
+  .metrics { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
+  .metric-card { padding: 12px !important; }
+  .metric-card h3 { font-size: 18px !important; }
 
-  .dashboard-grid { grid-template-columns: 1fr; gap: 12px; }
-  .settings-grid { grid-template-columns: 1fr; gap: 12px; }
+  .dashboard-grid { grid-template-columns: 1fr !important; gap: 12px !important; }
+  .settings-grid { grid-template-columns: 1fr !important; gap: 12px !important; }
 
-  .panel { padding: 14px; }
-  .panel h2 { font-size: 14px; }
+  .panel { padding: 14px !important; }
+  .panel h2 { font-size: 14px !important; }
 
   /* POS Mobile */
   .pos-page {
-    display: flex;
-    flex-direction: column;
-    height: auto;
+    display: flex !important;
+    flex-direction: column !important;
+    height: auto !important;
   }
 
-  .pos-catalog { padding: 14px; }
-  .catalog-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
-  .pos-product { padding: 10px 8px; }
+  .pos-catalog { padding: 12px !important; }
+  .catalog-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 8px !important; }
+  .pos-product { padding: 10px 8px !important; }
 
   .manual-form {
-    flex-direction: column;
-    gap: 6px;
+    flex-direction: column !important;
+    gap: 6px !important;
   }
 
-  .manual-form input, .manual-form select { min-width: 100%; }
+  .manual-form input, .manual-form select { min-width: 100% !important; }
 
   .cart-panel {
-    position: static;
-    height: auto;
-    border-left: 0;
-    border-top: 1px solid var(--line);
-    order: 2;
+    position: static !important;
+    height: auto !important;
+    border-left: 0 !important;
+    border-top: 1px solid var(--line) !important;
+    order: 2 !important;
   }
 
-  .cart-list { max-height: 250px; }
-  .cart-footer { padding: 12px 14px; }
+  .cart-list { max-height: 250px !important; }
+  .cart-footer { padding: 12px 14px !important; }
 
-  .customer-select { margin: 0 14px 10px; width: calc(100% - 28px); }
+  .customer-select { margin: 0 14px 10px !important; width: calc(100% - 28px) !important; }
 
   /* Forms */
   .inline-form {
-    flex-direction: column;
-    gap: 8px;
+    flex-direction: column !important;
+    gap: 8px !important;
   }
 
   .inline-form input, .inline-form select {
-    width: 100%;
-    padding: 10px;
+    width: 100% !important;
+    padding: 10px !important;
   }
 
   /* Tables */
-  table { font-size: 12px; min-width: 450px; }
-  th, td { padding: 8px 6px; }
+  .table-wrap { overflow-x: auto !important; }
+  table { font-size: 12px !important; }
+  th, td { padding: 8px 6px !important; }
 
   /* Receipt */
-  .modal { padding: 10px; }
-  .receipt { padding: 20px 16px; width: min(340px, 100%); }
+  .modal { padding: 10px !important; }
+  .receipt { padding: 20px 16px !important; width: min(340px, 100%) !important; }
 
   .success-actions {
-    flex-direction: column;
-    gap: 8px;
+    flex-direction: column !important;
+    gap: 8px !important;
   }
 
-  .success-actions button { width: 100%; }
+  .success-actions button { width: 100% !important; }
 
   /* Login mobile */
-  .login-card { padding: 20px; }
+  .login-card { padding: 20px !important; }
 }
 
 /* SMALL MOBILE: up to 400px */
 @media (max-width: 400px) {
-  .catalog-grid { grid-template-columns: 1fr; }
-  .metrics { grid-template-columns: 1fr; }
-  .metric-card { padding: 12px; }
-  .metric-card h3 { font-size: 16px; }
-  table { min-width: 380px; font-size: 11px; }
-  th, td { padding: 6px 4px; }
-  .receipt { padding: 16px 12px; }
+  .catalog-grid { grid-template-columns: 1fr !important; }
+  .metrics { grid-template-columns: 1fr !important; }
+  .metric-card { padding: 12px !important; }
+  .metric-card h3 { font-size: 16px !important; }
+  .receipt { padding: 16px 12px !important; }
 }
 
 /* PRINT */
@@ -826,16 +846,32 @@ td {
     color-adjust: exact !important;
   }
 
-  body { margin: 0; padding: 0; background: #fff !important; }
-  body > * { display: none !important; }
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+
+  body > *:not(#root) {
+    display: none !important;
+  }
+
+  #root {
+    position: static !important;
+  }
+
+  #root > *:not(.modal) {
+    display: none !important;
+  }
 
   .modal {
-    display: block !important;
+    display: grid !important;
     position: static !important;
     background: none !important;
     padding: 0 !important;
     backdrop-filter: none !important;
     z-index: auto !important;
+    inset: auto !important;
   }
 
   .receipt {
@@ -848,6 +884,7 @@ td {
     font-size: 11px !important;
     overflow: visible !important;
     border: none !important;
+    max-height: none !important;
   }
 
   .receipt::before { background: #000 !important; height: 2px !important; }

@@ -50,10 +50,26 @@ function apiClient(token, setOnline) {
     if (!response.ok) throw new Error(payload.error || 'Request failed');
     return payload;
   }
+  async function exportCsv(path, filename) {
+    const response = await fetch(path, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {}
+    });
+    if (!response.ok) throw new Error('Export failed');
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename || 'export.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
   return {
     get: path => request(path),
     post: (path, body) => request(path, { method: 'POST', body: JSON.stringify(body) }),
-    put: (path, body) => request(path, { method: 'PUT', body: JSON.stringify(body) })
+    put: (path, body) => request(path, { method: 'PUT', body: JSON.stringify(body) }),
+    exportCsv
   };
 }
 
@@ -115,10 +131,10 @@ function Metric({ title, value, note }) {
   return h('article', { className: 'metric-card' }, h('p', null, title), h('h3', null, value), h('small', null, note));
 }
 
-function Dashboard({ data, go }) {
+function Dashboard({ data, go, client }) {
   const report = data.reports?.day || {};
   return h('div', { className: 'page dashboard' },
-    h('div', { className: 'page-title' }, h('div', null, h('p', { className: 'eyebrow' }, 'LIVE STORE OVERVIEW'), h('h1', null, 'Dashboard'), h('p', { className: 'subtitle' }, 'Sales, stock, credit and low-stock alerts from persisted data.')), h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } }, h('button', { className: 'primary', onClick: () => go('pos') }, 'New sale'), h('a', { className: 'secondary', href: '/api/reports/export.csv', download: true }, 'Export CSV'))),
+    h('div', { className: 'page-title' }, h('div', null, h('p', { className: 'eyebrow' }, 'LIVE STORE OVERVIEW'), h('h1', null, 'Dashboard'), h('p', { className: 'subtitle' }, 'Sales, stock, credit and low-stock alerts from persisted data.')), h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } }, h('button', { className: 'primary', onClick: () => go('pos') }, 'New sale'), h('button', { className: 'secondary', onClick: () => client.exportCsv('/api/reports/export.csv', 'sales-report.csv') }, 'Export CSV'))),
     h('section', { className: 'metrics' },
       h(Metric, { title: 'Net sales today', value: money(report.netSales), note: `${report.salesCount || 0} invoices` }),
       h(Metric, { title: 'Gross profit', value: money(report.grossProfit), note: 'After product cost and discounts' }),
@@ -317,12 +333,12 @@ function DataPage({ page, data, client, refresh }) {
       setMessage(friendlyError(err));
     }
   }
-  if (page === 'reports') return h(Reports, { data });
+  if (page === 'reports') return h(Reports, { data, client });
   if (page === 'purchases') return h(Purchases, { data, client, refresh });
   if (page === 'users') return h(AuditLogs, { client });
   if (page === 'settings') return h(Settings, { data, client });
   return h('div', { className: 'page' },
-    h('div', { className: 'page-title' }, h('div', null, h('p', { className: 'eyebrow' }, 'MANAGEMENT'), h('h1', null, title)), h('a', { className: 'secondary', href: '/api/reports/export.csv' }, 'Export CSV')),
+    h('div', { className: 'page-title' }, h('div', null, h('p', { className: 'eyebrow' }, 'MANAGEMENT'), h('h1', null, title)), h('button', { className: 'secondary', onClick: () => client.exportCsv('/api/reports/export.csv', 'sales-report.csv') }, 'Export CSV')),
     message && h('div', { className: 'notice' }, message),
     ['products', 'inventory', 'customers'].includes(page) && h('form', { className: 'inline-form', onSubmit: addRecord },
       page === 'customers' ? [
@@ -358,11 +374,11 @@ function Purchases({ data, client, refresh }) {
       setMessage(err.message);
     }
   }
-  return h('div', { className: 'page' }, h('div', { className: 'page-title' }, h('div', null, h('p', { className: 'eyebrow' }, 'SUPPLIERS'), h('h1', null, 'Purchases')), h('a', { className: 'secondary', href: '/api/reports/export.csv', download: true }, 'Export CSV')), message && h('div', { className: 'notice' }, message), h('form', { className: 'inline-form', onSubmit: submit }, h('select', { value: item.supplierId, onChange: e => setItem({ ...item, supplierId: e.target.value }) }, data.suppliers.map(s => h('option', { value: s.id, key: s.id }, s.name))), h('select', { value: item.productId, onChange: e => setItem({ ...item, productId: e.target.value }) }, data.products.map(p => h('option', { value: p.id, key: p.id }, p.name))), h('input', { type: 'number', min: '1', value: item.qty, onChange: e => setItem({ ...item, qty: e.target.value }) }), h('input', { type: 'number', min: '1', placeholder: 'Cost', value: item.cost, onChange: e => setItem({ ...item, cost: e.target.value }) }), h('button', { className: 'primary' }, 'Receive stock')));
+  return h('div', { className: 'page' }, h('div', { className: 'page-title' }, h('div', null, h('p', { className: 'eyebrow' }, 'SUPPLIERS'), h('h1', null, 'Purchases')), h('button', { className: 'secondary', onClick: () => client.exportCsv('/api/reports/export.csv', 'sales-report.csv') }, 'Export CSV')), message && h('div', { className: 'notice' }, message), h('form', { className: 'inline-form', onSubmit: submit }, h('select', { value: item.supplierId, onChange: e => setItem({ ...item, supplierId: e.target.value }) }, data.suppliers.map(s => h('option', { value: s.id, key: s.id }, s.name))), h('select', { value: item.productId, onChange: e => setItem({ ...item, productId: e.target.value }) }, data.products.map(p => h('option', { value: p.id, key: p.id }, p.name))), h('input', { type: 'number', min: '1', value: item.qty, onChange: e => setItem({ ...item, qty: e.target.value }) }), h('input', { type: 'number', min: '1', placeholder: 'Cost', value: item.cost, onChange: e => setItem({ ...item, cost: e.target.value }) }), h('button', { className: 'primary' }, 'Receive stock')));
 }
 
-function Reports({ data }) {
-  return h('div', { className: 'page' }, h('div', { className: 'page-title' }, h('div', null, h('p', { className: 'eyebrow' }, 'PROFIT AND LOSS'), h('h1', null, 'Reports')), h('a', { className: 'secondary', href: '/api/reports/export.csv' }, 'Export CSV')),
+function Reports({ data, client }) {
+  return h('div', { className: 'page' }, h('div', { className: 'page-title' }, h('div', null, h('p', { className: 'eyebrow' }, 'PROFIT AND LOSS'), h('h1', null, 'Reports')), h('button', { className: 'secondary', onClick: () => client.exportCsv('/api/reports/export.csv', 'sales-report.csv') }, 'Export CSV')),
     h('section', { className: 'metrics' }, ['day', 'month', 'year'].map(period => {
       const report = data.reports[period] || {};
       return h(Metric, { key: period, title: `${period} net sales`, value: money(report.netSales), note: `Profit ${money(report.grossProfit)} - Refunds ${money(report.refunds)}` });
@@ -375,7 +391,7 @@ function AuditLogs({ client }) {
   const [error, setError] = useState('');
   useEffect(() => { client.get('/api/audit-logs').then(setLogs).catch(err => setError(friendlyError(err))); }, [client]);
   return h('div', { className: 'page' },
-    h('div', { className: 'page-title' }, h('div', null, h('p', { className: 'eyebrow' }, 'SECURITY'), h('h1', null, 'Users and Audit Logs')), h('a', { className: 'secondary', href: '/api/reports/export.csv', download: true }, 'Export CSV')),
+    h('div', { className: 'page-title' }, h('div', null, h('p', { className: 'eyebrow' }, 'SECURITY'), h('h1', null, 'Users and Audit Logs')), h('button', { className: 'secondary', onClick: () => client.exportCsv('/api/reports/export.csv', 'sales-report.csv') }, 'Export CSV')),
     error && h('div', { className: 'notice danger' }, error),
     h('article', { className: 'panel data-panel' },
       h('div', { className: 'table-wrap' },
@@ -501,7 +517,7 @@ function App() {
   const visiblePages = role === 'Cashier' ? pages.filter(([id]) => ['dashboard', 'pos', 'customers', 'reports'].includes(id)) : pages;
   return h('main', { className: 'app-shell' },
     h('aside', { className: 'sidebar' }, h('div', { className: 'brand' }, h('span', { className: 'brand-logo' }, 'F'), h('div', null, h('strong', null, 'Faislabadi'), h('small', null, 'GENERAL STORE'))), h('nav', null, visiblePages.map(([id, title]) => h('button', { key: id, className: page === id ? 'nav-item active' : 'nav-item', onClick: () => setPage(id) }, h('span', null, title)))), h('div', { className: 'sidebar-footer' }, h('div', { className: 'avatar' }, data.user.name.split(' ').map(part => part[0]).join('').slice(0, 2)), h('div', null, h('strong', null, data.user.name), h('small', null, role)), h('button', { className: 'more', onClick: () => { localStorage.removeItem(stateKey); setSession(null); } }, 'Logout'))),
-    h('section', { className: 'main-area' }, h('header', { className: 'topbar' }, h('div', { className: 'crumb' }, 'Faislabadi General Store / ', h('strong', null, pages.find(item => item[0] === page)?.[1])), h('div', { className: 'top-actions' }, h('span', { className: online ? 'sync-status' : 'sync-status offline' }, online ? 'Online' : 'Offline'), h('button', { className: 'secondary', onClick: refresh }, 'Refresh'))), page === 'dashboard' ? h(Dashboard, { data, go: setPage }) : page === 'pos' ? h(POS, { client, data, refresh, online, setOnline }) : h(DataPage, { page, data, client, refresh })));
+    h('section', { className: 'main-area' }, h('header', { className: 'topbar' }, h('div', { className: 'crumb' }, 'Faislabadi General Store / ', h('strong', null, pages.find(item => item[0] === page)?.[1])), h('div', { className: 'top-actions' }, h('span', { className: online ? 'sync-status' : 'sync-status offline' }, online ? 'Online' : 'Offline'), h('button', { className: 'secondary', onClick: refresh }, 'Refresh'))), page === 'dashboard' ? h(Dashboard, { data, go: setPage, client }) : page === 'pos' ? h(POS, { client, data, refresh, online, setOnline }) : h(DataPage, { page, data, client, refresh })));
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(h(App));
