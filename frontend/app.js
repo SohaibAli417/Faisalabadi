@@ -328,7 +328,8 @@ function Login({ onLogin, langTick, bumpLang }) {
       h('label', null, t('password')),
       h('input', { value: password, onChange: event => setPassword(event.target.value), type: 'password', autoComplete: 'current-password', required: true }),
       error && h('div', { className: 'notice danger' }, error),
-      h('button', { className: 'primary', type: 'submit' }, t('signIn'))));
+      h('button', { className: 'primary', type: 'submit' }, t('signIn')),
+      h('p', { className: 'login-hint' }, LANG === 'ur' ? 'ایڈمن: sohaib@faislabadi.pk | مینیجر: akmal@faislabadi.pk' : 'Admin: sohaib@faislabadi.pk | Manager: akmal@faislabadi.pk')));
 }
 
 function Metric({ title, value, note }) {

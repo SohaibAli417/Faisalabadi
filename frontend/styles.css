@@ -735,6 +735,7 @@ td {
 }
 
 .login-brand { margin: 0 0 24px; }
+.login-hint { text-align: center; font-size: 12px; color: #94a3b8; margin-top: 12px; }
 .login-card h1 { margin: 4px 0 8px; }
 .login-card label { display: block; font-weight: 800; font-size: 12px; margin: 14px 0 6px; }
 .login-card input {

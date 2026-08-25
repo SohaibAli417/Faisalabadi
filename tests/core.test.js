@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { seedData, hashPassword, verifyPassword, validatePassword, calculateReport, maskCnic } = require('../server');
+const { seedData, hashPassword, verifyPassword, validatePassword, calculateReport, maskCnic, resolveProductPricing } = require('../server');
 
 test('password hashes verify only the original password', () => {
   const stored = hashPassword('admin123');
@@ -64,4 +64,25 @@ test('voided sales are excluded from reporting', () => {
     items: [{ qty: 1, price: 500, cost: 300 }]
   });
   assert.equal(calculateReport(db, 'day').salesCount, 0);
+});
+
+test('owner profit amount is added to cost to set the sale price', () => {
+  const pricing = resolveProductPricing({ cost: 300, profitType: 'amount', profitValue: 100 });
+  assert.equal(pricing.cost, 300);
+  assert.equal(pricing.price, 400);
+});
+
+test('owner profit percent is calculated from cost', () => {
+  const pricing = resolveProductPricing({ cost: 300, profitType: 'percent', profitValue: 25 });
+  assert.equal(pricing.price, 375);
+});
+
+test('explicit sale price overrides the owner profit calculation', () => {
+  const pricing = resolveProductPricing({ cost: 300, price: '450', profitType: 'amount', profitValue: 100 });
+  assert.equal(pricing.price, 450);
+});
+
+test('missing profit values fall back to price equal to cost', () => {
+  const pricing = resolveProductPricing({ cost: 300 });
+  assert.equal(pricing.price, 300);
 });

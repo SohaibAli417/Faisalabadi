@@ -2,7 +2,8 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { readDb, writeDb: saveDb, useSupabase } = require('./database');
+const { readDb, writeDb: saveDb, readLocalDb, writeLocalDb, readCloudDb, writeCloudDb, readAuthData, recallLastGoodAuth, useSupabase, MODE, withDbLock } = require('./database');
+const { mergeDbs } = require('./sync');
 
 const PORT = Number(process.env.PORT || 3000);
 const root = path.join(__dirname, 'frontend');
@@ -15,18 +16,60 @@ const types = {
   '.csv': 'text/csv; charset=utf-8'
 };
 
-const sessions = new Map();
 const loginAttempts = new Map();
-const SESSION_TTL_MS = Number(process.env.SESSION_TTL_MS || 8 * 60 * 60 * 1000);
+const SESSION_TTL_MS = Number(process.env.SESSION_TTL_MS || 30 * 24 * 60 * 60 * 1000);
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_LIMIT = 8;
 const permissions = {
   Admin: ['*'],
-  Manager: ['dashboard', 'pos', 'products', 'inventory', 'purchases', 'customers', 'reports', 'settings', 'returns', 'backups'],
+  Manager: ['dashboard', 'pos', 'products', 'inventory', 'purchases', 'customers', 'udhar', 'returns', 'reports', 'settings', 'backups'],
   Cashier: ['dashboard', 'pos', 'customers', 'reports:own', 'returns:create']
 };
 
 const isVercel = !!process.env.VERCEL;
+
+const SYNC_INTERVAL_MS = Number(process.env.SYNC_INTERVAL_MS || 15000);
+const cloudSync = {
+  enabled: useSupabase && MODE === 'local-first',
+  running: false,
+  lastAttemptAt: null,
+  lastSuccessAt: null,
+  lastError: null
+};
+
+async function syncWithCloud() {
+  if (!cloudSync.enabled || cloudSync.running) return;
+  cloudSync.running = true;
+  cloudSync.lastAttemptAt = now();
+  try {
+    await withDbLock(async () => {
+      const local = await readLocalDb();
+      if (!local) return;
+      let cloud = null;
+      try {
+        cloud = await readCloudDb();
+      } catch (error) {
+        cloudSync.lastError = `Cloud unreachable, will retry (${error.message})`;
+        return;
+      }
+      if (!cloud) {
+        await writeCloudDb(local);
+        cloudSync.lastSuccessAt = now();
+        cloudSync.lastError = null;
+        return;
+      }
+      const { merged, localChanged, cloudChanged } = mergeDbs(local, cloud, { sessionTtlMs: SESSION_TTL_MS });
+      if (localChanged) await writeLocalDb(merged);
+      if (localChanged || cloudChanged) await writeCloudDb(merged);
+      cloudSync.lastSuccessAt = now();
+      cloudSync.lastError = null;
+    });
+  } catch (error) {
+    cloudSync.lastError = error.message;
+  } finally {
+    cloudSync.running = false;
+  }
+}
 const securityHeaders = isVercel ? {
   'X-Content-Type-Options': 'nosniff',
   'X-Frame-Options': 'DENY',
@@ -65,6 +108,14 @@ function verifyPassword(password, stored) {
   return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(candidate, 'hex'));
 }
 
+function hashToken(token) {
+  return crypto.createHash('sha256').update(String(token)).digest('hex');
+}
+
+function round2(value) {
+  return Math.round(Number(value || 0) * 100) / 100;
+}
+
 function validatePassword(password) {
   const value = String(password || '');
   if (value.length < 8) return 'Password must be at least 8 characters.';
@@ -76,17 +127,16 @@ function seedData() {
   return {
     meta: { createdAt: now(), updatedAt: now(), invoiceSeq: 1048 },
     settings: {
-      storeName: 'Faislabadi General Store',
-      phone: '0300-0000000',
-      address: 'Main Bazaar, Faisalabad',
+      storeName: 'Akmal Store',
+      phone: '03024503010',
+      address: 'Fazlia Colony, Opposite Ali Internet Service',
       taxRate: 0.18,
       currency: 'Rs',
       backupOnStartup: true
     },
     users: [
-      { id: 'usr_admin', name: 'Akmal', email: 'akmal@faislabadi.pk', phone: '0300-1111111', role: 'Admin', active: true, passwordHash: hashPassword('Akmal@786#POS') },
-      { id: 'usr_manager', name: 'Akmal Manager', email: 'manager@faislabadi.pk', phone: '0300-2222222', role: 'Manager', active: true, passwordHash: hashPassword('Mgr@786#Fsd') },
-      { id: 'usr_cashier', name: 'Akmal Cashier', email: 'cashier@faislabadi.pk', phone: '0300-3333333', role: 'Cashier', active: true, passwordHash: hashPassword('Cash@786#Pos') }
+      { id: 'usr_sohaib', name: 'Sohaib Ali', email: 'sohaib@faislabadi.pk', phone: '03074224449', role: 'Admin', active: true, passwordHash: hashPassword('Sohaib@786#Dev') },
+      { id: 'usr_akmal', name: 'Akmal', email: 'akmal@faislabadi.pk', phone: '03024503010', role: 'Manager', active: true, passwordHash: hashPassword('Akmal@786#Store') }
     ],
     products: [
       { id: 'prd_1', name: 'Surf Excel 1kg', sku: '8961000100123', category: 'Household', price: 890, cost: 760, stock: 18, reorderLevel: 8, unit: 'pack', active: true },
@@ -116,9 +166,60 @@ function seedData() {
   };
 }
 
+function ensureSchema(db) {
+  let changed = false;
+  if (!Array.isArray(db.customers)) { db.customers = []; changed = true; }
+  if (!Array.isArray(db.products)) { db.products = []; changed = true; }
+  if (!Array.isArray(db.sales)) { db.sales = []; changed = true; }
+  if (!Array.isArray(db.returns)) { db.returns = []; changed = true; }
+  if (!Array.isArray(db.payments)) { db.payments = []; changed = true; }
+  if (!Array.isArray(db.stockMovements)) { db.stockMovements = []; changed = true; }
+  for (const customer of db.customers) {
+    if (!('address' in customer)) { customer.address = ''; changed = true; }
+    if (!('active' in customer)) { customer.active = true; changed = true; }
+  }
+  for (const product of db.products) {
+    if (!('barcode' in product)) { product.barcode = ''; changed = true; }
+    if (!('image' in product)) { product.image = ''; changed = true; }
+    if (!('category' in product) || !product.category) { product.category = 'General'; changed = true; }
+    if (!('reorderLevel' in product)) { product.reorderLevel = 5; changed = true; }
+    if (!('active' in product)) { product.active = true; changed = true; }
+    if (!('status' in product)) { product.status = product.active === false ? 'inactive' : 'active'; changed = true; }
+  }
+  for (const sale of db.sales) {
+    if (!('paidAmount' in sale)) { sale.paidAmount = sale.paymentType === 'Credit' ? 0 : money(sale.total); changed = true; }
+    if (!('dueAmount' in sale)) { sale.dueAmount = Math.max(0, money(sale.total) - money(sale.paidAmount)); changed = true; }
+    if (!('returnStatus' in sale)) { sale.returnStatus = 'none'; changed = true; }
+  }
+  return changed;
+}
+
 function sanitizeUser(user) {
   const { passwordHash, ...safe } = user;
   return safe;
+}
+
+const coreSettings = { storeName: 'Akmal Store', phone: '03024503010', address: 'Fazlia Colony, Opposite Ali Internet Service' };
+
+function ensureCoreAccounts(db) {
+  let changed = false;
+  const hasCore = Array.isArray(db.users) && db.users.some(item => item.email === 'sohaib@faislabadi.pk');
+  if (!hasCore) {
+    db.users = [
+      { id: 'usr_sohaib', name: 'Sohaib Ali', email: 'sohaib@faislabadi.pk', phone: '03074224449', role: 'Admin', active: true, passwordHash: hashPassword('Sohaib@786#Dev') },
+      { id: 'usr_akmal', name: 'Akmal', email: 'akmal@faislabadi.pk', phone: '03024503010', role: 'Manager', active: true, passwordHash: hashPassword('Akmal@786#Store') }
+    ];
+    db.sessions = {};
+    changed = true;
+  }
+  if (!db.settings || typeof db.settings !== 'object') db.settings = {};
+  for (const [key, value] of Object.entries(coreSettings)) {
+    if (db.settings[key] !== value) {
+      db.settings[key] = value;
+      changed = true;
+    }
+  }
+  return changed;
 }
 
 const { readDbSync, writeDbSync, backupDir: configuredBackupDir } = require('./database');
@@ -144,6 +245,7 @@ async function restoreBackup(fileName, actor) {
   }
   await createBackup('before-restore');
   const restored = parsed.data;
+  restored.sessions = {};
   audit(restored, actor, 'restore', 'backup', safeName);
   await saveDb(restored);
   return { file: safeName, restoredAt: now() };
@@ -197,13 +299,34 @@ function parseBody(request) {
   });
 }
 
+function getSessions(db) {
+  if (!db.sessions || typeof db.sessions !== 'object' || Array.isArray(db.sessions)) db.sessions = {};
+  return db.sessions;
+}
+
+function pruneSessions(db) {
+  const store = getSessions(db);
+  for (const token of Object.keys(store)) {
+    const session = store[token];
+    if (!session || Date.now() - new Date(session.createdAt).getTime() > SESSION_TTL_MS) delete store[token];
+  }
+  return store;
+}
+
 function getActor(request, db) {
   const header = request.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : '';
-  const session = sessions.get(token);
+  if (!token) return null;
+  const store = getSessions(db);
+  let session = store[hashToken(token)];
+  if (!session && store[token]) {
+    session = store[token];
+    delete store[token];
+    store[hashToken(token)] = session;
+  }
   if (!session) return null;
   if (Date.now() - new Date(session.createdAt).getTime() > SESSION_TTL_MS) {
-    sessions.delete(token);
+    delete getSessions(db)[hashToken(token)];
     return null;
   }
   const user = db.users.find(item => item.id === session.userId && item.active);
@@ -212,6 +335,9 @@ function getActor(request, db) {
 
 function can(actor, permission) {
   if (!actor) return false;
+  if (Array.isArray(actor.permissions)) {
+    return actor.permissions.includes('*') || actor.permissions.includes(permission);
+  }
   const allowed = permissions[actor.role] || [];
   return allowed.includes('*') || allowed.includes(permission);
 }
@@ -231,6 +357,16 @@ function requireActor(request, response, db, permission) {
 
 function money(value) {
   return Math.round(Number(value || 0));
+}
+
+function resolveProductPricing(input) {
+  const cost = money(input.cost);
+  const explicitPrice = input.price !== undefined && input.price !== null && String(input.price).trim() !== '';
+  if (explicitPrice) return { cost, price: money(input.price) };
+  const profitType = input.profitType === 'percent' ? 'percent' : 'amount';
+  const profitValue = Number(input.profitValue || 0);
+  const price = profitType === 'percent' ? cost * (1 + profitValue / 100) : cost + profitValue;
+  return { cost, price: money(price) };
 }
 
 function periodStart(period) {
@@ -294,6 +430,7 @@ function createSale(db, payload, actor, source = 'online') {
       if (qty <= 0) throw new Error('Quantity must be positive');
       if (Number(product.stock) < qty) throw new Error(`${product.name} has insufficient stock`);
       product.stock = Number(product.stock) - qty;
+      product._updatedAt = now();
       db.stockMovements.unshift({ id: uid('stm'), at: now(), productId: product.id, type: 'sale', qty: -qty, note: 'POS sale' });
       return { productId: product.id, name: product.name, sku: product.sku, unit: product.unit, qty, price: money(item.price ?? product.price), cost: money(product.cost), manual: false };
     }
@@ -309,17 +446,39 @@ function createSale(db, payload, actor, source = 'online') {
   const tax = money(taxable * taxRate);
   const total = taxable + tax;
   const customerId = payload.customerId || 'cus_walkin';
+  const customer = db.customers.find(item => item.id === customerId);
   const paymentType = payload.paymentType || 'Cash';
-  if (paymentType === 'Credit' && customerId !== 'cus_walkin') {
-    const customer = db.customers.find(item => item.id === customerId);
-    if (customer) customer.balance = money(customer.balance + total);
+
+  let paidAmount;
+  if (paymentType === 'Credit') {
+    paidAmount = payload.paidAmount === undefined || payload.paidAmount === null || payload.paidAmount === ''
+      ? 0 : money(payload.paidAmount);
+  } else {
+    paidAmount = total;
   }
+  if (!(paidAmount > 0)) paidAmount = 0;
+  if (paidAmount > total) paidAmount = total;
+  const dueAmount = money(total - paidAmount);
+
+  if (dueAmount > 0) {
+    if (!customer || customerId === 'cus_walkin') {
+      throw new Error('Select a registered customer before leaving any amount as udhar');
+    }
+    const limit = Number(customer.creditLimit || 0);
+    if (limit > 0 && money(customer.balance) + dueAmount > limit) {
+      throw new Error(`Credit limit exceeded. ${customer.name} can take Rs ${money(limit - money(customer.balance))} more udhar.`);
+    }
+    customer.balance = money(Number(customer.balance) + dueAmount);
+    customer._updatedAt = now();
+  }
+
   const sale = {
     id: uid('sal'),
     clientId: payload.clientId || null,
     invoiceNo: nextInvoice(db),
     createdAt: now(),
     createdBy: actor.id,
+    createdByName: actor.name || '',
     customerId,
     paymentType,
     source,
@@ -329,12 +488,176 @@ function createSale(db, payload, actor, source = 'online') {
     taxRate,
     tax,
     total,
-    paidAmount: money(payload.paidAmount ?? total),
+    paidAmount,
+    dueAmount,
+    returnStatus: 'none',
     voided: false
   };
   db.sales.unshift(sale);
-  audit(db, actor, 'create', 'sale', sale.id, { invoiceNo: sale.invoiceNo, total });
+  if (paidAmount > 0) {
+    db.payments = [{ id: uid('pay'), customerId, amount: paidAmount, at: sale.createdAt, createdBy: actor.name || '', createdById: actor.id, saleId: sale.id, note: `Paid at billing (${sale.invoiceNo})`, _updatedAt: now() }, ...(db.payments || [])];
+  }
+  audit(db, actor, 'create', 'sale', sale.id, { invoiceNo: sale.invoiceNo, total, paid: paidAmount, due: dueAmount });
   return sale;
+}
+
+function itemKey(item) {
+  return item.productId || `manual:${String(item.name || '').toLowerCase()}`;
+}
+
+function customerTotals(db) {
+  const totals = {};
+  const entry = id => totals[id] || (totals[id] = { creditPurchases: 0, totalPaid: 0 });
+  for (const sale of db.sales) {
+    if (sale.voided || sale.customerId === 'cus_walkin') continue;
+    if (sale.paymentType !== 'Credit') continue;
+    entry(sale.customerId).creditPurchases += money(sale.total);
+  }
+  for (const payment of db.payments || []) {
+    if (!payment.customerId || payment.customerId === 'cus_walkin') continue;
+    entry(payment.customerId).totalPaid += money(payment.amount);
+  }
+  return totals;
+}
+
+function decorateCustomer(db, customer, totalsMap) {
+  const totals = totalsMap[customer.id] || { creditPurchases: 0, totalPaid: 0 };
+  return {
+    ...customer,
+    cnicMasked: maskCnic(customer.cnic),
+    cnic: undefined,
+    creditPurchases: money(totals.creditPurchases),
+    totalPaid: money(totals.totalPaid),
+    balance: money(customer.balance)
+  };
+}
+
+function returnedQtyByItem(db, saleId) {
+  const counts = {};
+  for (const record of db.returns) {
+    if (record.saleId !== saleId || record.voided) continue;
+    for (const item of record.items || []) {
+      const key = itemKey(item);
+      counts[key] = round2((counts[key] || 0) + Number(item.qty || 0));
+    }
+  }
+  return counts;
+}
+
+function processReturn(db, body, actor) {
+  const lookup = String(body.saleId || body.invoiceNo || '').trim();
+  if (!lookup) throw new Error('Provide the bill ID or invoice number');
+  const sale = db.sales.find(item => item.id === lookup || String(item.invoiceNo).toLowerCase() === lookup.toLowerCase());
+  if (!sale) throw new Error('Invoice not found');
+  if (sale.voided) throw new Error('This invoice was cancelled and cannot be returned');
+
+  const soldByKey = {};
+  for (const item of sale.items) soldByKey[itemKey(item)] = item;
+  const alreadyReturned = returnedQtyByItem(db, sale.id);
+
+  let requests = Array.isArray(body.items) ? body.items.filter(item => Number(item.qty) > 0) : [];
+  if (body.complete) {
+    requests = sale.items.map(item => ({
+      productId: item.productId,
+      name: item.name,
+      qty: round2(Number(item.qty) - (alreadyReturned[itemKey(item)] || 0))
+    })).filter(item => item.qty > 0);
+  }
+  if (!requests.length) throw new Error('Select at least one product with a quantity to return');
+
+  const returnItems = [];
+  for (const request of requests) {
+    const key = itemKey(request);
+    const soldItem = soldByKey[key];
+    if (!soldItem) throw new Error(`${request.name || 'Product'} is not on invoice ${sale.invoiceNo}`);
+    const eligible = round2(Number(soldItem.qty) - (alreadyReturned[key] || 0));
+    const qty = round2(request.qty);
+    if (!(qty > 0)) throw new Error('Return quantity must be positive');
+    if (qty > eligible + 1e-9) {
+      throw new Error(`${soldItem.name}: only ${eligible} of ${soldItem.qty} can still be returned`);
+    }
+    returnItems.push({ productId: soldItem.productId, name: soldItem.name, unit: soldItem.unit, qty, price: money(soldItem.price), cost: money(soldItem.cost) });
+  }
+
+  for (const item of returnItems) {
+    if (!item.productId) continue;
+    const product = db.products.find(row => row.id === item.productId);
+    if (product) {
+      product.stock = Number(product.stock) + item.qty;
+      product._updatedAt = now();
+      db.stockMovements.unshift({ id: uid('stm'), at: now(), productId: product.id, type: 'return', qty: item.qty, note: `Return on ${sale.invoiceNo}` });
+    }
+  }
+
+  const refundSubtotal = money(returnItems.reduce((sum, item) => sum + item.price * item.qty, 0));
+  const ratio = Number(sale.subtotal) > 0 ? refundSubtotal / sale.subtotal : 0;
+  const refundDiscount = money((sale.discount || 0) * ratio);
+  const refundTax = money((sale.tax || 0) * ratio);
+  const refundTotal = Math.max(0, refundSubtotal - refundDiscount + refundTax);
+
+  const saleDue = Math.max(0, money(sale.dueAmount));
+  const udharAdjustment = Math.min(refundTotal, saleDue);
+  const cashRefund = money(refundTotal - udharAdjustment);
+  if (udharAdjustment > 0) {
+    sale.dueAmount = money(saleDue - udharAdjustment);
+    const customer = db.customers.find(row => row.id === sale.customerId);
+    if (customer) {
+      customer.balance = Math.max(0, money(Number(customer.balance) - udharAdjustment));
+      customer._updatedAt = now();
+    }
+  }
+
+  const record = {
+    id: uid('ret'),
+    saleId: sale.id,
+    invoiceNo: sale.invoiceNo,
+    customerId: sale.customerId,
+    createdAt: now(),
+    createdBy: actor.id,
+    createdByName: actor.name || '',
+    items: returnItems,
+    reason: String(body.reason || '').trim() || 'Customer return',
+    refundSubtotal,
+    refundDiscount,
+    refundTax,
+    total: refundTotal,
+    udharAdjustment,
+    cashRefund,
+    _updatedAt: now()
+  };
+  db.returns.unshift(record);
+
+  const updatedReturned = returnedQtyByItem(db, sale.id);
+  sale.returnStatus = sale.items.every(item => round2(Number(item.qty) - (updatedReturned[itemKey(item)] || 0)) <= 1e-9) ? 'full' : 'partial';
+  audit(db, actor, 'create', 'return', record.id, { invoiceNo: sale.invoiceNo, refund: refundTotal, udharAdjusted: udharAdjustment, cashRefund });
+  return { record, sale };
+}
+
+function receiveUdharPayment(db, customerId, amountInput, actor, options = {}) {
+  const customer = db.customers.find(item => item.id === customerId);
+  if (!customer) throw new Error('Customer not found');
+  if (customerId === 'cus_walkin') throw new Error('Walk-in customers cannot have udhar');
+  const amount = money(amountInput);
+  if (!(amount > 0)) throw new Error('Amount must be more than zero');
+  const balance = money(customer.balance);
+  if (amount > balance) throw new Error(`Amount is more than the udhar balance (Rs ${balance})`);
+  customer.balance = money(balance - amount);
+  customer._updatedAt = now();
+  const payment = { id: uid('pay'), customerId, amount, at: now(), createdBy: actor.name || '', createdById: actor.id, saleId: options.saleId || null, note: options.note || '', _updatedAt: now() };
+  db.payments = [payment, ...(db.payments || [])];
+  audit(db, actor, options.clear ? 'clear-udhar' : 'payment', 'customer', customerId, { amount, newBalance: customer.balance, note: options.note || '' });
+  return { payment, balance: customer.balance };
+}
+
+function clearUdhar(db, customerId, actor) {
+  const customer = db.customers.find(item => item.id === customerId);
+  if (!customer) throw new Error('Customer not found');
+  const balance = money(customer.balance);
+  if (balance <= 0) throw new Error('Udhar is already clear for this customer');
+  const result = receiveUdharPayment(db, customerId, balance, actor, { note: 'Udhar cleared in full', clear: true });
+  result.cleared = true;
+  result.previousBalance = balance;
+  return result;
 }
 
 function csv(rows) {
@@ -342,27 +665,70 @@ function csv(rows) {
 }
 
 async function handleApi(request, response) {
-  let db = await readDb();
+  let db;
+  try {
+    db = await readDb();
+  } catch (error) {
+    db = null;
+    for (const fallback of [readAuthData, recallLastGoodAuth]) {
+      try {
+        const auth = await fallback();
+        if (auth && Array.isArray(auth.users) && auth.users.length) {
+          db = {
+            meta: { invoiceSeq: 0 },
+            settings: auth.settings || {},
+            users: auth.users,
+            sessions: auth.sessions || {},
+            products: [], customers: [], suppliers: [], purchases: [], sales: [],
+            returns: [], payments: [], stockMovements: [], auditLogs: [],
+            _readOnly: true
+          };
+          break;
+        }
+      } catch (_) {}
+    }
+    if (!db) {
+      return json(response, 503, { error: 'Store database is waking up or briefly unreachable. Please press Sign in again in a few seconds.' });
+    }
+  }
   if (!db) {
     db = seedData();
-    await saveDb(db);
+    try { await saveDb(db); } catch (_) {}
+  }
+  const readOnlyMode = !!db._readOnly;
+  delete db._readOnly;
+  if (ensureCoreAccounts(db) || ensureSchema(db)) {
+    try { await saveDb(db); } catch (_) {}
   }
   const url = new URL(request.url, `http://${request.headers.host}`);
   const method = request.method;
+  const authOnlyPaths = ['/api/auth/login', '/api/auth/logout', '/api/auth/password', '/api/health'];
+  if (readOnlyMode && !authOnlyPaths.includes(url.pathname)) {
+    return json(response, 503, { error: 'Store database connection is weak right now. Sign in again - data will appear once the connection recovers.' });
+  }
 
   try {
     if (method === 'POST' && url.pathname === '/api/auth/login') {
       const rateKey = `${request.socket.remoteAddress || 'local'}:${String(request.headers['user-agent'] || '').slice(0, 80)}`;
       if (!loginAllowed(rateKey)) return json(response, 429, { error: 'Too many login attempts. Try again later.' });
       const body = await parseBody(request);
-      const login = String(body.login || '').toLowerCase();
-      const user = db.users.find(item => item.active && [item.email.toLowerCase(), item.phone].includes(login));
+      const loginRaw = String(body.login || '').trim();
+      const loginEmail = loginRaw.toLowerCase();
+      const loginPhone = loginRaw.replace(/[\s-]/g, '');
+      const user = db.users.find(item => item.active && (
+        String(item.email).toLowerCase() === loginEmail ||
+        String(item.phone || '').replace(/[\s-]/g, '') === loginPhone && loginPhone.length > 0
+      ));
       if (!user || !verifyPassword(String(body.password || ''), user.passwordHash)) {
-        return json(response, 401, { error: 'Invalid login credentials' });
+        return json(response, 401, { error: 'Invalid login credentials. Check your email/phone and password. Accounts: sohaib@faislabadi.pk or akmal@faislabadi.pk' });
       }
       const token = crypto.randomBytes(32).toString('hex');
-      sessions.set(token, { userId: user.id, createdAt: now() });
+      const store = pruneSessions(db);
+      store[hashToken(token)] = { userId: user.id, createdAt: now(), agent: String(request.headers['user-agent'] || '').slice(0, 120) };
       audit(db, user, 'login', 'user', user.id);
+      if (readOnlyMode) {
+        return json(response, 200, { token, user: sanitizeUser(user), permissions: permissions[user.role] || [], warning: 'Connected in limited mode - the store database is still syncing. Please sign in again shortly.' });
+      }
       await saveDb(db);
       return json(response, 200, { token, user: sanitizeUser(user), permissions: permissions[user.role] || [] });
     }
@@ -372,12 +738,38 @@ async function handleApi(request, response) {
     const actor = requireActor(request, response, db);
     if (!actor) return;
 
+    if (method === 'POST' && url.pathname === '/api/auth/logout') {
+      const header = request.headers.authorization || '';
+      const token = header.startsWith('Bearer ') ? header.slice(7) : '';
+      if (token) {
+        delete getSessions(db)[hashToken(token)];
+        delete getSessions(db)[token];
+      }
+      audit(db, actor, 'logout', 'user', actor.id);
+      await saveDb(db);
+      return json(response, 200, { ok: true });
+    }
+
+    if (method === 'GET' && url.pathname === '/api/sync-status') {
+      return json(response, 200, {
+        mode: MODE,
+        cloudConfigured: useSupabase,
+        enabled: cloudSync.enabled,
+        intervalMs: SYNC_INTERVAL_MS,
+        running: cloudSync.running,
+        lastAttemptAt: cloudSync.lastAttemptAt,
+        lastSuccessAt: cloudSync.lastSuccessAt,
+        lastError: cloudSync.lastError
+      });
+    }
+
     if (method === 'GET' && url.pathname === '/api/bootstrap') {
+      const totalsMap = customerTotals(db);
       return json(response, 200, {
         user: sanitizeUser(actor),
         settings: db.settings,
         products: db.products,
-        customers: db.customers.map(item => ({ ...item, cnicMasked: maskCnic(item.cnic), cnic: undefined })),
+        customers: db.customers.map(item => decorateCustomer(db, item, totalsMap)),
         suppliers: db.suppliers,
         sales: db.sales.slice(0, 50),
         returns: db.returns.slice(0, 50),
@@ -406,29 +798,50 @@ async function handleApi(request, response) {
     }
 
     if (method === 'GET' && url.pathname === '/api/dashboard') {
+      const outstanding = money(db.customers
+        .filter(item => item.id !== 'cus_walkin')
+        .reduce((sum, item) => sum + Math.max(0, Number(item.balance) || 0), 0));
       return json(response, 200, {
         day: calculateReport(db, 'day'),
         month: calculateReport(db, 'month'),
         year: calculateReport(db, 'year'),
         lowStock: lowStock(db),
         recentSales: db.sales.slice(0, 10),
+        totalUdharOutstanding: outstanding,
         creditCustomers: db.customers.filter(item => item.balance > 0).map(item => ({ ...item, cnicMasked: maskCnic(item.cnic), cnic: undefined }))
       });
     }
 
     if (method === 'GET' && url.pathname === '/api/products') {
-      const q = String(url.searchParams.get('q') || '').toLowerCase();
-      const products = db.products.filter(item => !q || `${item.name} ${item.sku} ${item.category}`.toLowerCase().includes(q));
-      return json(response, 200, products);
+      const q = String(url.searchParams.get('q') || '').trim().toLowerCase();
+      const category = String(url.searchParams.get('category') || '').trim().toLowerCase();
+      const all = url.searchParams.get('all') === '1';
+      const page = Math.max(1, Number(url.searchParams.get('page') || 1));
+      const limit = Math.min(500, Math.max(1, Number(url.searchParams.get('limit') || 60)));
+      let rows = db.products;
+      if (q) rows = rows.filter(item => `${item.name} ${item.sku} ${item.barcode || ''} ${item.category}`.toLowerCase().includes(q));
+      if (category) rows = rows.filter(item => String(item.category || '').toLowerCase() === category);
+      const total = rows.length;
+      const categories = [...new Set(db.products.map(item => item.category).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+      const products = all ? rows : rows.slice((page - 1) * limit, page * limit);
+      return json(response, 200, { products, total, page, limit, categories });
     }
 
     if (method === 'POST' && url.pathname === '/api/products') {
       if (!can(actor, 'products')) return json(response, 403, { error: 'Permission denied' });
       const body = await parseBody(request);
-      const product = { id: uid('prd'), active: true, stock: 0, reorderLevel: 5, unit: 'pcs', category: 'General', ...body };
-      product.price = money(product.price);
-      product.cost = money(product.cost);
+      const product = { id: uid('prd'), active: true, stock: 0, reorderLevel: 5, unit: 'pcs', category: 'General', _updatedAt: now(), ...body };
+      const pricing = resolveProductPricing(product);
+      product.price = pricing.price;
+      product.cost = pricing.cost;
       product.stock = Number(product.stock || 0);
+      if (product.barcode === undefined) product.barcode = '';
+      if (product.image === undefined) product.image = '';
+      if (!product.category) product.category = 'General';
+      if (product.reorderLevel === undefined) product.reorderLevel = 5;
+      product.active = !(product.status === 'inactive' || product.active === false);
+      product.status = product.active ? 'active' : 'inactive';
+      product._updatedAt = now();
       db.products.unshift(product);
       audit(db, actor, 'create', 'product', product.id, { name: product.name });
       await saveDb(db);
@@ -441,26 +854,147 @@ async function handleApi(request, response) {
       const product = db.products.find(item => item.id === id);
       if (!product) return json(response, 404, { error: 'Product not found' });
       Object.assign(product, await parseBody(request));
-      product.price = money(product.price);
-      product.cost = money(product.cost);
+      const pricing = resolveProductPricing(product);
+      product.price = pricing.price;
+      product.cost = pricing.cost;
       product.stock = Number(product.stock || 0);
+      product.active = !(product.status === 'inactive' || product.active === false);
+      product.status = product.active ? 'active' : 'inactive';
+      product._updatedAt = now();
       audit(db, actor, 'update', 'product', product.id, { name: product.name });
       await saveDb(db);
       return json(response, 200, product);
     }
 
+    if (method === 'DELETE' && url.pathname.startsWith('/api/products/')) {
+      if (!can(actor, 'products')) return json(response, 403, { error: 'Permission denied' });
+      const id = url.pathname.split('/').pop();
+      const product = db.products.find(item => item.id === id);
+      if (!product) return json(response, 404, { error: 'Product not found' });
+      const used = db.sales.some(sale => (sale.items || []).some(item => item.productId === id))
+        || db.purchases.some(purchase => (purchase.items || []).some(item => item.productId === id));
+      if (used) {
+        return json(response, 409, { error: 'PRODUCT_IN_USE', message: 'This product has billing history. Mark it Inactive instead of deleting so old bills stay correct.' });
+      }
+      db.products = db.products.filter(item => item.id !== id);
+      audit(db, actor, 'delete', 'product', id, { name: product.name });
+      await saveDb(db);
+      return json(response, 200, { ok: true });
+    }
+
     if (method === 'GET' && url.pathname === '/api/customers') {
-      return json(response, 200, db.customers.map(item => ({ ...item, cnicMasked: maskCnic(item.cnic), cnic: undefined })));
+      const totalsMap = customerTotals(db);
+      return json(response, 200, db.customers.map(item => decorateCustomer(db, item, totalsMap)));
     }
 
     if (method === 'POST' && url.pathname === '/api/customers') {
       if (!can(actor, 'customers')) return json(response, 403, { error: 'Permission denied' });
       const body = await parseBody(request);
-      const customer = { id: uid('cus'), name: body.name, phone: body.phone || '', cnic: body.cnic || '', creditLimit: money(body.creditLimit), balance: money(body.balance), active: true };
+      if (!body.name || !String(body.name).trim()) return json(response, 400, { error: 'Customer name is required' });
+      const customer = { id: uid('cus'), name: String(body.name).trim(), phone: String(body.phone || '').trim(), cnic: String(body.cnic || '').trim(), address: String(body.address || '').trim(), creditLimit: money(body.creditLimit), balance: money(body.balance), active: true, _updatedAt: now() };
       db.customers.unshift(customer);
       audit(db, actor, 'create', 'customer', customer.id, { name: customer.name });
       await saveDb(db);
-      return json(response, 201, { ...customer, cnicMasked: maskCnic(customer.cnic), cnic: undefined });
+      return json(response, 201, decorateCustomer(db, customer, customerTotals(db)));
+    }
+
+    if (method === 'PUT' && /^\/api\/customers\/[^/]+$/.test(url.pathname)) {
+      if (!can(actor, 'customers')) return json(response, 403, { error: 'Permission denied' });
+      const id = url.pathname.split('/')[3];
+      const customer = db.customers.find(item => item.id === id);
+      if (!customer) return json(response, 404, { error: 'Customer not found' });
+      const body = await parseBody(request);
+      for (const field of ['name', 'phone', 'cnic', 'address', 'creditLimit']) {
+        if (body[field] !== undefined) customer[field] = field === 'creditLimit' ? money(body[field]) : String(body[field]).trim();
+      }
+      customer._updatedAt = now();
+      audit(db, actor, 'update', 'customer', customer.id, { name: customer.name });
+      await saveDb(db);
+      return json(response, 200, decorateCustomer(db, customer, customerTotals(db)));
+    }
+
+    if (method === 'GET' && /^\/api\/customers\/[^/]+\/ledger$/.test(url.pathname)) {
+      if (!can(actor, 'customers')) return json(response, 403, { error: 'Permission denied' });
+      const id = url.pathname.split('/')[3];
+      const customer = db.customers.find(item => item.id === id);
+      if (!customer) return json(response, 404, { error: 'Customer not found' });
+      const creditSales = db.sales
+        .filter(sale => sale.customerId === id && sale.paymentType === 'Credit' && !sale.voided)
+        .map(sale => ({
+          type: 'sale',
+          id: sale.id,
+          at: sale.createdAt,
+          invoiceNo: sale.invoiceNo,
+          amount: sale.total,
+          paidAtBilling: money(sale.paidAmount),
+          products: sale.items.map(item => `${item.name} x${item.qty}`).join(', '),
+          createdBy: sale.createdByName || ''
+        }));
+      const payments = (db.payments || [])
+        .filter(payment => payment.customerId === id)
+        .map(payment => ({
+          type: 'payment',
+          id: payment.id,
+          at: payment.at,
+          amount: payment.amount,
+          invoiceNo: payment.saleId ? ((db.sales.find(item => item.id === payment.saleId) || {}).invoiceNo || '') : '',
+          note: payment.note || '',
+          createdBy: payment.createdBy || ''
+        }));
+      const entries = [...creditSales, ...payments].sort((a, b) => new Date(b.at) - new Date(a.at));
+      return json(response, 200, { customer: { ...customer, cnicMasked: maskCnic(customer.cnic), cnic: undefined }, entries });
+    }
+
+    if (method === 'POST' && /^\/api\/customers\/[^/]+\/payments$/.test(url.pathname)) {
+      if (!can(actor, 'udhar')) return json(response, 403, { error: 'Only Admin or Manager can record udhar payments' });
+      const id = url.pathname.split('/')[3];
+      const body = await parseBody(request);
+      try {
+        const result = receiveUdharPayment(db, id, body.amount, actor, { note: String(body.note || '').trim(), saleId: body.saleId || null });
+        await saveDb(db);
+        return json(response, 201, { payment: result.payment, balance: result.balance });
+      } catch (error) {
+        const status = error.message === 'Customer not found' ? 404 : 400;
+        return json(response, status, { error: error.message });
+      }
+    }
+
+    if (method === 'POST' && /^\/api\/customers\/[^/]+\/clear-udhar$/.test(url.pathname)) {
+      if (!can(actor, 'udhar')) return json(response, 403, { error: 'Only Admin or Manager can clear udhar' });
+      const id = url.pathname.split('/')[3];
+      try {
+        const result = clearUdhar(db, id, actor);
+        await saveDb(db);
+        return json(response, 200, { ok: true, cleared: true, previousBalance: result.previousBalance, balance: 0, payment: result.payment });
+      } catch (error) {
+        const status = error.message === 'Customer not found' ? 404 : 400;
+        return json(response, status, { error: error.message });
+      }
+    }
+
+    if (method === 'POST' && url.pathname === '/api/reset') {
+      if (String(actor.role || '').toLowerCase() !== 'admin') return json(response, 403, { error: 'Only admin can reset the shop data' });
+      const body = await parseBody(request);
+      db.sales = [];
+      db.returns = [];
+      db.purchases = [];
+      db.stockMovements = [];
+      db.payments = [];
+      db.customers = [{ id: 'cus_walkin', name: 'Walk-in Customer', phone: '', cnic: '', creditLimit: 0, balance: 0, active: true }];
+      if (body.clearProducts) db.products = [];
+      db.meta.invoiceSeq = 1000;
+      db.auditLogs = [];
+      audit(db, actor, 'reset', 'system', 'reset', { clearProducts: !!body.clearProducts });
+      await saveDb(db);
+      let warning = null;
+      if (useSupabase && MODE !== 'cloud') {
+        try {
+          await writeCloudDb(db);
+        } catch (error) {
+          warning = `Reset saved locally but the cloud update failed (${error.message}). It will retry automatically.`;
+        }
+      }
+      return json(response, 200, { ok: true, warning });
     }
 
     if (method === 'POST' && url.pathname === '/api/sales') {
@@ -496,30 +1030,59 @@ async function handleApi(request, response) {
       for (const item of sale.items) {
         if (!item.productId) continue;
         const product = db.products.find(row => row.id === item.productId);
-        if (product) product.stock = Number(product.stock) + Number(item.qty);
+        if (product) {
+          product.stock = Number(product.stock) + Number(item.qty);
+          product._updatedAt = now();
+        }
       }
       audit(db, actor, 'void', 'sale', sale.id, { invoiceNo: sale.invoiceNo });
       await saveDb(db);
       return json(response, 200, sale);
     }
 
+    if (method === 'GET' && url.pathname === '/api/sales/lookup') {
+      const invoiceNo = String(url.searchParams.get('invoiceNo') || '').trim();
+      const saleId = String(url.searchParams.get('saleId') || '').trim();
+      if (!invoiceNo && !saleId) return json(response, 400, { error: 'Enter a bill ID or invoice number' });
+      const sale = db.sales.find(item =>
+        item.id === saleId ||
+        String(item.invoiceNo).toLowerCase() === invoiceNo.toLowerCase()
+      );
+      if (!sale) return json(response, 404, { error: `No invoice found for "${invoiceNo || saleId}"` });
+      const customer = db.customers.find(item => item.id === sale.customerId);
+      const returnedMap = returnedQtyByItem(db, sale.id);
+      const items = sale.items.map(item => {
+        const returnedQty = returnedMap[itemKey(item)] || 0;
+        return { ...item, returnedQty, eligibleQty: round2(Number(item.qty) - returnedQty) };
+      });
+      return json(response, 200, {
+        sale: {
+          id: sale.id,
+          invoiceNo: sale.invoiceNo,
+          createdAt: sale.createdAt,
+          paymentType: sale.paymentType,
+          subtotal: sale.subtotal,
+          discount: sale.discount,
+          tax: sale.tax,
+          total: sale.total,
+          paidAmount: money(sale.paidAmount),
+          dueAmount: Math.max(0, money(sale.dueAmount)),
+          voided: !!sale.voided,
+          returnStatus: sale.returnStatus || 'none',
+          createdByName: sale.createdByName || ''
+        },
+        customer: customer ? { id: customer.id, name: customer.name, phone: customer.phone, cnicMasked: maskCnic(customer.cnic), balance: money(customer.balance) } : null,
+        previousReturns: db.returns.filter(record => record.saleId === sale.id),
+        items
+      });
+    }
+
     if (method === 'POST' && url.pathname === '/api/returns') {
       if (!can(actor, 'returns:create') && !can(actor, 'returns')) return json(response, 403, { error: 'Permission denied' });
       const body = await parseBody(request);
-      const sale = db.sales.find(item => item.id === body.saleId || item.invoiceNo === body.invoiceNo);
-      if (!sale) return json(response, 404, { error: 'Sale not found' });
-      const refundItems = Array.isArray(body.items) && body.items.length ? body.items : sale.items;
-      const total = money(refundItems.reduce((sum, item) => sum + Number(item.price || 0) * Number(item.qty || 0), 0));
-      for (const item of refundItems) {
-        if (!item.productId) continue;
-        const product = db.products.find(row => row.id === item.productId);
-        if (product) product.stock = Number(product.stock) + Number(item.qty || 0);
-      }
-      const refund = { id: uid('ret'), saleId: sale.id, invoiceNo: sale.invoiceNo, createdAt: now(), createdBy: actor.id, items: refundItems, total, reason: body.reason || 'Customer return' };
-      db.returns.unshift(refund);
-      audit(db, actor, 'create', 'return', refund.id, { invoiceNo: sale.invoiceNo, total });
+      const { record } = processReturn(db, body, actor);
       await saveDb(db);
-      return json(response, 201, refund);
+      return json(response, 201, record);
     }
 
     if (method === 'GET' && url.pathname === '/api/reports') {
@@ -551,6 +1114,7 @@ async function handleApi(request, response) {
         const cost = money(item.cost ?? product.cost);
         product.stock = Number(product.stock) + qty;
         product.cost = cost;
+        product._updatedAt = now();
         purchase.total += qty * cost;
         db.stockMovements.unshift({ id: uid('stm'), at: now(), productId: product.id, type: 'purchase', qty, note: 'Supplier purchase' });
       }
@@ -561,6 +1125,79 @@ async function handleApi(request, response) {
     }
 
     if (method === 'GET' && url.pathname === '/api/suppliers') return json(response, 200, db.suppliers);
+
+    if (method === 'GET' && url.pathname === '/api/users') {
+      if (!can(actor, 'users')) return json(response, 403, { error: 'Only Admin can manage users' });
+      return json(response, 200, db.users.map(sanitizeUser));
+    }
+
+    if (method === 'POST' && url.pathname === '/api/users') {
+      if (!can(actor, 'users')) return json(response, 403, { error: 'Only Admin can manage users' });
+      const body = await parseBody(request);
+      const name = String(body.name || '').trim();
+      const email = String(body.email || '').trim().toLowerCase();
+      const phone = String(body.phone || '').trim();
+      const password = String(body.password || '');
+      const role = String(body.role || '').trim();
+      if (!name || !email) return json(response, 400, { error: 'Name and email are required' });
+      if (!permissions[role]) return json(response, 400, { error: `Role must be one of: ${Object.keys(permissions).join(', ')}` });
+      if (db.users.some(item => item.email.toLowerCase() === email)) return json(response, 400, { error: 'A user with this email already exists' });
+      if (!phone) return json(response, 400, { error: 'Phone number is required for login' });
+      if (db.users.some(item => item.phone === phone)) return json(response, 400, { error: 'A user with this phone already exists' });
+      const validationError = validatePassword(password);
+      if (validationError) return json(response, 400, { error: validationError });
+      const user = { id: uid('usr'), name, email, phone, role, active: true, passwordHash: hashPassword(password), _updatedAt: now() };
+      if (Array.isArray(body.permissions)) user.permissions = body.permissions;
+      db.users.push(user);
+      audit(db, actor, 'create', 'user', user.id, { name, role });
+      await saveDb(db);
+      return json(response, 201, sanitizeUser(user));
+    }
+
+    if (method === 'PUT' && /^\/api\/users\/[^/]+$/.test(url.pathname)) {
+      if (!can(actor, 'users')) return json(response, 403, { error: 'Only Admin can manage users' });
+      const id = url.pathname.split('/')[3];
+      const user = db.users.find(item => item.id === id);
+      if (!user) return json(response, 404, { error: 'User not found' });
+      const body = await parseBody(request);
+      if (body.role !== undefined) {
+        const role = String(body.role).trim();
+        if (!permissions[role]) return json(response, 400, { error: `Role must be one of: ${Object.keys(permissions).join(', ')}` });
+        const wasAdmin = user.role === 'Admin';
+        const willBeAdmin = role === 'Admin';
+        if (wasAdmin && !willBeAdmin) {
+          const otherActiveAdmins = db.users.filter(item => item.id !== id && item.role === 'Admin' && item.active).length;
+          if (otherActiveAdmins === 0) return json(response, 400, { error: 'Cannot demote the last active Admin' });
+        }
+        user.role = role;
+        delete user.permissions;
+      }
+      if (body.active !== undefined) {
+        if (user.id === actor.id && !body.active) return json(response, 400, { error: 'You cannot deactivate your own account' });
+        if (user.role === 'Admin' && !body.active) {
+          const otherActiveAdmins = db.users.filter(item => item.id !== id && item.role === 'Admin' && item.active).length;
+          if (otherActiveAdmins === 0) return json(response, 400, { error: 'Cannot deactivate the last active Admin' });
+        }
+        if (!body.active) {
+          for (const [tokenKey, session] of Object.entries(getSessions(db))) {
+            if (session.userId === user.id) delete getSessions(db)[tokenKey];
+          }
+        }
+        user.active = !!body.active;
+      }
+      if (body.name !== undefined) user.name = String(body.name).trim() || user.name;
+      if (body.phone !== undefined) user.phone = String(body.phone).trim();
+      if (body.password) {
+        const validationError = validatePassword(String(body.password));
+        if (validationError) return json(response, 400, { error: validationError });
+        user.passwordHash = hashPassword(String(body.password));
+      }
+      if (Array.isArray(body.permissions)) user.permissions = body.permissions;
+      user._updatedAt = now();
+      audit(db, actor, 'update', 'user', user.id, { name: user.name, role: user.role, active: user.active });
+      await saveDb(db);
+      return json(response, 200, sanitizeUser(user));
+    }
 
     if (method === 'GET' && url.pathname === '/api/audit-logs') {
       if (!can(actor, 'settings')) return json(response, 403, { error: 'Permission denied' });
@@ -596,7 +1233,8 @@ async function handleApi(request, response) {
 }
 
 function serveStatic(request, response) {
-  const requested = request.url === '/' ? 'index.html' : decodeURIComponent(request.url).replace(/^\/+/, '');
+  const parsedUrl = new URL(request.url, `http://${request.headers.host}`);
+  const requested = parsedUrl.pathname === '/' ? 'index.html' : decodeURIComponent(parsedUrl.pathname).replace(/^\/+/, '');
   const file = path.resolve(root, requested);
   if (file !== root && !file.startsWith(`${root}${path.sep}`)) return response.writeHead(403, securityHeaders).end('Forbidden');
   fs.readFile(file, (error, content) => {
@@ -607,7 +1245,7 @@ function serveStatic(request, response) {
 }
 
 function requestHandler(request, response) {
-  if (request.url.startsWith('/api/')) return handleApi(request, response);
+  if (request.url.startsWith('/api/')) return withDbLock(() => handleApi(request, response));
   return serveStatic(request, response);
 }
 
@@ -618,8 +1256,16 @@ async function initDb() {
     const data = seedData();
     await saveDb(data);
     console.log('Database seeded with initial data');
+  } else if (ensureCoreAccounts(existing)) {
+    await saveDb(existing);
+    console.log('Core accounts and store settings migrated');
   }
   try { await createBackup('startup'); } catch (_) {}
+  if (cloudSync.enabled) {
+    console.log(`Cloud sync active: local database syncs to the cloud every ${Math.round(SYNC_INTERVAL_MS / 1000)}s`);
+    setTimeout(() => { syncWithCloud(); }, 1500);
+    setInterval(() => { syncWithCloud(); }, SYNC_INTERVAL_MS);
+  }
 }
 
 function createServer() {
@@ -636,11 +1282,22 @@ if (require.main === module) {
 }
 
 module.exports = requestHandler;
+module.exports.maxDuration = 30;
 module.exports.createServer = createServer;
 module.exports.seedData = seedData;
 module.exports.hashPassword = hashPassword;
 module.exports.verifyPassword = verifyPassword;
 module.exports.validatePassword = validatePassword;
 module.exports.calculateReport = calculateReport;
+module.exports.resolveProductPricing = resolveProductPricing;
 module.exports.maskCnic = maskCnic;
 module.exports.restoreBackup = restoreBackup;
+module.exports.ensureSchema = ensureSchema;
+module.exports.createSale = createSale;
+module.exports.processReturn = processReturn;
+module.exports.receiveUdharPayment = receiveUdharPayment;
+module.exports.clearUdhar = clearUdhar;
+module.exports.returnedQtyByItem = returnedQtyByItem;
+module.exports.customerTotals = customerTotals;
+module.exports.can = can;
+module.exports.permissions = permissions;
