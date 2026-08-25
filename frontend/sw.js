@@ -1,17 +1,19 @@
-const CACHE_NAME = 'faislabadi-pos-v1';
+const CACHE_NAME = 'faislabadi-pos-v15';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
-  '/styles.css',
-  '/manual.css',
-  '/app.js',
+  '/styles.css?v=15',
+  '/manual.css?v=15',
+  '/app.js?v=15',
   '/vendor/react.production.min.js',
   '/vendor/react-dom.production.min.js',
   '/manifest.json'
 ];
 
-const API_CACHE = 'faislabadi-api-v1';
-const BOOTSTRAP_CACHE = 'faislabadi-bootstrap-v1';
+const URDU_FONT_CSS = 'https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;700&display=swap';
+
+const API_CACHE = 'faislabadi-api-v15';
+const BOOTSTRAP_CACHE = 'faislabadi-bootstrap-v15';
 
 self.addEventListener('install', function(event) {
   event.waitUntil(
@@ -24,14 +26,18 @@ self.addEventListener('install', function(event) {
 
 self.addEventListener('activate', function(event) {
   event.waitUntil(
-    caches.keys().then(function(keys) {
-      return Promise.all(
-        keys.filter(function(key) {
-          return key !== CACHE_NAME && key !== API_CACHE && key !== BOOTSTRAP_CACHE;
-        }).map(function(key) {
-          return caches.delete(key);
-        })
-      );
+    caches.open(CACHE_NAME).then(function(cache) {
+      return cache.add(URDU_FONT_CSS).catch(function() {});
+    }).then(function() {
+      return caches.keys().then(function(keys) {
+        return Promise.all(
+          keys.filter(function(key) {
+            return key !== CACHE_NAME && key !== API_CACHE && key !== BOOTSTRAP_CACHE;
+          }).map(function(key) {
+            return caches.delete(key);
+          })
+        );
+      });
     })
   );
   self.clients.claim();
@@ -71,9 +77,48 @@ self.addEventListener('fetch', function(event) {
     return;
   }
 
+  if (event.request.mode === 'navigate' || url.pathname === '/' || url.pathname === '/index.html') {
+    event.respondWith(
+      fetch(event.request).then(function(response) {
+        if (response.ok && url.origin === self.location.origin) {
+          var clone = response.clone();
+          caches.open(CACHE_NAME).then(function(cache) {
+            cache.put('/index.html', clone);
+          });
+        }
+        return response;
+      }).catch(function() {
+        return caches.match('/index.html').then(function(cached) {
+          return cached || new Response('<h1>POS offline</h1><p>Reconnect to the internet once to load the app.</p>', { headers: { 'Content-Type': 'text/html' }, status: 503 });
+        });
+      })
+    );
+    return;
+  }
+
+  if (/fonts\.(googleapis|gstatic)\.com/.test(url.hostname)) {
+    event.respondWith(
+      caches.match(event.request).then(function(cached) {
+        if (cached) return cached;
+        return fetch(event.request).then(function(response) {
+          if (response.ok || response.type === 'opaque') {
+            var clone = response.clone();
+            caches.open(CACHE_NAME).then(function(cache) {
+              cache.put(event.request, clone);
+            });
+          }
+          return response;
+        }).catch(function() {
+          return cached || Response.error();
+        });
+      })
+    );
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request).then(function(cached) {
-      return cached || fetch(event.request).then(function(response) {
+      var networkFetch = fetch(event.request).then(function(response) {
         if (response.ok && url.origin === self.location.origin) {
           var clone = response.clone();
           caches.open(CACHE_NAME).then(function(cache) {
@@ -81,11 +126,13 @@ self.addEventListener('fetch', function(event) {
           });
         }
         return response;
+      }).catch(function() {
+        return cached || Response.error();
       });
-    }).catch(function() {
-      if (event.request.mode === 'navigate') {
-        return caches.match('/index.html');
-      }
+      return cached ? Promise.race([
+        networkFetch.catch(function() { return cached; }),
+        new Promise(function(resolve) { setTimeout(function() { resolve(cached); }, 1200); })
+      ]) : networkFetch;
     })
   );
 });

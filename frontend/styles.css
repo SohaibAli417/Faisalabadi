@@ -293,6 +293,79 @@ td {
   color: var(--red);
 }
 
+.notice.warning {
+  background: #fff4e0;
+  color: #9b6117;
+}
+
+/* DANGER BUTTON + KHATA LEDGER */
+.danger-btn {
+  background: var(--red);
+  color: #fff;
+  border: none;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-weight: 700;
+}
+
+.khata {
+  background: #fff;
+  border-radius: 14px;
+  width: min(480px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 22px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.35);
+}
+
+.khata-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.payment-form {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.payment-form input {
+  flex: 1;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.ledger-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ledger-entry {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #f6f7fb;
+}
+
+.ledger-entry.sale { background: #fdf0ef; }
+.ledger-entry.payment { background: #eefaf1; }
+
+.entry-info { display: flex; flex-direction: column; }
+.entry-info small { color: #64748b; }
+
+.amount-due { color: var(--red); }
+.amount-paid { color: var(--green); }
+
+.khata-btn { padding: 6px 12px !important; font-size: 12px; }
+
 /* STOCK ROWS */
 .stock-row {
   display: flex;
@@ -435,6 +508,19 @@ td {
 
 .quantity b { font-size: 14px; min-width: 20px; text-align: center; }
 
+.quantity .qty-input {
+  width: 52px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 2px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.quantity .qty-input::-webkit-outer-spin-button,
+.quantity .qty-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
 .empty {
   text-align: center;
   padding: 40px 20px;
@@ -560,7 +646,7 @@ td {
 }
 
 .ri-name { flex: 2; text-align: left; }
-.ri-qty { flex: 0 0 36px; text-align: center; }
+.ri-qty { flex: 0 0 52px; text-align: center; }
 .ri-price { flex: 0 0 60px; text-align: right; }
 .ri-total { flex: 0 0 65px; text-align: right; }
 
@@ -597,6 +683,38 @@ td {
 .receipt-footer { text-align: center; padding: 10px 0 4px; border-top: 2px dashed var(--line); }
 .receipt-footer p { margin: 2px 0; font-size: 11px; }
 .receipt-footer p:first-child { font-weight: 700; color: var(--green); font-size: 12px; }
+
+.receipt-credit {
+  text-align: center;
+  margin-top: 10px;
+  padding: 10px 12px 8px;
+  border-top: 2px dashed var(--line);
+}
+.receipt-credit .credit-title {
+  margin: 0;
+  font-size: 9px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.receipt-credit .credit-name {
+  margin: 3px 0 2px;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: var(--green);
+}
+.receipt-credit .credit-phone {
+  margin: 0;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--green) 10%, transparent);
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--green) 35%, transparent);
+}
 .success-actions { display: flex; gap: 10px; justify-content: center; margin-top: 18px; }
 
 /* LOGIN */
@@ -838,7 +956,7 @@ td {
   .receipt { padding: 16px 12px !important; }
 }
 
-/* PRINT */
+/* PRINT — the receipt modal is portalled to document.body, so only it prints */
 @media print {
   * {
     -webkit-print-color-adjust: exact !important;
@@ -846,32 +964,34 @@ td {
     color-adjust: exact !important;
   }
 
-  body {
+  @page { margin: 6mm; }
+
+  html, body {
     margin: 0 !important;
     padding: 0 !important;
     background: #fff !important;
+    height: auto !important;
+    overflow: visible !important;
   }
 
-  body > *:not(#root) {
-    display: none !important;
-  }
-
-  #root {
-    position: static !important;
-  }
-
-  #root > *:not(.modal) {
+  body > *:not(.modal) {
     display: none !important;
   }
 
   .modal {
-    display: grid !important;
+    display: block !important;
     position: static !important;
+    inset: auto !important;
     background: none !important;
     padding: 0 !important;
+    margin: 0 !important;
     backdrop-filter: none !important;
     z-index: auto !important;
-    inset: auto !important;
+    width: auto !important;
+    max-width: none !important;
+    min-height: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
   }
 
   .receipt {
@@ -898,5 +1018,88 @@ td {
   .receipt-badge { border: 1px solid #000 !important; background: #fff !important; color: #000 !important; }
   .receipt-footer p { font-size: 10px !important; }
   .receipt-footer p:first-child { font-size: 11px !important; color: #000 !important; }
+  .receipt-credit { border-top-color: #000 !important; }
+  .receipt-credit .credit-title { font-size: 8px !important; color: #444 !important; }
+  .receipt-credit .credit-name { font-size: 11px !important; color: #000 !important; }
+  .receipt-credit .credit-phone { font-size: 9.5px !important; color: #000 !important; background: none !important; border: 1px solid #000 !important; border-radius: 0 !important; }
   .no-print { display: none !important; }
+}
+
+/* --- v9: Udhar totals, partial payments, returns, users --- */
+.khata-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  background: #f6faf8;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin: 12px 0;
+}
+.khata-summary div { display: flex; flex-direction: column; gap: 2px; }
+.khata-summary span { font-size: 11px; color: #64748b; font-weight: 600; }
+.khata-summary strong { font-size: 15px; }
+.payment-form { display: flex; gap: 8px; align-items: stretch; flex-wrap: wrap; }
+.paid-line strong { color: #267152; }
+.due-line strong { color: #c0392b; }
+.partial-pay-row { display: flex; gap: 6px; padding: 0 20px; margin-top: 4px; }
+.partial-pay-row input {
+  flex: 1; min-width: 0;
+  border: 1.5px solid var(--line); border-radius: 8px;
+  padding: 8px 10px; font-size: 13px; font-family: inherit;
+}
+.partial-pay-row button { padding: 6px 12px !important; font-size: 12px; }
+.danger-btn.small { padding: 6px 12px !important; font-size: 12px; margin-left: 6px; }
+.user-form { margin: 14px 0 24px; }
+.return-search input { min-width: 260px; }
+@media (max-width: 760px) {
+  .khata-summary { grid-template-columns: 1fr; }
+  .partial-pay-row { flex-wrap: wrap; }
+}
+
+/* ===== Urdu RTL mode (v12) ===== */
+html[dir='rtl'] body {
+  font-family: 'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq', urdu-typesetting, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  line-height: 2;
+}
+html[dir='rtl'] .receipt,
+html[dir='rtl'] .receipt * {
+  direction: ltr;
+  font-family: 'Courier New', 'Consolas', monospace !important;
+  line-height: 1.45;
+}
+html[dir='rtl'] .table-wrap table { text-align: right; }
+html[dir='rtl'] .nav-item { text-align: right; }
+html[dir='rtl'] input, html[dir='rtl'] select, html[dir='rtl'] textarea, html[dir='rtl'] button { font-family: inherit; }
+html[dir='rtl'] .qty-input, html[dir='rtl'] .discount-input, html[dir='rtl'] input[type='number'] { direction: ltr; text-align: center; }
+html[dir='rtl'] .brand small, html[dir='rtl'] .crumb { letter-spacing: 0; }
+html[dir='rtl'] .eyebrow { letter-spacing: 1px; }
+html[dir='rtl'] .login-card { text-align: right; }
+html[dir='rtl'] .metric-card p, html[dir='rtl'] .metric-card h3, html[dir='rtl'] .metric-card small { line-height: 2; }
+
+/* Printer & Scanner settings panel */
+.printer-settings { padding: 8px 0; }
+.printer-settings .toggle-row { display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 8px 0; }
+.printer-settings .toggle-row input[type='checkbox'] { width: 18px; height: 18px; accent-color: #103d34; }
+.printer-settings .toggle-row span { display: flex; flex-direction: column; }
+.printer-settings .toggle-row small { color: #64748b; font-size: 12px; }
+.setting-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-top: 1px solid #f1f5f9; }
+.setting-row strong { font-size: 14px; }
+.setting-row select { padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; }
+.scan-info { display: flex; align-items: center; gap: 8px; }
+.scan-info small { color: #64748b; font-size: 12px; }
+
+/* Paper size variants for receipt printing */
+@media print {
+  .receipt.paper-58 { width: 58mm !important; max-width: 58mm !important; padding: 5mm 3mm !important; font-size: 9px !important; }
+  .receipt.paper-58 h2 { font-size: 12px !important; }
+  .receipt.paper-58 .receipt-row { font-size: 8px !important; }
+  .receipt.paper-58 .receipt-items-header, .receipt.paper-58 .receipt-item { font-size: 8px !important; }
+  .receipt.paper-58 .receipt-grand { font-size: 11px !important; }
+  .receipt.paper-80 { width: 80mm !important; max-width: 80mm !important; padding: 8mm 5mm !important; }
+  .receipt.paper-a4 { width: 100% !important; max-width: 210mm !important; padding: 15mm !important; font-size: 12px !important; }
+  .receipt.paper-a4 h2 { font-size: 18px !important; }
+  .receipt.paper-a4 .receipt-row { font-size: 12px !important; }
+  .receipt.paper-a4 .receipt-items-header, .receipt.paper-a4 .receipt-item { font-size: 11px !important; }
+  .receipt.paper-a4 .receipt-grand { font-size: 16px !important; }
 }

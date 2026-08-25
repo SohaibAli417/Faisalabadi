@@ -9,22 +9,16 @@
     <meta name="description" content="Faislabadi General Store - Point of Sale System" />
     <link rel="manifest" href="manifest.json" />
     <title>Faislabadi General Store | POS</title>
-    <link rel="stylesheet" href="styles.css" />
-    <link rel="stylesheet" href="manual.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;700&display=swap" />
+    <link rel="stylesheet" href="styles.css?v=15" />
+    <link rel="stylesheet" href="manual.css?v=15" />
   </head>
   <body>
     <div id="root"></div>
     <script src="vendor/react.production.min.js"></script>
     <script src="vendor/react-dom.production.min.js"></script>
-    <script src="app.js"></script>
-    <script>
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js').then(function(reg) {
-          console.log('Service Worker registered');
-        }).catch(function(err) {
-          console.log('Service Worker failed:', err);
-        });
-      }
-    </script>
+    <script src="app.js?v=15"></script>
   </body>
 </html>
