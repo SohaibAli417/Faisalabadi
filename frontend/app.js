@@ -324,12 +324,14 @@ function Login({ onLogin, langTick, bumpLang }) {
       h('h1', null, t('signInToPos')),
       isOffline && h('div', { className: 'notice' }, t('offlineModeNotice')),
       h('label', null, t('emailOrPhone')),
-      h('input', { value: login, onChange: event => setLogin(event.target.value), autoComplete: 'username', required: true }),
+      h('input', { value: login, onChange: event => setLogin(event.target.value), autoComplete: 'username', required: true, autoCapitalize: 'none', autoCorrect: 'off', spellCheck: false, inputMode: 'email' }),
       h('label', null, t('password')),
       h('input', { value: password, onChange: event => setPassword(event.target.value), type: 'password', autoComplete: 'current-password', required: true }),
       error && h('div', { className: 'notice danger' }, error),
       h('button', { className: 'primary', type: 'submit' }, t('signIn')),
-      h('p', { className: 'login-hint' }, LANG === 'ur' ? 'ایڈمن: sohaib@faislabadi.pk | مینیجر: akmal@faislabadi.pk' : 'Admin: sohaib@faislabadi.pk | Manager: akmal@faislabadi.pk')));
+      h('div', { className: 'login-hints' },
+        h('p', { className: 'login-hint' }, LANG === 'ur' ? 'ایڈمن: sohaib@faislabadi.pk یا 03074224449' : 'Admin: sohaib@faislabadi.pk or 03074224449'),
+        h('p', { className: 'login-hint' }, LANG === 'ur' ? 'مینیجر: akmal@faislabadi.pk یا 03024503010' : 'Manager: akmal@faislabadi.pk or 03024503010'))));
 }
 
 function Metric({ title, value, note }) {
