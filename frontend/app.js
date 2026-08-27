@@ -1,4 +1,22 @@
 /* global React, ReactDOM */
+const APP_VERSION = 'v18';
+const APP_CHECKSUM = 'void-delete-v18';
+(function() {
+  var stored = null;
+  try { stored = localStorage.getItem('faislabadi-pos-version'); } catch(_) {}
+  if (stored && stored !== APP_CHECKSUM) {
+    try { localStorage.removeItem('faislabadi-pos-session'); } catch(_) {}
+  }
+  try { localStorage.setItem('faislabadi-pos-version', APP_CHECKSUM); } catch(_) {}
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistration().then(function(reg) {
+      if (reg && reg.waiting) {
+        reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+        window.location.reload();
+      }
+    });
+  }
+})();
 const { useEffect, useMemo, useState } = React;
 const h = React.createElement;
 

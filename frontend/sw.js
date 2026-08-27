@@ -1,10 +1,10 @@
-const CACHE_NAME = 'faislabadi-pos-v17';
+const CACHE_NAME = 'faislabadi-pos-v18';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
-  '/styles.css?v=17',
-  '/manual.css?v=17',
-  '/app.js?v=17',
+  '/styles.css?v=18',
+  '/manual.css?v=18',
+  '/app.js?v=18',
   '/vendor/react.production.min.js',
   '/vendor/react-dom.production.min.js',
   '/manifest.json'
@@ -12,8 +12,8 @@ const STATIC_ASSETS = [
 
 const URDU_FONT_CSS = 'https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;700&display=swap';
 
-const API_CACHE = 'faislabadi-api-v17';
-const BOOTSTRAP_CACHE = 'faislabadi-bootstrap-v17';
+const API_CACHE = 'faislabadi-api-v18';
+const BOOTSTRAP_CACHE = 'faislabadi-bootstrap-v18';
 
 self.addEventListener('install', function(event) {
   event.waitUntil(
@@ -145,5 +145,8 @@ self.addEventListener('message', function(event) {
       });
       cache.put('/api/bootstrap', response);
     });
+  }
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
   }
 });
