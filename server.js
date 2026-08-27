@@ -2,7 +2,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { readDb, writeDb: saveDb, readLocalDb, writeLocalDb, readCloudDb, writeCloudDb, readAuthData, recallLastGoodAuth, useSupabase, MODE, withDbLock } = require('./database');
+const { readDb, writeDb: saveDb, readLocalDb, writeLocalDb, readCloudDb, writeCloudDb, readAuthData, recallLastGoodAuth, useSupabase, MODE, withDbLock, listCloudBackups, saveCloudBackup, loadCloudBackup } = require('./database');
 const { mergeDbs } = require('./sync');
 
 const PORT = Number(process.env.PORT || 3000);
@@ -22,7 +22,7 @@ const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_LIMIT = 8;
 const permissions = {
   Admin: ['*'],
-  Manager: ['dashboard', 'pos', 'products', 'inventory', 'purchases', 'customers', 'udhar', 'returns', 'reports', 'settings', 'backups'],
+  Manager: ['dashboard', 'pos', 'products', 'inventory', 'warehouse', 'purchases', 'customers', 'udhar', 'returns', 'reports', 'settings', 'backups'],
   Cashier: ['dashboard', 'pos', 'customers', 'reports:own', 'returns:create']
 };
 
@@ -70,18 +70,13 @@ async function syncWithCloud() {
     cloudSync.running = false;
   }
 }
-const securityHeaders = isVercel ? {
-  'X-Content-Type-Options': 'nosniff',
-  'X-Frame-Options': 'DENY',
-  'Referrer-Policy': 'no-referrer',
-  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()'
-} : {
+const securityHeaders = {
   'X-Content-Type-Options': 'nosniff',
   'X-Frame-Options': 'DENY',
   'Referrer-Policy': 'no-referrer',
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
   'Cross-Origin-Resource-Policy': 'same-origin',
-  'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
+  'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; connect-src 'self'; img-src 'self' data:; font-src 'self' https://fonts.gstatic.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
 };
 
 function now() {
@@ -170,6 +165,7 @@ function ensureSchema(db) {
   let changed = false;
   if (!Array.isArray(db.customers)) { db.customers = []; changed = true; }
   if (!Array.isArray(db.products)) { db.products = []; changed = true; }
+  if (!Array.isArray(db.warehouses)) { db.warehouses = []; changed = true; }
   if (!Array.isArray(db.sales)) { db.sales = []; changed = true; }
   if (!Array.isArray(db.returns)) { db.returns = []; changed = true; }
   if (!Array.isArray(db.payments)) { db.payments = []; changed = true; }
@@ -191,6 +187,12 @@ function ensureSchema(db) {
     if (!('dueAmount' in sale)) { sale.dueAmount = Math.max(0, money(sale.total) - money(sale.paidAmount)); changed = true; }
     if (!('returnStatus' in sale)) { sale.returnStatus = 'none'; changed = true; }
   }
+  for (const wh of db.warehouses) {
+    if (!('location' in wh)) { wh.location = ''; changed = true; }
+    if (!('active' in wh)) { wh.active = true; changed = true; }
+    if (!('status' in wh)) { wh.status = 'active'; changed = true; }
+    if (!('supplier' in wh)) { wh.supplier = ''; changed = true; }
+  }
   return changed;
 }
 
@@ -201,18 +203,33 @@ function sanitizeUser(user) {
 
 const coreSettings = { storeName: 'Faislabadi General Store', phone: '03024503010', address: 'Fazlia Colony, Opposite Ali Internet Service' };
 
+function generateInitialPassword() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+  let pw = '';
+  const bytes = crypto.randomBytes(12);
+  for (let i = 0; i < 12; i++) pw += chars[bytes[i] % chars.length];
+  return pw;
+}
+
 function ensureCoreAccounts(db) {
   let changed = false;
-  const hasCore = Array.isArray(db.users) && db.users.some(item => item.email === 'sohaib@faislabadi.pk');
-  if (!hasCore) {
+  if (!Array.isArray(db.users)) db.users = [];
+  if (!db.settings || typeof db.settings !== 'object') db.settings = {};
+  if (db.users.length === 0) {
+    const adminPw = generateInitialPassword();
+    const managerPw = generateInitialPassword();
     db.users = [
-      { id: 'usr_sohaib', name: 'Sohaib Ali', email: 'sohaib@faislabadi.pk', phone: '03074224449', role: 'Admin', active: true, passwordHash: hashPassword('Sohaib@786#Dev') },
-      { id: 'usr_akmal', name: 'Akmal', email: 'akmal@faislabadi.pk', phone: '03024503010', role: 'Manager', active: true, passwordHash: hashPassword('Akmal@786#Store') }
+      { id: 'usr_admin', name: 'Admin', email: 'admin@faislabadi.pk', phone: '', role: 'Admin', active: true, passwordHash: hashPassword(adminPw) },
+      { id: 'usr_manager', name: 'Manager', email: 'manager@faislabadi.pk', phone: '', role: 'Manager', active: true, passwordHash: hashPassword(managerPw) }
     ];
     db.sessions = {};
+    console.log('=== FIRST RUN - Initial accounts created ===');
+    console.log(`Admin:    admin@faislabadi.pk / ${adminPw}`);
+    console.log(`Manager:  manager@faislabadi.pk / ${managerPw}`);
+    console.log('CHANGE THESE PASSWORDS IMMEDIATELY after first login!');
+    console.log('===============================================');
     changed = true;
   }
-  if (!db.settings || typeof db.settings !== 'object') db.settings = {};
   for (const [key, value] of Object.entries(coreSettings)) {
     if (db.settings[key] !== value) {
       db.settings[key] = value;
@@ -226,20 +243,31 @@ const { readDbSync, writeDbSync, backupDir: configuredBackupDir } = require('./d
 const resolvedBackupDir = configuredBackupDir || backupDir;
 
 async function createBackup(reason = 'manual') {
-  ensureDir(backupDir);
   const db = await readDb();
-  const stamp = now().replace(/[:.]/g, '-');
-  const file = path.join(backupDir, `pos-backup-${stamp}.json`);
-  fs.writeFileSync(file, JSON.stringify({ reason, backedUpAt: now(), data: db }, null, 2));
-  return { file: path.basename(file), createdAt: now(), reason };
+  const stamp = now().replace(/[:.]/g, '_');
+  const file = `pos-backup-${stamp}.json`;
+  if (isVercel && useSupabase) {
+    await saveCloudBackup(file, reason, db);
+  } else {
+    ensureDir(backupDir);
+    const localFile = path.join(backupDir, file);
+    fs.writeFileSync(localFile, JSON.stringify({ reason, backedUpAt: now(), data: db }, null, 2));
+  }
+  return { file, createdAt: now(), reason };
 }
 
 async function restoreBackup(fileName, actor) {
   const safeName = path.basename(String(fileName || ''));
   if (!/^pos-backup-[\w.-]+\.json$/.test(safeName)) throw new Error('Invalid backup file name');
-  const file = path.join(backupDir, safeName);
-  if (!fs.existsSync(file)) throw new Error('Backup not found');
-  const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+  let parsed;
+  if (isVercel && useSupabase) {
+    const data = await loadCloudBackup(safeName);
+    parsed = { data };
+  } else {
+    const file = path.join(backupDir, safeName);
+    if (!fs.existsSync(file)) throw new Error('Backup not found');
+    parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+  }
   if (!parsed.data || !parsed.data.meta || !Array.isArray(parsed.data.products) || !Array.isArray(parsed.data.users)) {
     throw new Error('Backup file is not a valid POS backup');
   }
@@ -720,7 +748,7 @@ async function handleApi(request, response) {
         String(item.phone || '').replace(/[\s-]/g, '') === loginPhone && loginPhone.length > 0
       ));
       if (!user || !verifyPassword(String(body.password || ''), user.passwordHash)) {
-        return json(response, 401, { error: 'Invalid login credentials. Check your email/phone and password. Accounts: sohaib@faislabadi.pk or akmal@faislabadi.pk' });
+        return json(response, 401, { error: 'Invalid login credentials. Check your email/phone and password.' });
       }
       const token = crypto.randomBytes(32).toString('hex');
       const store = pruneSessions(db);
@@ -769,6 +797,7 @@ async function handleApi(request, response) {
         user: sanitizeUser(actor),
         settings: db.settings,
         products: db.products,
+        warehouses: db.warehouses || [],
         customers: db.customers.map(item => decorateCustomer(db, item, totalsMap)),
         suppliers: db.suppliers,
         sales: db.sales.slice(0, 50),
@@ -880,6 +909,85 @@ async function handleApi(request, response) {
       audit(db, actor, 'delete', 'product', id, { name: product.name });
       await saveDb(db);
       return json(response, 200, { ok: true });
+    }
+
+    if (method === 'GET' && url.pathname === '/api/warehouses') {
+      if (!can(actor, 'warehouse')) return json(response, 403, { error: 'Permission denied' });
+      const q = String(url.searchParams.get('q') || '').trim().toLowerCase();
+      let rows = db.warehouses;
+      if (q) rows = rows.filter(item => `${item.name} ${item.sku || ''} ${item.barcode || ''} ${item.category || ''} ${item.location || ''} ${item.supplier || ''}`.toLowerCase().includes(q));
+      return json(response, 200, { warehouses: rows, total: rows.length });
+    }
+
+    if (method === 'POST' && url.pathname === '/api/warehouses') {
+      if (!can(actor, 'warehouse')) return json(response, 403, { error: 'Permission denied' });
+      const body = await parseBody(request);
+      const item = { id: uid('wh'), active: true, stock: 0, reorderLevel: 5, unit: 'pcs', category: 'General', location: '', supplier: '', linkedProductId: '', _updatedAt: now(), ...body };
+      item.stock = Number(item.stock || 0);
+      item.reorderLevel = Number(item.reorderLevel || 5);
+      item.active = !(item.status === 'inactive' || item.active === false);
+      item.status = item.active ? 'active' : 'inactive';
+      item._updatedAt = now();
+      db.warehouses.unshift(item);
+      audit(db, actor, 'create', 'warehouse', item.id, { name: item.name });
+      await saveDb(db);
+      return json(response, 201, item);
+    }
+
+    if (method === 'PUT' && url.pathname.startsWith('/api/warehouses/')) {
+      if (!can(actor, 'warehouse')) return json(response, 403, { error: 'Permission denied' });
+      const id = url.pathname.split('/').pop();
+      const item = db.warehouses.find(w => w.id === id);
+      if (!item) return json(response, 404, { error: 'Warehouse item not found' });
+      const body = await parseBody(request);
+      delete body.id;
+      Object.assign(item, body);
+      item.stock = Number(item.stock || 0);
+      item.reorderLevel = Number(item.reorderLevel || 5);
+      item.active = !(item.status === 'inactive' || item.active === false);
+      item.status = item.active ? 'active' : 'inactive';
+      item._updatedAt = now();
+      audit(db, actor, 'update', 'warehouse', item.id, { name: item.name });
+      await saveDb(db);
+      return json(response, 200, item);
+    }
+
+    if (method === 'DELETE' && url.pathname.startsWith('/api/warehouses/')) {
+      if (!can(actor, 'warehouse')) return json(response, 403, { error: 'Permission denied' });
+      const id = url.pathname.split('/').pop();
+      const item = db.warehouses.find(w => w.id === id);
+      if (!item) return json(response, 404, { error: 'Warehouse item not found' });
+      db.warehouses = db.warehouses.filter(w => w.id !== id);
+      audit(db, actor, 'delete', 'warehouse', id, { name: item.name });
+      await saveDb(db);
+      return json(response, 200, { ok: true });
+    }
+
+    if (method === 'POST' && url.pathname === '/api/warehouses/transfer') {
+      if (!can(actor, 'warehouse')) return json(response, 403, { error: 'Permission denied' });
+      const body = await parseBody(request);
+      const { warehouseId, productId, qty, direction } = body;
+      const qtyNum = Number(qty);
+      if (!warehouseId || !productId || !qtyNum || qtyNum <= 0) return json(response, 400, { error: 'warehouseId, productId, and positive qty are required' });
+      const wh = db.warehouses.find(w => w.id === warehouseId);
+      const prod = db.products.find(p => p.id === productId);
+      if (!wh) return json(response, 404, { error: 'Warehouse item not found' });
+      if (!prod) return json(response, 404, { error: 'Product not found' });
+      if (direction === 'toProduct') {
+        if (Number(wh.stock) < qtyNum) return json(response, 400, { error: `Not enough warehouse stock for ${wh.name}. Available: ${wh.stock}` });
+        wh.stock = Number(wh.stock) - qtyNum;
+        prod.stock = Number(prod.stock || 0) + qtyNum;
+      } else {
+        if (Number(prod.stock) < qtyNum) return json(response, 400, { error: `Not enough product stock for ${prod.name}. Available: ${prod.stock}` });
+        prod.stock = Number(prod.stock) - qtyNum;
+        wh.stock = Number(wh.stock || 0) + qtyNum;
+      }
+      wh._updatedAt = now();
+      prod._updatedAt = now();
+      db.stockMovements.push({ id: uid('stm'), productId, warehouseId, direction: direction || 'toProduct', qty: qtyNum, at: now(), by: actor.name });
+      audit(db, actor, 'transfer', direction === 'toWarehouse' ? 'product-to-warehouse' : 'warehouse-to-product', null, { warehouse: wh.name, product: prod.name, qty: qtyNum });
+      await saveDb(db);
+      return json(response, 200, { warehouse: wh, product: prod });
     }
 
     if (method === 'GET' && url.pathname === '/api/customers') {
@@ -1206,6 +1314,10 @@ async function handleApi(request, response) {
 
     if (method === 'GET' && url.pathname === '/api/backups') {
       if (!can(actor, 'backups')) return json(response, 403, { error: 'Permission denied' });
+      if (isVercel && useSupabase) {
+        const backups = await listCloudBackups();
+        return json(response, 200, backups);
+      }
       ensureDir(backupDir);
       const backups = fs.readdirSync(backupDir).filter(name => name.endsWith('.json')).sort().reverse();
       return json(response, 200, backups.map(file => ({ file })));

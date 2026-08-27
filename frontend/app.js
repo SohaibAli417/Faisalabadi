@@ -1,6 +1,6 @@
 /* global React, ReactDOM */
-const APP_VERSION = 'v19';
-const APP_CHECKSUM = 'no-confirm-v19';
+const APP_VERSION = 'v20';
+const APP_CHECKSUM = 'warehouse-security-v20';
 (function() {
   var stored = null;
   try { stored = localStorage.getItem('faislabadi-pos-version'); } catch(_) {}
@@ -24,6 +24,7 @@ const pages = [
   ['dashboard', 'Dashboard'],
   ['pos', 'Point of Sale'],
   ['products', 'Products'],
+  ['warehouse', 'Warehouse'],
   ['inventory', 'Inventory'],
   ['purchases', 'Purchases'],
   ['customers', 'Customers and Udhar'],
@@ -37,6 +38,7 @@ const pagePermissions = {
   dashboard: 'dashboard',
   pos: 'pos',
   products: 'products',
+  warehouse: 'warehouse',
   inventory: 'inventory',
   purchases: 'purchases',
   customers: 'customers',
@@ -59,7 +61,7 @@ function canSee(user, pageId) {
 
 const permissionsList = {
   Admin: ['*'],
-  Manager: ['dashboard', 'pos', 'products', 'inventory', 'purchases', 'customers', 'udhar', 'returns', 'reports', 'settings', 'backups'],
+  Manager: ['dashboard', 'pos', 'products', 'warehouse', 'inventory', 'purchases', 'customers', 'udhar', 'returns', 'reports', 'settings', 'backups'],
   Cashier: ['dashboard', 'pos', 'customers', 'reports:own', 'returns:create']
 };
 
@@ -85,7 +87,7 @@ let LANG = 'en';
 try { LANG = localStorage.getItem(LANG_KEY) === 'ur' ? 'ur' : 'en'; } catch (_) {}
 const STRINGS = {
   en: {
-    nav_dashboard: 'Dashboard', nav_pos: 'Point of Sale', nav_products: 'Products', nav_inventory: 'Inventory',
+    nav_dashboard: 'Dashboard', nav_pos: 'Point of Sale', nav_products: 'Products', nav_warehouse: 'Warehouse', nav_inventory: 'Inventory',
     nav_purchases: 'Purchases', nav_customers: 'Customers and Udhar', nav_returns: 'Product Returns',
     nav_reports: 'Reports', nav_users: 'Users and Audit', nav_settings: 'Settings and Backups',
     secureLogin: 'SECURE LOGIN', signInToPos: 'Sign in to POS', emailOrPhone: 'Email or phone', password: 'Password',
@@ -142,10 +144,13 @@ const STRINGS = {
     scanMode: 'Scanner mode', scanModeNote: 'Barcode scanner connects as keyboard - scan into the POS search box', scanModeAlways: 'Scanner is always ready', scanModeManual: 'Press F3 to focus scanner input',
     cloudSynced: 'Cloud synced', cloudPending: 'Cloud pending', cloudConnecting: 'Cloud connecting', waitingFirstSync: 'Waiting for first cloud sync',
     cloudSyncedAt: 'Cloud synced', loadingData: 'Loading POS data...', offlineCached: 'Offline mode - showing cached data',
-    offlineNoCache: 'Offline and no cached data. Connect to the internet first.', langSwitch: 'اردو'
+    offlineNoCache: 'Offline and no cached data. Connect to the internet first.', langSwitch: 'اردو',
+    whEyebrow: 'WAREHOUSE MANAGEMENT', whAddItem: 'Add warehouse item', whTransfer: 'Transfer Stock', whTransferToProduct: 'To Product', whTransferToWarehouse: 'To Warehouse',
+    whLocation: 'Location', whSupplier: 'Supplier', phWhName: 'Item name', phWhLocation: 'Bin / Location', phWhSupplier: 'Supplier (optional)',
+    phTransferQty: 'Quantity', transferDone: 'Stock transferred successfully.', linkedProduct: 'Linked Product', linkProduct: 'Link product', unlinkProduct: 'Unlink'
   },
   ur: {
-    nav_dashboard: 'ڈیش بورڈ', nav_pos: 'نئی فروخت', nav_products: 'پروڈکٹس', nav_inventory: 'اسٹاک',
+    nav_dashboard: 'ڈیش بورڈ', nav_pos: 'نئی فروخت', nav_products: 'پروڈکٹس', nav_warehouse: 'گودام', nav_inventory: 'اسٹاک',
     nav_purchases: 'خریداری', nav_customers: 'گاہک اور اُدھار', nav_returns: 'پروڈکٹ واپسی',
     nav_reports: 'رپورٹس', nav_users: 'یوزرز اور آڈٹ', nav_settings: 'سیٹنگز اور بیک اپ',
     secureLogin: 'محفوظ لاگ ان', signInToPos: 'پی او ایس میں سائن کریں', emailOrPhone: 'ای میل یا موبائل نمبر', password: 'پاس ورڈ',
@@ -202,7 +207,10 @@ const STRINGS = {
     scanMode: 'اسکینر موڈ', scanModeNote: 'بارکوڈ اسکینر کی بورڈ کی طرح کام کرتا ہے - پی او ایس سرچ باکس میں اسکین کریں', scanModeAlways: 'اسکینر ہمیشہ تیار ہے', scanModeManual: 'اسکینر انپٹ پر فوکس کے لیے F3 دبائیں',
     cloudSynced: 'کلاؤڈ سنک', cloudPending: 'کلاؤڈ زیرِ انتظار', cloudConnecting: 'کلاؤڈ جوڑ رہے ہیں', waitingFirstSync: 'پہلی کلاؤڈ سنک کا انتظار',
     cloudSyncedAt: 'کلاؤڈ سنک ہوا', loadingData: 'ڈیٹا لوڈ ہو رہا ہے...', offlineCached: 'آف لائن موڈ - پرانا ڈیٹا دکھایا جا رہا ہے',
-    offlineNoCache: 'آف لائن ہیں اور کوئی محفوظ ڈیٹا نہیں۔ پہلے انٹرنیٹ سے جوڑیں۔', langSwitch: 'English'
+    offlineNoCache: 'آف لائن ہیں اور کوئی محفوظ ڈیٹا نہیں۔ پہلے انٹرنیٹ سے جوڑیں۔', langSwitch: 'English',
+    whEyebrow: 'گودام انتظام', whAddItem: 'گودام میں شامل کریں', whTransfer: 'اسٹاک منتقل کریں', whTransferToProduct: 'پروڈکٹ کو', whTransferToWarehouse: 'گودام کو',
+    whLocation: 'لوکیشن', whSupplier: 'سپلائر', phWhName: 'چیز کا نام', phWhLocation: 'بن / لوکیشن', phWhSupplier: 'سپلائر (اختیاری)',
+    phTransferQty: 'تعداد', transferDone: 'اسٹاک منتقل ہو گیا۔', linkedProduct: 'لنکڈ پروڈکٹ', linkProduct: 'لنک کریں', unlinkProduct: 'لنک ہٹائیں'
   }
 };
 const t = key => (STRINGS[LANG] && STRINGS[LANG][key]) || STRINGS.en[key] || key;
@@ -869,6 +877,135 @@ function DataPage({ page, data, client, refresh }) {
     khata && h(KhataModal, { customer: khata, client, onClose: () => setKhata(null), refresh }));
 }
 
+function WarehousePage({ data, client, refresh }) {
+  const [message, setMessage] = useState('');
+  const [form, setForm] = useState({});
+  const [search, setSearch] = useState('');
+  const [transferModal, setTransferModal] = useState(null);
+  const items = (data.warehouses || []).filter(item => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return `${item.name} ${item.sku || ''} ${item.barcode || ''} ${item.category || ''} ${item.location || ''} ${item.supplier || ''}`.toLowerCase().includes(q);
+  });
+  const products = data.products || [];
+  const productsByName = {};
+  products.forEach(p => { productsByName[p.id] = p; });
+
+  async function addItem(event) {
+    event.preventDefault();
+    setMessage('');
+    try {
+      await client.post('/api/warehouses', form);
+      setForm({});
+      await refresh();
+      setMessage(t('saved'));
+    } catch (err) { setMessage(friendlyError(err)); }
+  }
+
+  async function deleteItem(row) {
+    const ok = await askConfirm(LANG === 'ur' ? `"${row.name}" گودام سے ہٹائیں؟` : `Delete "${row.name}" from warehouse?`,
+      LANG === 'ur' ? `یہ عمل واپس نہیں ہو سکتا۔` : `This cannot be undone.`);
+    if (!ok) return;
+    try {
+      await client.del(`/api/warehouses/${row.id}`);
+      setMessage(LANG === 'ur' ? `"${row.name}" گودام سے ہٹایا گیا۔` : `"${row.name}" removed from warehouse.`);
+      await refresh();
+    } catch (err) { setMessage(friendlyError(err)); }
+  }
+
+  async function doTransfer(direction) {
+    if (!transferModal) return;
+    const qty = Number(transferModal.qty);
+    if (!qty || qty <= 0) { setMessage(LANG === 'ur' ? 'درست تعداد لکھیں۔' : 'Enter a valid quantity.'); return; }
+    setMessage('');
+    try {
+      await client.post('/api/warehouses/transfer', { warehouseId: transferModal.item.id, productId: transferModal.productId, qty, direction });
+      setTransferModal(null);
+      await refresh();
+      setMessage(t('transferDone'));
+    } catch (err) { setMessage(friendlyError(err)); }
+  }
+
+  async function linkProduct(whItem) {
+    const pid = window.prompt(LANG === 'ur' ? `پروڈکٹ کوڈ (SKU) یا نام لکھیں:` : `Enter product SKU or name:`, '');
+    if (!pid) return;
+    const match = products.find(p => p.sku === pid || p.id === pid || p.name.toLowerCase() === pid.toLowerCase());
+    if (!match) { setMessage(LANG === 'ur' ? 'پروڈکٹ نہیں ملا۔' : 'Product not found.'); return; }
+    try {
+      await client.put(`/api/warehouses/${whItem.id}`, { linkedProductId: match.id });
+      await refresh();
+      setMessage(LANG === 'ur' ? `لنک ہو گیا: ${match.name}` : `Linked: ${match.name}`);
+    } catch (err) { setMessage(friendlyError(err)); }
+  }
+
+  async function unlinkProduct(whItem) {
+    try {
+      await client.put(`/api/warehouses/${whItem.id}`, { linkedProductId: '' });
+      await refresh();
+    } catch (err) { setMessage(friendlyError(err)); }
+  }
+
+  return h('div', { className: 'page' },
+    h('div', { className: 'page-title' },
+      h('div', null, h('p', { className: 'eyebrow' }, t('whEyebrow')), h('h1', null, t('nav_warehouse')))),
+    message && h('div', { className: 'notice' }, message),
+    h('form', { className: 'inline-form', onSubmit: addItem },
+      h('input', { key: 'name', placeholder: t('phWhName'), value: form.name || '', onChange: e => setForm({ ...form, name: e.target.value }), required: true }),
+      h('input', { key: 'sku', placeholder: 'SKU / code', value: form.sku || '', onChange: e => setForm({ ...form, sku: e.target.value }) }),
+      h('input', { key: 'barcode', placeholder: 'Barcode', value: form.barcode || '', onChange: e => setForm({ ...form, barcode: e.target.value }) }),
+      h('input', { key: 'category', placeholder: t('phCategory'), value: form.category || '', onChange: e => setForm({ ...form, category: e.target.value }) }),
+      h('input', { key: 'stock', type: 'number', step: 'any', placeholder: t('hStock'), value: form.stock || '', onChange: e => setForm({ ...form, stock: e.target.value }) }),
+      h('input', { key: 'reorderLevel', type: 'number', min: '0', placeholder: t('phLowAlertAt'), value: form.reorderLevel || '', onChange: e => setForm({ ...form, reorderLevel: e.target.value }) }),
+      h('select', { key: 'unit', value: form.unit || 'pcs', onChange: e => setForm({ ...form, unit: e.target.value }) },
+        UNITS.map(unit => h('option', { key: unit.value, value: unit.value }, unit.urdu))),
+      h('input', { key: 'location', placeholder: t('phWhLocation'), value: form.location || '', onChange: e => setForm({ ...form, location: e.target.value }) }),
+      h('input', { key: 'supplier', placeholder: t('phWhSupplier'), value: form.supplier || '', onChange: e => setForm({ ...form, supplier: e.target.value }) }),
+      h('button', { key: 'save', className: 'primary' }, t('whAddItem'))),
+    h('div', { style: { margin: '12px 0' } },
+      h('input', { type: 'search', placeholder: t('searchPlaceholder'), value: search, onChange: e => setSearch(e.target.value), style: { width: '100%', maxWidth: '400px', padding: '8px 12px', border: '1px solid #ddd', borderRadius: '8px' } })),
+    h('article', { className: 'panel data-panel' },
+      h('div', { className: 'table-wrap' },
+        h('table', null,
+          h('thead', null, h('tr', null,
+            [t('hProduct'), t('hSku'), t('hCategory'), t('hStock'), t('whLocation'), t('whSupplier'), t('linkedProduct'), t('thStatus'), t('hActions')]
+              .map((label, i) => h('th', { key: i }, label)))),
+          h('tbody', null,
+            items.map(item => {
+              const isLow = Number(item.stock) <= Number(item.reorderLevel || 0);
+              const linked = item.linkedProductId && productsByName[item.linkedProductId];
+              return h('tr', { key: item.id },
+                h('td', null, h('strong', null, item.name), item.barcode ? h('small', { style: { display: 'block', color: '#64748b' } }, `${t('barcodeLabel')} ${item.barcode}`) : null),
+                h('td', null, item.sku || ''),
+                h('td', null, item.category || ''),
+                h('td', null, `${item.stock} ${unitLabel(item.unit)}`, isLow ? h('span', null, ' ', h(Badge, { tone: 'danger' }, t('lowBadge'))) : null),
+                h('td', null, item.location || ''),
+                h('td', null, item.supplier || ''),
+                h('td', null,
+                  linked
+                    ? h('span', null, h(Badge, { tone: 'success' }, linked.name), ' ', h('button', { className: 'secondary danger-btn small', style: { marginLeft: '4px', padding: '2px 6px', fontSize: '11px' }, onClick: () => unlinkProduct(item) }, t('unlinkProduct')))
+                    : h('button', { className: 'secondary small', onClick: () => linkProduct(item) }, t('linkProduct'))),
+                h('td', null, item.active === false || item.status === 'inactive' ? h(Badge, { tone: 'neutral' }, t('inactiveBadge')) : h(Badge, { tone: 'success' }, t('activeBadge'))),
+                h('td', null,
+                  h('button', { className: 'secondary small', onClick: () => setTransferModal({ item, productId: item.linkedProductId || '', qty: '' }) }, t('whTransfer')),
+                  h('button', { className: 'secondary danger-btn small', onClick: () => deleteItem(item) }, t('delete'))));
+            })))),
+    transferModal && h('div', { style: { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }, onClick: e => { if (e.target.style.background) setTransferModal(null); } },
+      h('div', { style: { background: '#fff', borderRadius: '14px', padding: '24px', maxWidth: '400px', width: '90%', boxShadow: '0 8px 32px rgba(0,0,0,0.25)' }, onClick: e => e.stopPropagation() },
+        h('h3', { style: { margin: '0 0 16px' } }, `${t('whTransfer')}: ${transferModal.item.name}`),
+        h('div', { style: { marginBottom: '12px' } },
+          h('label', { style: { display: 'block', marginBottom: '4px', fontWeight: 600 } }, t('hProduct')),
+          h('select', { style: { width: '100%', padding: '8px', borderRadius: '8px', border: '1px solid #ddd' }, value: transferModal.productId, onChange: e => setTransferModal({ ...transferModal, productId: e.target.value }) },
+            h('option', { value: '' }, '-- Select Product --'),
+            products.filter(p => p.active !== false).map(p => h('option', { key: p.id, value: p.id }, `${p.name} (${p.stock || 0} in stock)`)))),
+        h('div', { style: { marginBottom: '16px' } },
+          h('label', { style: { display: 'block', marginBottom: '4px', fontWeight: 600 } }, t('phTransferQty')),
+          h('input', { type: 'number', min: '1', step: 'any', style: { width: '100%', padding: '8px', borderRadius: '8px', border: '1px solid #ddd' }, value: transferModal.qty, onChange: e => setTransferModal({ ...transferModal, qty: e.target.value }), placeholder: `${LANG === 'ur' ? 'گودام میں موجود' : 'In warehouse'}: ${transferModal.item.stock}` })),
+        h('div', { style: { display: 'flex', gap: '10px' } },
+          h('button', { className: 'primary', disabled: !transferModal.productId, onClick: () => doTransfer('toProduct') }, t('whTransferToProduct')),
+          h('button', { className: 'primary', disabled: !transferModal.productId, onClick: () => doTransfer('toWarehouse') }, t('whTransferToWarehouse')),
+          h('button', { className: 'secondary', onClick: () => setTransferModal(null) }, t('close')))));
+}
+
 function KhataModal({ customer, client, onClose, refresh }) {
   const [entries, setEntries] = useState(null);
   const [summary, setSummary] = useState({ creditPurchases: customer.creditPurchases || 0, totalPaid: customer.totalPaid || 0 });
@@ -1403,7 +1540,7 @@ function App() {
     h('aside', { className: 'sidebar' }, h('div', { className: 'brand' }, h('span', { className: 'brand-logo' }, 'F'), h('div', null, h('strong', null, 'Faislabadi'), h('small', null, 'GENERAL STORE'))), h('nav', null, visiblePages.map(([id]) => h('button', { key: id, className: activePage === id ? 'nav-item active' : 'nav-item', onClick: () => setPage(id) }, h('span', null, t('nav_' + id)))), h(LangToggle, { tick: bumpLang })), h('div', { className: 'sidebar-footer' }, h('div', { className: 'avatar' }, data.user.name.split(' ').map(part => part[0]).join('').slice(0, 2)), h('div', null, h('strong', null, data.user.name), h('small', null, role)), h('button', { className: 'more', onClick: () => { try { client.post('/api/auth/logout', {}).catch(() => {}); } catch (_) {} localStorage.removeItem(stateKey); setSession(null); } }, t('logout')))),
     h('section', { className: 'main-area' }, h('header', { className: 'topbar' }, h('div', { className: 'crumb' }, 'Faislabadi General Store / ', h('strong', null, t('nav_' + activePage))), h('div', { className: 'top-actions' },
       cloudSync && cloudSync.enabled && h('span', { className: cloudSync.lastError ? 'sync-status offline' : 'sync-status', title: cloudSync.lastSuccessAt ? `${t('cloudSyncedAt')} ${new Date(cloudSync.lastSuccessAt).toLocaleTimeString()}` : t('waitingFirstSync') }, cloudSync.lastError ? t('cloudPending') : (cloudSync.lastSuccessAt ? t('cloudSynced') : t('cloudConnecting'))),
-      h('span', { className: online ? 'sync-status' : 'sync-status offline' }, online ? t('online') : t('offline')), h('button', { className: 'secondary', onClick: refresh }, t('refresh')), h(LangToggle, { tick: bumpLang }))), dataWarning && h('div', { className: 'notice danger', style: { margin: '12px 20px 0' } }, dataWarning), storageNotice && h('div', { className: 'notice warning', style: { margin: '12px 20px 0' } }, storageNotice), activePage === 'dashboard' ? h(Dashboard, { data, go: setPage, client }) : activePage === 'pos' ? h(POS, { client, data, refresh, online, setOnline, go: setPage }) : activePage === 'users' ? h(UsersAdmin, { client }) : activePage === 'returns' ? h(ReturnsPage, { data, client, refresh }) : activePage === 'reports' ? h(Reports, { data, client }) : activePage === 'purchases' ? h(Purchases, { data, client, refresh }) : activePage === 'settings' ? h(Settings, { data, client }) : h(DataPage, { page: activePage, data, client, refresh })));
+      h('span', { className: online ? 'sync-status' : 'sync-status offline' }, online ? t('online') : t('offline')), h('button', { className: 'secondary', onClick: refresh }, t('refresh')), h(LangToggle, { tick: bumpLang }))), dataWarning && h('div', { className: 'notice danger', style: { margin: '12px 20px 0' } }, dataWarning), storageNotice && h('div', { className: 'notice warning', style: { margin: '12px 20px 0' } }, storageNotice),     activePage === 'dashboard' ? h(Dashboard, { data, go: setPage, client }) : activePage === 'pos' ? h(POS, { client, data, refresh, online, setOnline, go: setPage }) : activePage === 'users' ? h(UsersAdmin, { client }) : activePage === 'returns' ? h(ReturnsPage, { data, client, refresh }) : activePage === 'reports' ? h(Reports, { data, client }) : activePage === 'purchases' ? h(Purchases, { data, client, refresh }) : activePage === 'settings' ? h(Settings, { data, client }) : activePage === 'warehouse' ? h(WarehousePage, { data, client, refresh }) : h(DataPage, { page: activePage, data, client, refresh })));
 }
 
 if ('serviceWorker' in navigator) {

@@ -205,6 +205,40 @@ async function writeCloudDb(db) {
   rememberCloud(db);
 }
 
+async function listCloudBackups() {
+  if (!useSupabase) return [];
+  try {
+    const { data, error } = await withTimeout(
+      supabase.from('pos_backups').select('id, file, reason, backed_up_at').order('backed_up_at', { ascending: false }).limit(50),
+      6000, 'List backups'
+    );
+    if (error) throw error;
+    return (data || []).map(row => ({ file: row.file, reason: row.reason, backedUpAt: row.backed_up_at }));
+  } catch (_) { return []; }
+}
+
+async function saveCloudBackup(file, reason, db) {
+  if (!useSupabase) throw new Error('Cloud backups require Supabase');
+  await withRetry(() => withTimeout(
+    supabase.from('pos_backups').upsert(
+      { id: file, file, reason, data: db, backed_up_at: new Date().toISOString() },
+      { onConflict: 'id' }
+    ).then(({ error }) => { if (error) throw new Error(error.message); }),
+    15000, 'Cloud backup write'
+  ), 'Cloud backup write');
+}
+
+async function loadCloudBackup(file) {
+  if (!useSupabase) throw new Error('Cloud backups require Supabase');
+  const { data, error } = await withTimeout(
+    supabase.from('pos_backups').select('data').eq('id', file).single(),
+    10000, 'Cloud backup read'
+  );
+  if (error) throw error;
+  if (!data || !data.data) throw new Error('Backup not found');
+  return data.data;
+}
+
 async function readDb() {
   if (MODE === 'cloud' && useSupabase) return readCloudDb();
   return readLocalDb();
@@ -254,5 +288,8 @@ module.exports = {
   MODE,
   withDbLock,
   ensureDir,
-  backupDir: path.join(dbDir, 'backups')
+  backupDir: path.join(dbDir, 'backups'),
+  listCloudBackups,
+  saveCloudBackup,
+  loadCloudBackup
 };
