@@ -945,6 +945,54 @@ function WarehousePage({ data, client, refresh }) {
     } catch (err) { setMessage(friendlyError(err)); }
   }
 
+  function renderTable() {
+    var headers = h('thead', null, h('tr', null,
+      [t('hProduct'), t('hSku'), t('hCategory'), t('hStock'), t('whLocation'), t('whSupplier'), t('linkedProduct'), t('thStatus'), t('hActions')]
+        .map(function(label, i) { return h('th', { key: i }, label); })));
+    var bodyRows = items.map(function(item) {
+      var isLow = Number(item.stock) <= Number(item.reorderLevel || 0);
+      var linked = item.linkedProductId && productsByName[item.linkedProductId];
+      return h('tr', { key: item.id },
+        h('td', null, h('strong', null, item.name), item.barcode ? h('small', { style: { display: 'block', color: '#64748b' } }, t('barcodeLabel') + ' ' + item.barcode) : null),
+        h('td', null, item.sku || ''),
+        h('td', null, item.category || ''),
+        h('td', null, item.stock + ' ' + unitLabel(item.unit), isLow ? h('span', null, ' ', h(Badge, { tone: 'danger' }, t('lowBadge'))) : null),
+        h('td', null, item.location || ''),
+        h('td', null, item.supplier || ''),
+        h('td', null, linked
+          ? h('span', null, h(Badge, { tone: 'success' }, linked.name), ' ', h('button', { className: 'secondary danger-btn small', style: { marginLeft: '4px', padding: '2px 6px', fontSize: '11px' }, onClick: function() { unlinkProduct(item); } }, t('unlinkProduct')))
+          : h('button', { className: 'secondary small', onClick: function() { linkProduct(item); } }, t('linkProduct'))),
+        h('td', null, item.active === false || item.status === 'inactive' ? h(Badge, { tone: 'neutral' }, t('inactiveBadge')) : h(Badge, { tone: 'success' }, t('activeBadge'))),
+        h('td', null,
+          h('button', { className: 'secondary small', onClick: function() { setTransferModal({ item: item, productId: item.linkedProductId || '', qty: '' }); } }, t('whTransfer')),
+          h('button', { className: 'secondary danger-btn small', onClick: function() { deleteItem(item); } }, t('delete'))));
+    });
+    return h('article', { className: 'panel data-panel' },
+      h('div', { className: 'table-wrap' },
+        h('table', null, headers, h('tbody', null, bodyRows))));
+  }
+
+  function renderTransferModal() {
+    if (!transferModal) return null;
+    return h('div', { style: { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }, onClick: function(e) { if (e.target.style.background) setTransferModal(null); } },
+      h('div', { style: { background: '#fff', borderRadius: '14px', padding: '24px', maxWidth: '400px', width: '90%', boxShadow: '0 8px 32px rgba(0,0,0,0.25)' }, onClick: function(e) { e.stopPropagation(); } },
+        h('h3', { style: { margin: '0 0 16px' } }, t('whTransfer') + ': ' + transferModal.item.name),
+        h('div', { style: { marginBottom: '12px' } },
+          h('label', { style: { display: 'block', marginBottom: '4px', fontWeight: 600 } }, t('hProduct')),
+          h('select', { style: { width: '100%', padding: '8px', borderRadius: '8px', border: '1px solid #ddd' }, value: transferModal.productId, onChange: function(e) { setTransferModal(Object.assign({}, transferModal, { productId: e.target.value })); } },
+            h('option', { value: '' }, '-- Select Product --'),
+            products.filter(function(p) { return p.active !== false; }).map(function(p) {
+              return h('option', { key: p.id, value: p.id }, p.name + ' (' + (p.stock || 0) + ' in stock)');
+            }))),
+        h('div', { style: { marginBottom: '16px' } },
+          h('label', { style: { display: 'block', marginBottom: '4px', fontWeight: 600 } }, t('phTransferQty')),
+          h('input', { type: 'number', min: '1', step: 'any', style: { width: '100%', padding: '8px', borderRadius: '8px', border: '1px solid #ddd' }, value: transferModal.qty, onChange: function(e) { setTransferModal(Object.assign({}, transferModal, { qty: e.target.value })); }, placeholder: (LANG === 'ur' ? 'گودام میں موجود' : 'In warehouse') + ': ' + transferModal.item.stock })),
+        h('div', { style: { display: 'flex', gap: '10px' } },
+          h('button', { className: 'primary', disabled: !transferModal.productId, onClick: function() { doTransfer('toProduct'); } }, t('whTransferToProduct')),
+          h('button', { className: 'primary', disabled: !transferModal.productId, onClick: function() { doTransfer('toWarehouse'); } }, t('whTransferToWarehouse')),
+          h('button', { className: 'secondary', onClick: function() { setTransferModal(null); } }, t('close')))));
+  }
+
   return h('div', { className: 'page' },
     h('div', { className: 'page-title' },
       h('div', null, h('p', { className: 'eyebrow' }, t('whEyebrow')), h('h1', null, t('nav_warehouse')))),
@@ -963,47 +1011,8 @@ function WarehousePage({ data, client, refresh }) {
       h('button', { key: 'save', className: 'primary' }, t('whAddItem'))),
     h('div', { style: { margin: '12px 0' } },
       h('input', { type: 'search', placeholder: t('searchPlaceholder'), value: search, onChange: e => setSearch(e.target.value), style: { width: '100%', maxWidth: '400px', padding: '8px 12px', border: '1px solid #ddd', borderRadius: '8px' } })),
-    h('article', { className: 'panel data-panel' },
-      h('div', { className: 'table-wrap' },
-        h('table', null,
-          h('thead', null, h('tr', null,
-            [t('hProduct'), t('hSku'), t('hCategory'), t('hStock'), t('whLocation'), t('whSupplier'), t('linkedProduct'), t('thStatus'), t('hActions')]
-              .map((label, i) => h('th', { key: i }, label)))),
-          h('tbody', null,
-            items.map(item => {
-              const isLow = Number(item.stock) <= Number(item.reorderLevel || 0);
-              const linked = item.linkedProductId && productsByName[item.linkedProductId];
-              return h('tr', { key: item.id },
-                h('td', null, h('strong', null, item.name), item.barcode ? h('small', { style: { display: 'block', color: '#64748b' } }, `${t('barcodeLabel')} ${item.barcode}`) : null),
-                h('td', null, item.sku || ''),
-                h('td', null, item.category || ''),
-                h('td', null, `${item.stock} ${unitLabel(item.unit)}`, isLow ? h('span', null, ' ', h(Badge, { tone: 'danger' }, t('lowBadge'))) : null),
-                h('td', null, item.location || ''),
-                h('td', null, item.supplier || ''),
-                h('td', null,
-                  linked
-                    ? h('span', null, h(Badge, { tone: 'success' }, linked.name), ' ', h('button', { className: 'secondary danger-btn small', style: { marginLeft: '4px', padding: '2px 6px', fontSize: '11px' }, onClick: () => unlinkProduct(item) }, t('unlinkProduct')))
-                    : h('button', { className: 'secondary small', onClick: () => linkProduct(item) }, t('linkProduct'))),
-                h('td', null, item.active === false || item.status === 'inactive' ? h(Badge, { tone: 'neutral' }, t('inactiveBadge')) : h(Badge, { tone: 'success' }, t('activeBadge'))),
-                h('td', null,
-                  h('button', { className: 'secondary small', onClick: () => setTransferModal({ item, productId: item.linkedProductId || '', qty: '' }) }, t('whTransfer')),
-                  h('button', { className: 'secondary danger-btn small', onClick: () => deleteItem(item) }, t('delete'))));
-            })))),
-    transferModal && h('div', { style: { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }, onClick: e => { if (e.target.style.background) setTransferModal(null); } },
-      h('div', { style: { background: '#fff', borderRadius: '14px', padding: '24px', maxWidth: '400px', width: '90%', boxShadow: '0 8px 32px rgba(0,0,0,0.25)' }, onClick: e => e.stopPropagation() },
-        h('h3', { style: { margin: '0 0 16px' } }, `${t('whTransfer')}: ${transferModal.item.name}`),
-        h('div', { style: { marginBottom: '12px' } },
-          h('label', { style: { display: 'block', marginBottom: '4px', fontWeight: 600 } }, t('hProduct')),
-          h('select', { style: { width: '100%', padding: '8px', borderRadius: '8px', border: '1px solid #ddd' }, value: transferModal.productId, onChange: e => setTransferModal({ ...transferModal, productId: e.target.value }) },
-            h('option', { value: '' }, '-- Select Product --'),
-            products.filter(p => p.active !== false).map(p => h('option', { key: p.id, value: p.id }, `${p.name} (${p.stock || 0} in stock)`)))),
-        h('div', { style: { marginBottom: '16px' } },
-          h('label', { style: { display: 'block', marginBottom: '4px', fontWeight: 600 } }, t('phTransferQty')),
-          h('input', { type: 'number', min: '1', step: 'any', style: { width: '100%', padding: '8px', borderRadius: '8px', border: '1px solid #ddd' }, value: transferModal.qty, onChange: e => setTransferModal({ ...transferModal, qty: e.target.value }), placeholder: `${LANG === 'ur' ? 'گودام میں موجود' : 'In warehouse'}: ${transferModal.item.stock}` })),
-        h('div', { style: { display: 'flex', gap: '10px' } },
-          h('button', { className: 'primary', disabled: !transferModal.productId, onClick: () => doTransfer('toProduct') }, t('whTransferToProduct')),
-          h('button', { className: 'primary', disabled: !transferModal.productId, onClick: () => doTransfer('toWarehouse') }, t('whTransferToWarehouse')),
-          h('button', { className: 'secondary', onClick: () => setTransferModal(null) }, t('close')))));
+    renderTable(),
+    renderTransferModal());
 }
 
 function KhataModal({ customer, client, onClose, refresh }) {
