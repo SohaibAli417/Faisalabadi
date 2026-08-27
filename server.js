@@ -127,7 +127,7 @@ function seedData() {
   return {
     meta: { createdAt: now(), updatedAt: now(), invoiceSeq: 1048 },
     settings: {
-      storeName: 'Akmal Store',
+      storeName: 'Faislabadi General Store',
       phone: '03024503010',
       address: 'Fazlia Colony, Opposite Ali Internet Service',
       taxRate: 0.18,
@@ -199,7 +199,7 @@ function sanitizeUser(user) {
   return safe;
 }
 
-const coreSettings = { storeName: 'Akmal Store', phone: '03024503010', address: 'Fazlia Colony, Opposite Ali Internet Service' };
+const coreSettings = { storeName: 'Faislabadi General Store', phone: '03024503010', address: 'Fazlia Colony, Opposite Ali Internet Service' };
 
 function ensureCoreAccounts(db) {
   let changed = false;
