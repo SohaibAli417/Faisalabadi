@@ -1,10 +1,10 @@
-const CACHE_NAME = 'faislabadi-pos-v18';
+const CACHE_NAME = 'faislabadi-pos-v19';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
-  '/styles.css?v=18',
-  '/manual.css?v=18',
-  '/app.js?v=18',
+  '/styles.css?v=19',
+  '/manual.css?v=19',
+  '/app.js?v=19',
   '/vendor/react.production.min.js',
   '/vendor/react-dom.production.min.js',
   '/manifest.json'
@@ -12,7 +12,7 @@ const STATIC_ASSETS = [
 
 const URDU_FONT_CSS = 'https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;700&display=swap';
 
-const API_CACHE = 'faislabadi-api-v18';
+const API_CACHE = 'faislabadi-api-v19';
 const BOOTSTRAP_CACHE = 'faislabadi-bootstrap-v18';
 
 self.addEventListener('install', function(event) {

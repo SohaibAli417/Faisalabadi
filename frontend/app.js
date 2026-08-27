@@ -1,6 +1,6 @@
 /* global React, ReactDOM */
-const APP_VERSION = 'v18';
-const APP_CHECKSUM = 'void-delete-v18';
+const APP_VERSION = 'v19';
+const APP_CHECKSUM = 'no-confirm-v19';
 (function() {
   var stored = null;
   try { stored = localStorage.getItem('faislabadi-pos-version'); } catch(_) {}
@@ -240,6 +240,56 @@ const friendlyError = error => {
   }
   return raw;
 };
+
+let _confirmResolve = null;
+let _confirmState = { show: false, title: '', message: '' };
+
+function askConfirm(title, message) {
+  return new Promise(function(resolve) {
+    _confirmResolve = resolve;
+    _confirmState = { show: true, title: title, message: message };
+    renderConfirm();
+  });
+}
+
+function renderConfirm() {
+  var el = document.getElementById('confirm-modal-root');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'confirm-modal-root';
+    document.body.appendChild(el);
+  }
+  if (!_confirmState.show) { el.innerHTML = ''; return; }
+  var overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;';
+  var card = document.createElement('div');
+  card.style.cssText = 'background:#fff;border-radius:14px;padding:24px;max-width:380px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.25);text-align:center;';
+  var titleEl = document.createElement('h3');
+  titleEl.textContent = _confirmState.title;
+  titleEl.style.cssText = 'margin:0 0 12px;font-size:18px;color:#1a1a2e;';
+  var msgEl = document.createElement('p');
+  msgEl.textContent = _confirmState.message;
+  msgEl.style.cssText = 'margin:0 0 20px;font-size:14px;color:#555;white-space:pre-line;line-height:1.5;';
+  var btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;gap:10px;justify-content:center;';
+  var cancelBtn = document.createElement('button');
+  cancelBtn.textContent = LANG === 'ur' ? 'منسوخ' : 'Cancel';
+  cancelBtn.style.cssText = 'padding:10px 24px;border-radius:8px;border:1px solid #ccc;background:#fff;font-size:15px;font-weight:600;cursor:pointer;min-width:80px;';
+  var okBtn = document.createElement('button');
+  okBtn.textContent = LANG === 'ur' ? 'ٹھیک ہے' : 'OK';
+  okBtn.style.cssText = 'padding:10px 24px;border-radius:8px;border:none;background:#c0392b;color:#fff;font-size:15px;font-weight:600;cursor:pointer;min-width:80px;';
+  cancelBtn.onclick = function() { _confirmState.show = false; renderConfirm(); if (_confirmResolve) _confirmResolve(false); };
+  okBtn.onclick = function() { _confirmState.show = false; renderConfirm(); if (_confirmResolve) _confirmResolve(true); };
+  overlay.onclick = function(e) { if (e.target === overlay) { _confirmState.show = false; renderConfirm(); if (_confirmResolve) _confirmResolve(false); } };
+  btnRow.appendChild(cancelBtn);
+  btnRow.appendChild(okBtn);
+  card.appendChild(titleEl);
+  card.appendChild(msgEl);
+  card.appendChild(btnRow);
+  overlay.appendChild(card);
+  el.innerHTML = '';
+  el.appendChild(overlay);
+}
 
 function Badge({ children, tone = 'neutral' }) {
   return h('span', { className: `badge ${tone}` }, children);
@@ -720,9 +770,12 @@ function DataPage({ page, data, client, refresh }) {
         canManageUdhar && Number(row.balance) > 0 && h('button', { className: 'secondary khata-btn danger-btn small', onClick: () => confirmClearUdhar(row) }, t('clearShort'))));
   }
   async function confirmClearUdhar(row) {
-    const ok = window.confirm(LANG === 'ur'
-      ? `${row.name} کا اُدھار کلیر کریں؟\n\nبقیہ: ${money(row.balance)}\n\nیہ اُدھار مکمل ادا شدہ قرار پائے گا اور بیلنس روپے 0 ہو جائے گا۔ مکمل تاریخ محفوظ رہے گی۔`
-      : `Clear udhar for ${row.name}?\n\nRemaining balance: ${money(row.balance)}\n\nThis marks the udhar as FULLY PAID and sets the balance to Rs 0. Full payment history will be kept permanently.`);
+    const ok = await askConfirm(LANG === 'ur'
+      ? `${row.name} کا اُدھار کلیر کریں؟`
+      : `Clear udhar for ${row.name}?`,
+      LANG === 'ur'
+      ? `بقیہ: ${money(row.balance)}\n\nیہ اُدھار مکمل ادا شدہ قرار پائے گا اور بیلنس روپے 0 ہو جائے گا۔ مکمل تاریخ محفوظ رہے گی۔`
+      : `Remaining balance: ${money(row.balance)}\n\nThis marks the udhar as FULLY PAID and sets the balance to Rs 0. Full payment history will be kept permanently.`);
     if (!ok) return;
     try {
       await client.post(`/api/customers/${row.id}/clear-udhar`, {});
@@ -748,9 +801,12 @@ function DataPage({ page, data, client, refresh }) {
         canDeleteProducts && (page === 'products' || page === 'inventory') && h('button', { className: 'secondary danger-btn small', onClick: () => confirmDeleteProduct(row) }, t('delete'))));
   }
   async function confirmDeleteProduct(row) {
-    const ok = window.confirm(LANG === 'ur'
-      ? `"${row.name}" مستقل ڈیلیٹ کریں؟\n\nاگر یہ پروڈکٹ کسی بل میں آ چکی ہے تو ڈیلیٹ کے بجائے "بند (Inactive)" کیا جائے گا۔`
-      : `Delete "${row.name}" permanently?\n\nIf this product has billing history it will be marked Inactive instead.`);
+    const ok = await askConfirm(LANG === 'ur'
+      ? `"${row.name}" ڈیلیٹ کریں؟`
+      : `Delete "${row.name}"?`,
+      LANG === 'ur'
+      ? `اگر یہ پروڈکٹ کسی بل میں آ چکی ہے تو ڈیلیٹ کے بجائے "بند (Inactive)" کیا جائے گا۔`
+      : `If this product has billing history it will be marked Inactive instead of being deleted.`);
     if (!ok) return;
     try {
       await client.del(`/api/products/${row.id}`);
@@ -759,9 +815,12 @@ function DataPage({ page, data, client, refresh }) {
     } catch (err) {
       const msg = String((err && err.message) || '');
       if (/PRODUCT_IN_USE/i.test(msg) || /billing history/i.test(msg)) {
-        const markInactive = window.confirm(LANG === 'ur'
-          ? `"${row.name}" کی بلنگ کی تاریخ ہے۔ ڈیلیٹ نہیں ہو سکتا۔\n\nکیا اسے "بند (Inactive)" کرنا ہے؟ یہ پروڈکٹ پوس سے چھپ جائے گا لیکن پرانے بل محفوظ رہیں گے۔`
-          : `"${row.name}" has billing history and cannot be deleted.\n\nMark it Inactive instead? It will hide from POS but old bills stay correct.`);
+        const markInactive = await askConfirm(LANG === 'ur'
+          ? `"${row.name}" بند (Inactive) کریں؟`
+          : `Mark "${row.name}" as Inactive?`,
+          LANG === 'ur'
+          ? `یہ پروڈکٹ پوس سے چھپ جائے گا لیکن پرانے بل محفوظ رہیں گے۔`
+          : `It will hide from POS but old bills stay correct.`);
         if (markInactive) {
           try {
             await client.put(`/api/products/${row.id}`, { active: false, status: 'inactive' });
@@ -858,9 +917,12 @@ function KhataModal({ customer, client, onClose, refresh }) {
     } catch (_) {}
   }
   async function clearUdhar() {
-    const ok = window.confirm(LANG === 'ur'
-      ? `${customer.name} کا پورا اُدھار کلیر کریں؟\n\nبقیہ: ${money(balance)}\n\nبیلنس روپے 0 ہو جائے گا اور تاریخ میں "اُدھار مکمل کلیر" درج ہوگا۔ کچھ بھی ڈیلیٹ نہیں ہوگا۔`
-      : `Clear ALL udhar for ${customer.name}?\n\nRemaining: ${money(balance)}\n\nThe balance will become Rs 0 and this will be recorded as "Udhar cleared in full" in the history. Nothing is deleted.`);
+    const ok = await askConfirm(LANG === 'ur'
+      ? `${customer.name} کا پورا اُدھار کلیر کریں؟`
+      : `Clear ALL udhar for ${customer.name}?`,
+      LANG === 'ur'
+      ? `بقیہ: ${money(balance)}\n\nبیلنس روپے 0 ہو جائے گا اور تاریخ میں "اُدھار مکمل کلیر" درج ہوگا۔`
+      : `Remaining: ${money(balance)}\n\nThe balance will become Rs 0 and this will be recorded as "Udhar cleared in full" in the history.`);
     if (!ok) return;
     setBusy(true);
     setMessage('');
@@ -949,7 +1011,7 @@ function ReturnsPage({ data, client, refresh }) {
     const detail = complete
       ? (LANG === 'ur' ? 'تمام باقی مقدار دوبارہ اسٹاک میں شامل ہوگی اور بل مکمل واپس شدہ لگ جائے گا۔' : 'All remaining quantities will go back to stock and the invoice will be marked fully returned.')
       : `${LANG === 'ur' ? 'اشیاء' : 'Products'}: ${items.map(item => `${item.name} x${item.qty}`).join(', ') || (LANG === 'ur' ? 'کوئی منتخب نہیں' : 'None selected')}\n${LANG === 'ur' ? 'واپس آیا مال اسٹاک میں شامل ہوگا۔' : 'Returned stock goes back to inventory.'}`;
-    if (!window.confirm(`${label}\n\n${detail}\n\n${LANG === 'ur' ? 'یہ واپس نہیں ہو سکتا۔' : 'This cannot be undone.'}`)) return;
+    if (!await askConfirm(label, `${detail}\n\n${LANG === 'ur' ? 'یہ واپس نہیں ہو سکتا۔' : 'This cannot be undone.'}`)) return;
     if (!complete && !items.length) { setMessage(LANG === 'ur' ? 'کم از کم ایک پروڈکٹ کی مقدار منتخب کریں۔' : 'Select at least one product quantity to return.'); return; }
     setBusy(true);
     setMessage('');
@@ -977,7 +1039,7 @@ function ReturnsPage({ data, client, refresh }) {
   const canVoid = data.user.role === 'Admin' || data.user.role === 'Manager';
   async function voidBill() {
     if (!sale) return;
-    if (!window.confirm(`${t('voidBillConfirm')}\n\n${t('voidBillDetail')}`)) return;
+    if (!await askConfirm(t('voidBillConfirm'), t('voidBillDetail'))) return;
     setBusy(true);
     setMessage('');
     try {
@@ -1054,7 +1116,7 @@ function UsersAdmin({ client }) {
     }
   }
   async function toggleActive(user) {
-    if (!window.confirm(LANG === 'ur' ? `${user.name} کا اکاؤنٹ ${user.active ? 'بند' : 'چالو'} کریں؟` : `${user.active ? 'Deactivate' : 'Activate'} account for ${user.name}?`)) return;
+    if (!await askConfirm(LANG === 'ur' ? `${user.name} کا اکاؤنٹ ${user.active ? 'بند' : 'چالو'} کریں؟` : `${user.active ? 'Deactivate' : 'Activate'} account?`, LANG === 'ur' ? `${user.name}` : `${user.name} (${user.email})`)) return;
     try { await client.put(`/api/users/${user.id}`, { active: !user.active }); await load(); }
     catch (err) { setMessage(friendlyError(err)); }
   }
@@ -1168,7 +1230,7 @@ function Settings({ data, client }) {
     }
   }
   async function restoreBackup(file) {
-    const confirmed = window.confirm(LANG === 'ur' ? `بیک اپ ${file} بحال کریں؟ پہلے حفاظتی بیک اپ بن جائے گا۔` : `Restore backup ${file}? A safety backup will be created first.`);
+    const confirmed = await askConfirm(LANG === 'ur' ? `بیک اپ بحال کریں؟` : `Restore backup?`, LANG === 'ur' ? `بیک اپ ${file} بحال کریں؟ پہلے حفاظتی بیک اپ بن جائے گا۔` : `Restore backup ${file}? A safety backup will be created first.`);
     if (!confirmed) return;
     try {
       await client.post(`/api/backups/${encodeURIComponent(file)}/restore`, {});
@@ -1196,12 +1258,14 @@ function Settings({ data, client }) {
     setMessage(LANG === 'ur' ? 'سیٹنگز محفوظ ہو گئیں۔' : 'Printer settings saved.');
   }
   async function resetShop() {
-    if (!window.confirm(LANG === 'ur'
-      ? 'نیا آغاز؟ اس سے تمام سیلز، اُدھار کھاتہ، ادائیگیاں اور گاہک ریکارڈ مستقل ڈیلیٹ ہوں گے۔ جاری رکھیں؟'
-      : 'START FRESH? This permanently deletes ALL sales, udhar khata, payments and customer records. Continue?')) return;
-    const clearProducts = window.confirm(LANG === 'ur'
-      ? 'پروڈکٹس بھی ڈیلیٹ کریں؟ OK = پروڈکٹس بھی ڈیلیٹ، Cancel = پروڈکٹس رہنے دیں'
-      : 'Also delete ALL products? OK = delete products too, Cancel = keep products');
+    if (!await askConfirm(LANG === 'ur' ? 'نیا آغاز؟' : 'START FRESH?',
+      LANG === 'ur'
+      ? 'اس سے تمام سیلز، اُدھار کھاتہ، ادائیگیاں اور گاہک ریکارڈ مستقل ڈیلیٹ ہوں گے۔ جاری رکھیں؟'
+      : 'This permanently deletes ALL sales, udhar khata, payments and customer records. Continue?')) return;
+    const clearProducts = await askConfirm(LANG === 'ur' ? 'پروڈکٹس بھی؟' : 'Also delete products?',
+      LANG === 'ur'
+      ? 'OK = پروڈکٹس بھی ڈیلیٹ، Cancel = پروڈکٹس رہنے دیں'
+      : 'OK = delete all products too, Cancel = keep products');
     try {
       const result = await client.post('/api/reset', { clearProducts });
       setMessage(result.warning || (LANG === 'ur' ? 'ڈیٹا صاف۔ نیا آغاز تیار - ری لوڈ ہو رہا ہے...' : 'Shop data cleared. Fresh start ready - reloading...'));
