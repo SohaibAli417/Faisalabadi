@@ -122,6 +122,13 @@ function validatePassword(password) {
 }
 
 function seedData() {
+  const adminPw = generateInitialPassword();
+  const managerPw = generateInitialPassword();
+  console.log('=== FRESH DATABASE - generated initial passwords ===');
+  console.log(`Admin:   Sohaib Ali  / ${adminPw}`);
+  console.log(`Manager: Akmal       / ${managerPw}`);
+  console.log('CHANGE THESE PASSWORDS after first login!');
+  console.log('====================================================');
   return {
     meta: { createdAt: now(), updatedAt: now(), invoiceSeq: 1048 },
     settings: {
@@ -133,8 +140,8 @@ function seedData() {
       backupOnStartup: true
     },
     users: [
-      { id: 'usr_sohaib', name: 'Sohaib Ali', email: 'sohaib@faislabadi.pk', phone: '03074224449', role: 'Admin', active: true, passwordHash: hashPassword('Sohaib@786#Dev') },
-      { id: 'usr_akmal', name: 'Akmal', email: 'akmal@faislabadi.pk', phone: '03024503010', role: 'Manager', active: true, passwordHash: hashPassword('Akmal@786#Store') }
+      { id: 'usr_sohaib', name: 'Sohaib Ali', email: 'sohaib@faislabadi.pk', phone: '03074224449', role: 'Admin', active: true, passwordHash: hashPassword(adminPw) },
+      { id: 'usr_akmal', name: 'Akmal', email: 'akmal@faislabadi.pk', phone: '03024503010', role: 'Manager', active: true, passwordHash: hashPassword(managerPw) }
     ],
     products: [
       { id: 'prd_1', name: 'Surf Excel 1kg', sku: '8961000100123', category: 'Household', price: 890, cost: 760, stock: 18, reorderLevel: 8, unit: 'pack', active: true },
