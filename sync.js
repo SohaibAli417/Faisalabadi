@@ -154,15 +154,11 @@ function mergeDbs(local, cloud, options = {}) {
   const supplierMap = mergeLwwCollection(local.suppliers, cloud.suppliers, 'id');
   const suppliers = [...supplierMap.values()].map(cleanRow).sort((a, b) => recordTime(b) - recordTime(a));
 
-  const purchases = [
-    ...tag(localPurchases, 'local'),
-    ...tag(cloudPurchasesRows, 'cloud')
-  ].sort((a, b) => recordTime(b) - recordTime(a)).map(cleanRow);
+  const purchases = [...mergeLwwCollection(localPurchases, cloudPurchasesRows, 'id').values()]
+    .sort((a, b) => recordTime(b) - recordTime(a)).map(cleanRow);
 
-  const returns = [
-    ...tag(localReturns, 'local'),
-    ...tag(cloudReturnsRows, 'cloud')
-  ].sort((a, b) => recordTime(b) - recordTime(a)).map(cleanRow);
+  const returns = [...mergeLwwCollection(localReturns, cloudReturnsRows, 'id').values()]
+    .sort((a, b) => recordTime(b) - recordTime(a)).map(cleanRow);
 
   if (cloudPurchaseOnly.length || localPurchaseOnly.length || cloudReturnOnly.length || localReturnOnly.length) {
     flags.cloudChanged = true;

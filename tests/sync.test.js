@@ -137,3 +137,26 @@ test('union: a payment recorded on one side merges into the result', () => {
   assert.equal(merged.payments[0].id, 'pay_2');
   assert.ok(localChanged && cloudChanged);
 });
+
+test('returns and purchases are deduped by id and never duplicated by the merge', () => {
+  const returnRecord = {
+    id: 'ret_1', saleId: 'sal_1', createdAt: '2026-08-02T10:00:00Z',
+    items: [{ productId: 'prd_1', qty: 1 }], total: 100
+  };
+  const purchaseRecord = {
+    id: 'pur_1', createdAt: '2026-08-02T10:00:00Z',
+    items: [{ productId: 'prd_1', qty: 5 }], total: 500
+  };
+  const local = baseDb({ returns: [{ ...returnRecord, _updatedAt: '2026-08-03T00:00:00Z' }], purchases: [{ ...purchaseRecord }] });
+  const cloud = baseDb({ returns: [{ ...returnRecord, _updatedAt: '2026-08-01T00:00:00Z' }], purchases: [{ ...purchaseRecord }] });
+
+  const first = mergeDbs(local, cloud);
+  assert.equal(first.merged.returns.length, 1);
+  assert.equal(first.merged.purchases.length, 1);
+
+  const second = mergeDbs(first.merged, first.merged);
+  assert.equal(second.merged.returns.length, 1);
+  assert.equal(second.merged.purchases.length, 1);
+  assert.equal(second.localChanged, false);
+  assert.equal(second.cloudChanged, false);
+});
