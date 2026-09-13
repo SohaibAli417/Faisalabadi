@@ -42,16 +42,19 @@ async function syncWithCloud() {
   cloudSync.running = true;
   cloudSync.lastAttemptAt = now();
   try {
+    let cloud = null;
+    try {
+      cloud = await Promise.race([
+        readCloudDb(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timed out')), 6000))
+      ]);
+    } catch (error) {
+      cloudSync.lastError = `Cloud unreachable, will retry (${error.message})`;
+      return;
+    }
     await withDbLock(async () => {
       const local = await readLocalDb();
       if (!local) return;
-      let cloud = null;
-      try {
-        cloud = await readCloudDb();
-      } catch (error) {
-        cloudSync.lastError = `Cloud unreachable, will retry (${error.message})`;
-        return;
-      }
       if (!cloud) {
         await writeCloudDb(local);
         cloudSync.lastSuccessAt = now();

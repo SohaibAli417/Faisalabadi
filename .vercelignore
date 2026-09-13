@@ -1,0 +1,24 @@
+# Non-POS files - do not deploy
+product-description.html
+product-description.css
+COPY-PASTE-PRODUCT-DESCRIPTION.html
+livestock-product-description-package.zip
+assets/
+
+# Secrets and environment - never deployed
+.env
+.env.*
+!.env.example
+
+# Backups and runtime data - huge, not needed on server
+database/backups/
+database/pre-dedupe-backup-*.json
+database/pos-data-corrupt-*.json
+
+# Logs
+.server.*.log
+*.log
+
+# Local tooling
+.vercel
+node_modules/.cache
