@@ -19,3 +19,6 @@ Thumbs.db
 
 .vercel
 .env*
+
+# Local build artifact for client handover
+faislabadi-pos-client-delivery.zip
