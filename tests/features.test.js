@@ -2,7 +2,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
   seedData, ensureSchema, createSale, processReturn, receiveUdharPayment,
-  clearUdhar, returnedQtyByItem, customerTotals, decorateCustomer, can
+  clearUdhar, returnedQtyByItem, customerTotals, decorateCustomer,
+  createSupplier, updateSupplier, deleteSupplier, can
 } = require('../server');
 const { mergeDbs } = require('../sync');
 
@@ -98,6 +99,25 @@ test('decorateCustomer honors recordedTotal/recordedPaid overrides and masks cni
   assert.ok(view.cnicMasked);
   customer.recordedPaid = 15000;
   assert.equal(decorateCustomer(db, customer, customerTotals(db)).balance, 0);
+});
+
+test('supplier create/update/delete works, audited, and delete is blocked once purchases exist', () => {
+  const { db, admin } = fixture();
+  const sup = createSupplier(db, { name: 'Shalimar Foods', phone: '041-5556666', address: 'Jaranwala Road' }, admin);
+  assert.equal(sup.name, 'Shalimar Foods');
+  assert.equal(db.suppliers[0].id, sup.id);
+  assert.equal(db.auditLogs.some(log => log.entity === 'supplier' && log.action === 'create'), true);
+  const updated = updateSupplier(db, sup.id, { name: 'Shalimar Foods (HQ)', phone: '041-9998888', active: false }, admin);
+  assert.equal(updated.name, 'Shalimar Foods (HQ)');
+  assert.equal(updated.active, false);
+  deleteSupplier(db, sup.id, admin);
+  assert.equal(db.suppliers.some(item => item.id === sup.id), false);
+  const used = createSupplier(db, { name: 'Used Supplier' }, admin);
+  db.purchases = [{ id: 'pur_x', supplierId: used.id, items: [], total: 100 }];
+  assert.throws(() => deleteSupplier(db, used.id, admin), /purchase history/);
+  const cashier = db.users.find(user => user.role === 'Cashier');
+  assert.equal(can(cashier, 'purchases'), false);
+  assert.equal(can(admin, 'purchases'), true);
 });
 
 test('clear udhar zeroes the balance and preserves every history record', () => {

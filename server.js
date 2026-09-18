@@ -741,6 +741,37 @@ function receiveUdharPayment(db, customerId, amountInput, actor, options = {}) {
   return { payment, balance: customer.balance };
 }
 
+function createSupplier(db, body, actor) {
+  const name = String(body.name || '').trim();
+  if (!name) throw new Error('Supplier name is required');
+  const supplier = { id: uid('sup'), name, phone: String(body.phone || '').trim(), address: String(body.address || '').trim(), active: true, _updatedAt: now() };
+  db.suppliers = [supplier, ...(db.suppliers || [])];
+  audit(db, actor, 'create', 'supplier', supplier.id, { name });
+  return supplier;
+}
+
+function updateSupplier(db, id, body, actor) {
+  const supplier = db.suppliers.find(item => item.id === id);
+  if (!supplier) throw new Error('Supplier not found');
+  if (body.name !== undefined) supplier.name = String(body.name).trim();
+  if (body.phone !== undefined) supplier.phone = String(body.phone).trim();
+  if (body.address !== undefined) supplier.address = String(body.address).trim();
+  if (body.active !== undefined) supplier.active = body.active === true || body.active === 'true';
+  supplier._updatedAt = now();
+  audit(db, actor, 'update', 'supplier', supplier.id, { name: supplier.name });
+  return supplier;
+}
+
+function deleteSupplier(db, id, actor) {
+  const supplier = db.suppliers.find(item => item.id === id);
+  if (!supplier) throw new Error('Supplier not found');
+  const used = (db.purchases || []).some(item => item.supplierId === id);
+  if (used) throw new Error('This supplier has purchase history and cannot be deleted');
+  db.suppliers = db.suppliers.filter(item => item.id !== id);
+  audit(db, actor, 'delete', 'supplier', id, { name: supplier.name });
+  return { ok: true };
+}
+
 function clearUdhar(db, customerId, actor) {
   const customer = db.customers.find(item => item.id === customerId);
   if (!customer) throw new Error('Customer not found');
@@ -1361,6 +1392,43 @@ async function handleApi(request, response) {
 
     if (method === 'GET' && url.pathname === '/api/suppliers') return json(response, 200, db.suppliers);
 
+    if (method === 'POST' && url.pathname === '/api/suppliers') {
+      if (!can(actor, 'purchases')) return json(response, 403, { error: 'Permission denied' });
+      const body = await parseBody(request);
+      try {
+        const supplier = createSupplier(db, body, actor);
+        await saveDb(db);
+        return json(response, 201, supplier);
+      } catch (error) {
+        return json(response, 400, { error: error.message });
+      }
+    }
+
+    if (method === 'PUT' && /^\/api\/suppliers\/[^/]+$/.test(url.pathname)) {
+      if (!can(actor, 'purchases')) return json(response, 403, { error: 'Permission denied' });
+      const id = url.pathname.split('/')[3];
+      const body = await parseBody(request);
+      try {
+        const supplier = updateSupplier(db, id, body, actor);
+        await saveDb(db);
+        return json(response, 200, supplier);
+      } catch (error) {
+        return json(response, error.message === 'Supplier not found' ? 404 : 400, { error: error.message });
+      }
+    }
+
+    if (method === 'DELETE' && /^\/api\/suppliers\/[^/]+$/.test(url.pathname)) {
+      if (!can(actor, 'purchases')) return json(response, 403, { error: 'Permission denied' });
+      const id = url.pathname.split('/')[3];
+      try {
+        const result = deleteSupplier(db, id, actor);
+        await saveDb(db);
+        return json(response, 200, result);
+      } catch (error) {
+        return json(response, error.message === 'Supplier not found' ? 404 : 400, { error: error.message });
+      }
+    }
+
     if (method === 'GET' && url.pathname === '/api/users') {
       if (!can(actor, 'users')) return json(response, 403, { error: 'Only Admin can manage users' });
       return json(response, 200, db.users.map(sanitizeUser));
@@ -1540,5 +1608,8 @@ module.exports.returnedQtyByItem = returnedQtyByItem;
 module.exports.customerTotals = customerTotals;
 module.exports.decorateCustomer = decorateCustomer;
 module.exports.combineDateTime = combineDateTime;
+module.exports.createSupplier = createSupplier;
+module.exports.updateSupplier = updateSupplier;
+module.exports.deleteSupplier = deleteSupplier;
 module.exports.can = can;
 module.exports.permissions = permissions;

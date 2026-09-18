@@ -1,6 +1,6 @@
 /* global React, ReactDOM */
-const APP_VERSION = 'v22';
-const APP_CHECKSUM = 'customer-product-edit-v22';
+const APP_VERSION = 'v23';
+const APP_CHECKSUM = 'edit-all-sections-v23';
 (function() {
   var stored = null;
   try { stored = localStorage.getItem('faislabadi-pos-version'); } catch(_) {}
@@ -125,7 +125,7 @@ const STRINGS = {
     hActions: 'Actions', hProduct: 'Product', hSku: 'SKU', hCategory: 'Category', hStock: 'Stock', hCost: 'Cost', hProfit: 'Profit', hPrice: 'Price',
     hPaymentDate: 'Payment Date', hPaymentTime: 'Payment Time', editLabel: 'Edit', saveLabel: 'Save', cancelLabel: 'Cancel',
     khata: 'Khata', payUdhar: 'Pay Udhar', clearShort: 'Clear', udharBadge: 'Udhar', clearBadge: 'Clear', activeBadge: 'Active', inactiveBadge: 'Inactive', lowBadge: 'Low',
-    delete: 'Delete', saved: 'Saved.', addCustomer: 'Add customer', addProduct: 'Add product',
+    delete: 'Delete', saved: 'Saved.', addCustomer: 'Add customer', addProduct: 'Add product', addSupplier: 'Add supplier',
     phName: 'Name', phPhone: 'Phone', phCnicOptional: 'CNIC (optional)', phAddressOptional: 'Address (optional)',
     phProductName: 'Product name', phCategory: 'Category', phCost: 'Purchase price (cost)', profitRs: 'Profit Rs', profitPercent: 'Profit %',
     phOwnerProfit: 'Owner profit', phSalePriceAuto: 'Sale price (auto)', phLowAlertAt: 'Low stock alert at', barcodeLabel: 'Barcode:',
@@ -189,7 +189,7 @@ const STRINGS = {
     hActions: 'ایکشن', hProduct: 'پروڈکٹ', hSku: 'کوڈ', hCategory: 'قسم', hStock: 'اسٹاک', hCost: 'لاگت', hProfit: 'منافع', hPrice: 'قیمت',
     hPaymentDate: 'ادائیگی کی تاریخ', hPaymentTime: 'ادائیگی کا وقت', editLabel: 'ترمیم', saveLabel: 'محفوظ', cancelLabel: 'منسوخ',
     khata: 'کھاتہ', payUdhar: 'اُدھار وصول', clearShort: 'کلیر', udharBadge: 'اُدھار', clearBadge: 'صاف', activeBadge: 'فعال', inactiveBadge: 'بند', lowBadge: 'کم',
-    delete: 'ڈیلیٹ', saved: 'محفوظ ہو گیا۔', addCustomer: 'گاہک شامل کریں', addProduct: 'پروڈکٹ شامل کریں',
+    delete: 'ڈیلیٹ', saved: 'محفوظ ہو گیا۔', addCustomer: 'گاہک شامل کریں', addProduct: 'پروڈکٹ شامل کریں', addSupplier: 'سپلائر شامل کریں',
     phName: 'نام', phPhone: 'موبائل', phCnicOptional: 'شناختی نمبر (اختیاری)', phAddressOptional: 'پتہ (اختیاری)',
     phProductName: 'پروڈکٹ کا نام', phCategory: 'قسم', phCost: 'خرید قیمت (لاگت)', profitRs: 'منافع روپے', profitPercent: 'منافع فیصد',
     phOwnerProfit: 'مالکانہ منافع', phSalePriceAuto: 'فروخت قیمت (خود بخود)', phLowAlertAt: 'کم اسٹاک الرٹ پر', barcodeLabel: 'بارکوڈ:',
@@ -921,6 +921,7 @@ function WarehousePage({ data, client, refresh }) {
   const [form, setForm] = useState({});
   const [search, setSearch] = useState('');
   const [transferModal, setTransferModal] = useState(null);
+  const [editWh, setEditWh] = useState(null);
   const items = (data.warehouses || []).filter(item => {
     if (!search) return true;
     const q = search.toLowerCase();
@@ -1003,6 +1004,7 @@ function WarehousePage({ data, client, refresh }) {
           : h('button', { className: 'secondary small', onClick: function() { linkProduct(item); } }, t('linkProduct'))),
         h('td', null, item.active === false || item.status === 'inactive' ? h(Badge, { tone: 'neutral' }, t('inactiveBadge')) : h(Badge, { tone: 'success' }, t('activeBadge'))),
         h('td', null,
+          h('button', { className: 'secondary small', onClick: function() { setEditWh(item); } }, t('editLabel')),
           h('button', { className: 'secondary small', onClick: function() { setTransferModal({ item: item, productId: item.linkedProductId || '', qty: '' }); } }, t('whTransfer')),
           h('button', { className: 'secondary danger-btn small', onClick: function() { deleteItem(item); } }, t('delete'))));
     });
@@ -1051,7 +1053,8 @@ function WarehousePage({ data, client, refresh }) {
     h('div', { style: { margin: '12px 0' } },
       h('input', { type: 'search', placeholder: t('searchPlaceholder'), value: search, onChange: e => setSearch(e.target.value), style: { width: '100%', maxWidth: '400px', padding: '8px 12px', border: '1px solid #ddd', borderRadius: '8px' } })),
     renderTable(),
-    renderTransferModal());
+    renderTransferModal(),
+    editWh && h(WarehouseEditModal, { item: editWh, client, refresh, onClose: () => setEditWh(null) }));
 }
 
 function KhataModal({ customer, client, onClose, refresh }) {
@@ -1318,6 +1321,133 @@ function ProductEditModal({ product, client, refresh, onClose }) {
     document.body));
 }
 
+function WarehouseEditModal({ item, client, refresh, onClose }) {
+  const init = {
+    name: item.name || '',
+    sku: item.sku || '',
+    barcode: item.barcode || '',
+    category: item.category || '',
+    unit: item.unit || 'pcs',
+    stock: item.stock ?? '',
+    reorderLevel: item.reorderLevel ?? 0,
+    location: item.location || '',
+    supplier: item.supplier || '',
+    active: item.active !== false && item.status !== 'inactive'
+  };
+  const [form, setForm] = useState(init);
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function save(event) {
+    event.preventDefault();
+    setMessage('');
+    setBusy(true);
+    try {
+      await client.put(`/api/warehouses/${item.id}`, {
+        name: form.name,
+        sku: form.sku,
+        barcode: form.barcode,
+        category: form.category,
+        unit: form.unit,
+        stock: Number(form.stock) || 0,
+        reorderLevel: Number(form.reorderLevel) || 0,
+        location: form.location,
+        supplier: form.supplier,
+        active: form.active,
+        status: form.active ? 'active' : 'inactive'
+      });
+      setMessage(LANG === 'ur' ? 'محفوظ ہو گیا۔' : 'Saved.');
+      await refresh();
+      onClose();
+    } catch (err) {
+      setMessage(friendlyError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return ReactDOM.createPortal(h('div', { className: 'modal', onClick: onClose },
+    h('section', { className: 'khata', onClick: e => e.stopPropagation() },
+      h('header', { className: 'khata-head' },
+        h('div', null, h('p', { className: 'eyebrow' }, t('whEyebrow')), h('h2', null, `${t('editLabel')}: ${item.name}`))),
+      message && h('div', { className: 'notice' }, message),
+      h('form', { className: 'edit-form', onSubmit: save },
+        h('div', { className: 'edit-form-row' },
+          h('div', null, h('label', null, t('hProduct')), h('input', { value: form.name, onChange: e => setForm({ ...form, name: e.target.value }), required: true })),
+          h('div', null, h('label', null, t('hCategory')), h('input', { value: form.category, onChange: e => setForm({ ...form, category: e.target.value }) })),
+          h('div', null, h('label', null, t('hSku')), h('input', { value: form.sku, onChange: e => setForm({ ...form, sku: e.target.value }) }))),
+        h('div', { className: 'edit-form-row' },
+          h('div', null, h('label', null, 'Barcode'), h('input', { value: form.barcode, onChange: e => setForm({ ...form, barcode: e.target.value }) })),
+          h('div', null, h('label', null, t('whLocation')), h('input', { value: form.location, onChange: e => setForm({ ...form, location: e.target.value }) })),
+          h('div', null, h('label', null, t('whSupplier')), h('input', { value: form.supplier, onChange: e => setForm({ ...form, supplier: e.target.value }) }))),
+        h('div', { className: 'section-label' }, LANG === 'ur' ? 'اسٹاک اور یونٹ' : 'Stock and Unit'),
+        h('div', { className: 'edit-form-row' },
+          h('div', null, h('label', null, t('hStock')), h('input', { type: 'number', step: 'any', min: '0', value: form.stock, onChange: e => setForm({ ...form, stock: e.target.value }) })),
+          h('div', null, h('label', null, t('phLowAlertAt')), h('input', { type: 'number', min: '0', value: form.reorderLevel, onChange: e => setForm({ ...form, reorderLevel: e.target.value }) })),
+          h('div', null, h('label', null, `${t('hStock')} ${LANG === 'ur' ? 'اکائی' : 'Unit'}`), h('select', { value: form.unit, onChange: e => setForm({ ...form, unit: e.target.value }) }, UNITS.map(unit => h('option', { key: unit.value, value: unit.value }, unit.urdu))))),
+        h('div', { className: 'edit-form-row' },
+          h('label', { style: { display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700 } },
+            h('input', { type: 'checkbox', checked: form.active, onChange: e => setForm({ ...form, active: e.target.checked }) }),
+            form.active ? t('activeBadge') : t('inactiveBadge'))),
+        h('div', { className: 'form-actions' },
+          h('button', { className: 'primary', disabled: busy }, t('saveLabel')),
+          h('button', { type: 'button', className: 'secondary', onClick: onClose }, t('cancelLabel'))))),
+    document.body));
+}
+
+function SupplierEditModal({ supplier, client, refresh, onClose }) {
+  const init = {
+    name: supplier.name || '',
+    phone: supplier.phone || '',
+    address: supplier.address || '',
+    active: supplier.active !== false && supplier.status !== 'inactive'
+  };
+  const [form, setForm] = useState(init);
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function save(event) {
+    event.preventDefault();
+    setMessage('');
+    setBusy(true);
+    try {
+      await client.put(`/api/suppliers/${supplier.id}`, {
+        name: form.name,
+        phone: form.phone,
+        address: form.address,
+        active: form.active,
+        status: form.active ? 'active' : 'inactive'
+      });
+      setMessage(LANG === 'ur' ? 'محفوظ ہو گیا۔' : 'Saved.');
+      await refresh();
+      onClose();
+    } catch (err) {
+      setMessage(friendlyError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return ReactDOM.createPortal(h('div', { className: 'modal', onClick: onClose },
+    h('section', { className: 'khata', onClick: e => e.stopPropagation() },
+      h('header', { className: 'khata-head' },
+        h('div', null, h('p', { className: 'eyebrow' }, t('suppliersEyebrow')), h('h2', null, `${t('editLabel')}: ${supplier.name}`))),
+      message && h('div', { className: 'notice' }, message),
+      h('form', { className: 'edit-form', onSubmit: save },
+        h('div', { className: 'edit-form-row' },
+          h('div', null, h('label', null, t('hName')), h('input', { value: form.name, onChange: e => setForm({ ...form, name: e.target.value }), required: true })),
+          h('div', null, h('label', null, t('hPhone')), h('input', { value: form.phone, onChange: e => setForm({ ...form, phone: e.target.value }) })),
+          h('div', null, h('label', null, t('phAddressOptional')), h('input', { value: form.address, onChange: e => setForm({ ...form, address: e.target.value }) }))),
+        h('div', { className: 'edit-form-row' },
+          h('label', { style: { display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700 } },
+            h('input', { type: 'checkbox', checked: form.active, onChange: e => setForm({ ...form, active: e.target.checked }) }),
+            form.active ? t('activeBadge') : t('inactiveBadge'))),
+        h('div', { className: 'form-actions' },
+          h('button', { className: 'primary', disabled: busy }, t('saveLabel')),
+          h('button', { type: 'button', className: 'secondary', onClick: onClose }, t('cancelLabel'))))),
+    document.body));
+}
+
 function ReturnsPage({ data, client, refresh }) {
   const [search, setSearch] = useState('');
   const [lookup, setLookup] = useState(null);
@@ -1513,7 +1643,10 @@ function UsersAdmin({ client }) {
 
 function Purchases({ data, client, refresh }) {
   const [item, setItem] = useState({ supplierId: data.suppliers[0]?.id, productId: data.products[0]?.id, qty: 1, cost: '' });
+  const [supp, setSupp] = useState({ name: '', phone: '', address: '' });
+  const [editSupplier, setEditSupplier] = useState(null);
   const [message, setMessage] = useState('');
+  const [suppMessage, setSuppMessage] = useState('');
   async function submit(event) {
     event.preventDefault();
     try {
@@ -1524,7 +1657,61 @@ function Purchases({ data, client, refresh }) {
       setMessage(err.message);
     }
   }
-  return h('div', { className: 'page' }, h('div', { className: 'page-title' }, h('div', null, h('p', { className: 'eyebrow' }, t('suppliersEyebrow')), h('h1', null, t('nav_purchases'))), h('button', { className: 'secondary', onClick: () => client.exportCsv('/api/reports/export.csv', 'sales-report.csv') }, 'Export CSV')), message && h('div', { className: 'notice' }, message), h('form', { className: 'inline-form', onSubmit: submit }, h('select', { value: item.supplierId, onChange: e => setItem({ ...item, supplierId: e.target.value }) }, data.suppliers.map(s => h('option', { value: s.id, key: s.id }, s.name))), h('select', { value: item.productId, onChange: e => setItem({ ...item, productId: e.target.value }) }, data.products.map(p => h('option', { value: p.id, key: p.id }, p.name))), h('input', { type: 'number', min: '0.01', step: 'any', value: item.qty, onChange: e => setItem({ ...item, qty: e.target.value }) }), h('input', { type: 'number', min: '1', placeholder: t('phCostPerUnit'), value: item.cost, onChange: e => setItem({ ...item, cost: e.target.value }) }), h('button', { className: 'primary' }, t('receiveStock'))));
+  async function addSupplier(event) {
+    event.preventDefault();
+    setSuppMessage('');
+    try {
+      await client.post('/api/suppliers', supp);
+      setSupp({ name: '', phone: '', address: '' });
+      await refresh();
+      setSuppMessage(LANG === 'ur' ? 'سپلائر شامل ہو گیا۔' : 'Supplier added.');
+    } catch (err) {
+      setSuppMessage(friendlyError(err));
+    }
+  }
+  async function confirmDeleteSupplier(row) {
+    const ok = await askConfirm(LANG === 'ur'
+      ? `"${row.name}" سپلائر ڈیلیٹ کریں؟`
+      : `Delete supplier "${row.name}"?`,
+      LANG === 'ur' ? 'اس کی خریداری کی تاریخ نہ ہونے پر حذف ہو گا۔' : 'Deletes only if it has no purchase history.');
+    if (!ok) return;
+    setSuppMessage('');
+    try {
+      await client.del(`/api/suppliers/${row.id}`);
+      await refresh();
+      setSuppMessage(LANG === 'ur' ? `"${row.name}" ڈیلیٹ ہو گیا۔` : `"${row.name}" deleted.`);
+    } catch (err) {
+      setSuppMessage(friendlyError(err));
+    }
+  }
+  return h('div', { className: 'page' },
+    h('div', { className: 'page-title' }, h('div', null, h('p', { className: 'eyebrow' }, t('suppliersEyebrow')), h('h1', null, t('nav_purchases'))), h('button', { className: 'secondary', onClick: () => client.exportCsv('/api/reports/export.csv', 'sales-report.csv') }, 'Export CSV')),
+    message && h('div', { className: 'notice' }, message),
+    h('form', { className: 'inline-form', onSubmit: submit },
+      h('select', { value: item.supplierId, onChange: e => setItem({ ...item, supplierId: e.target.value }) }, data.suppliers.map(s => h('option', { value: s.id, key: s.id }, s.name))),
+      h('select', { value: item.productId, onChange: e => setItem({ ...item, productId: e.target.value }) }, data.products.map(p => h('option', { value: p.id, key: p.id }, p.name))),
+      h('input', { type: 'number', min: '0.01', step: 'any', value: item.qty, onChange: e => setItem({ ...item, qty: e.target.value }) }),
+      h('input', { type: 'number', min: '1', placeholder: t('phCostPerUnit'), value: item.cost, onChange: e => setItem({ ...item, cost: e.target.value }) }),
+      h('button', { className: 'primary' }, t('receiveStock'))),
+    h('article', { className: 'panel data-panel', style: { marginTop: '18px' } },
+      h('h2', null, t('suppliersEyebrow')),
+      suppMessage && h('div', { className: 'notice' }, suppMessage),
+      h('form', { className: 'inline-form', onSubmit: addSupplier },
+        h('input', { key: 'name', placeholder: t('phName'), value: supp.name || '', onChange: e => setSupp({ ...supp, name: e.target.value }), required: true }),
+        h('input', { key: 'phone', placeholder: t('hPhone'), value: supp.phone || '', onChange: e => setSupp({ ...supp, phone: e.target.value }) }),
+        h('input', { key: 'address', placeholder: t('phAddressOptional'), value: supp.address || '', onChange: e => setSupp({ ...supp, address: e.target.value }) }),
+        h('button', { key: 'save', className: 'primary' }, t('addSupplier'))),
+      h('div', { className: 'table-wrap' }, h('table', null,
+        h('thead', null, h('tr', null, [t('hName'), t('hPhone'), t('phAddressOptional'), t('thStatus'), t('hActions')].map((label, i) => h('th', { key: i }, label)))),
+        h('tbody', null, (data.suppliers || []).map(row => h('tr', { key: row.id },
+          h('td', null, h('strong', null, row.name)),
+          h('td', null, row.phone || ''),
+          h('td', null, row.address || ''),
+          h('td', null, row.active === false || row.status === 'inactive' ? h(Badge, { tone: 'neutral' }, t('inactiveBadge')) : h(Badge, { tone: 'success' }, t('activeBadge'))),
+          h('td', null,
+            h('button', { className: 'secondary small', onClick: () => setEditSupplier(row) }, t('editLabel')),
+            h('button', { className: 'secondary danger-btn small', onClick: () => confirmDeleteSupplier(row) }, t('delete'))))))))),
+    editSupplier && h(SupplierEditModal, { supplier: editSupplier, client, refresh, onClose: () => setEditSupplier(null) }));
 }
 
 function Reports({ data, client }) {
