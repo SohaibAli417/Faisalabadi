@@ -1,6 +1,6 @@
 /* global React, ReactDOM */
-const APP_VERSION = 'v23';
-const APP_CHECKSUM = 'edit-all-sections-v23';
+const APP_VERSION = 'v24';
+const APP_CHECKSUM = 'portal-paren-fix-v24';
 (function() {
   var stored = null;
   try { stored = localStorage.getItem('faislabadi-pos-version'); } catch(_) {}
@@ -1167,8 +1167,8 @@ function KhataModal({ customer, client, onClose, refresh }) {
             entry.products && h('small', null, entry.products),
             h('small', null, `${when(entry.at)}${entry.createdBy ? ' - ' + entry.createdBy : ''}${entry.note && entry.invoiceNo ? ' - ' + entry.note : ''}`)),
           h('b', { className: entry.type === 'sale' ? 'amount-due' : 'amount-paid' }, entry.type === 'sale' ? `+${money(entry.amount)}` : `-${money(entry.amount)}`)))),
-      h('div', { className: 'success-actions no-print' }, h('button', { className: 'primary', onClick: onClose }, t('close')))),
-    document.body));
+      h('div', { className: 'success-actions no-print' }, h('button', { className: 'primary', onClick: onClose }, t('close'))))),
+    document.body);
 }
 
 function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose }) {
@@ -1243,8 +1243,8 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose })
           : 'Record payments from the Khata. Edit total / paid amounts and the last payment date/time here.'),
         h('div', { className: 'form-actions' },
           h('button', { className: 'primary', disabled: busy }, t('saveLabel')),
-          h('button', { type: 'button', className: 'secondary', onClick: onClose }, t('cancelLabel'))))),
-    document.body));
+          h('button', { type: 'button', className: 'secondary', onClick: onClose }, t('cancelLabel')))))),
+    document.body);
 }
 
 function ProductEditModal({ product, client, refresh, onClose }) {
@@ -1317,8 +1317,8 @@ function ProductEditModal({ product, client, refresh, onClose }) {
             form.active ? t('activeBadge') : t('inactiveBadge'))),
         h('div', { className: 'form-actions' },
           h('button', { className: 'primary', disabled: busy }, t('saveLabel')),
-          h('button', { type: 'button', className: 'secondary', onClick: onClose }, t('cancelLabel'))))),
-    document.body));
+          h('button', { type: 'button', className: 'secondary', onClick: onClose }, t('cancelLabel')))))),
+    document.body);
 }
 
 function WarehouseEditModal({ item, client, refresh, onClose }) {
@@ -1391,8 +1391,8 @@ function WarehouseEditModal({ item, client, refresh, onClose }) {
             form.active ? t('activeBadge') : t('inactiveBadge'))),
         h('div', { className: 'form-actions' },
           h('button', { className: 'primary', disabled: busy }, t('saveLabel')),
-          h('button', { type: 'button', className: 'secondary', onClick: onClose }, t('cancelLabel'))))),
-    document.body));
+          h('button', { type: 'button', className: 'secondary', onClick: onClose }, t('cancelLabel')))))),
+    document.body);
 }
 
 function SupplierEditModal({ supplier, client, refresh, onClose }) {
@@ -1444,8 +1444,8 @@ function SupplierEditModal({ supplier, client, refresh, onClose }) {
             form.active ? t('activeBadge') : t('inactiveBadge'))),
         h('div', { className: 'form-actions' },
           h('button', { className: 'primary', disabled: busy }, t('saveLabel')),
-          h('button', { type: 'button', className: 'secondary', onClick: onClose }, t('cancelLabel'))))),
-    document.body));
+          h('button', { type: 'button', className: 'secondary', onClick: onClose }, t('cancelLabel')))))),
+    document.body);
 }
 
 function ReturnsPage({ data, client, refresh }) {
