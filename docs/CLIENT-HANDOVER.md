@@ -59,8 +59,6 @@ Copy this folder but **leave out**:
 - `.server.*.log`
 - `database\backups\`
 - `database\*backup*.json`
-- `product-description.html`, `product-description.css`, `COPY-PASTE-PRODUCT-DESCRIPTION.html`,
-  `livestock-product-description-package.zip`, `assets\` (not part of the POS)
 
 Keep `database\pos-data.json` — it holds the real shop data.
 Keep `.env` — it holds the cloud connection so laptop and website share data.

@@ -119,3 +119,32 @@ Vercel domain steps:
 7. Vercel will issue HTTPS automatically.
 
 For this current JSON version, local/VPS hosting is safer than Vercel for real data because Vercel does not provide durable local file storage.
+
+## Editing Customers and Udhar (v22)
+
+Open `Customers and Udhar`.
+
+- The table shows each customer's total credit, total paid, balance, and the date/time of their last payment.
+- Use the search box above the table to filter customers by name or phone.
+- The `Export CSV` button downloads a `customers.csv` file (name, phone, masked CNIC, address, credit limit, total udhaar, paid, remaining, payment date/time, status).
+- Click `Edit` on any row to open the edit screen.
+
+In the customer edit screen:
+
+- Name, phone, CNIC, address, and credit limit are editable by anyone with customer access.
+- CNIC shows masked; it is only changed if you type a full new number.
+- `Total Udhaar`, `Total Paid`, and `Payment Date/Time` are only shown to Admin or Manager.
+- The remaining balance is calculated live as Total Udhaar minus Total Paid.
+- Udhaar amounts are only written when you actually change them. Routine sales, returns, and payments automatically keep the edited totals in line, so balances never drift.
+
+To record a normal payment, use the `Khata` button and `Pay Udhar`. The payment form lets you set the payment date and time (useful for late bookkeeping).
+
+## Editing Products and Inventory (v22)
+
+Open `Products` or `Inventory`.
+
+- Use the search box to filter by name, SKU, barcode, or category.
+- Click `Edit` on a product row (Admin/Manager) to open the edit screen.
+- Editable fields: product name, category, SKU, barcode, purchase cost, sale price, stock quantity (supports loose weight units), low-stock reorder level, unit (pcs, pack, kg, etc.), and Active/Inactive status.
+- Marking a product Inactive hides it from the POS but keeps old bills correct.
+- Products with billing history cannot be permanently deleted; the app offers to mark them Inactive instead.
