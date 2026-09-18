@@ -1104,3 +1104,47 @@ html[dir='rtl'] .metric-card p, html[dir='rtl'] .metric-card h3, html[dir='rtl']
   .receipt.paper-a4 .receipt-items-header, .receipt.paper-a4 .receipt-item { font-size: 11px !important; }
   .receipt.paper-a4 .receipt-grand { font-size: 16px !important; }
 }
+
+/* EDITABLE TABLES + EDIT MODALS */
+.muted { color: var(--muted); }
+.small { padding: 5px 10px !important; font-size: 12px; }
+.payment-form input[type='date'], .payment-form input[type='time'] { flex: 0 0 auto; width: 138px; }
+
+.table-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.table-toolbar .search { margin: 0; flex: 1; max-width: 420px; }
+.table-toolbar .search input { padding: 9px 12px; font-size: 13px; }
+
+.edit-form { display: flex; flex-direction: column; gap: 10px; }
+.edit-form-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.edit-form-row > div { flex: 1; min-width: 130px; }
+.edit-form label { display: block; font-weight: 700; font-size: 11px; margin-bottom: 4px; color: #64748b; }
+.edit-form input, .edit-form select {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 13px;
+  box-sizing: border-box;
+}
+.edit-form input:focus, .edit-form select:focus { border-color: var(--green); outline: none; }
+.edit-form .section-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--green);
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+  margin-top: 2px;
+}
+.edit-form .remaining-row { display: flex; align-items: center; gap: 10px; }
+.edit-form .remaining-row strong { font-size: 18px; color: #c0392b; }
+.edit-form .hint { font-size: 11px; color: var(--muted); }
+.form-actions { display: flex; gap: 10px; margin-top: 10px; }
+.form-actions .primary { flex: 1; }

@@ -507,6 +507,9 @@ function createSale(db, payload, actor, source = 'online') {
       throw new Error(`Credit limit exceeded. ${customer.name} can take Rs ${money(limit - money(customer.balance))} more udhar.`);
     }
     customer.balance = money(Number(customer.balance) + dueAmount);
+    if (customer.recordedTotal !== undefined && customer.recordedTotal !== null && customer.recordedTotal !== '') {
+      customer.recordedTotal = money(Number(customer.recordedTotal) + dueAmount);
+    }
     customer._updatedAt = now();
   }
 
@@ -545,7 +548,7 @@ function itemKey(item) {
 
 function customerTotals(db) {
   const totals = {};
-  const entry = id => totals[id] || (totals[id] = { creditPurchases: 0, totalPaid: 0 });
+  const entry = id => totals[id] || (totals[id] = { creditPurchases: 0, totalPaid: 0, lastPaymentAt: null });
   for (const sale of db.sales) {
     if (sale.voided || sale.customerId === 'cus_walkin') continue;
     if (sale.paymentType !== 'Credit') continue;
@@ -553,21 +556,57 @@ function customerTotals(db) {
   }
   for (const payment of db.payments || []) {
     if (!payment.customerId || payment.customerId === 'cus_walkin') continue;
-    entry(payment.customerId).totalPaid += money(payment.amount);
+    const totals = entry(payment.customerId);
+    totals.totalPaid += money(payment.amount);
+    const atMs = new Date(payment.at || 0).getTime();
+    const prevMs = totals.lastPaymentAt ? new Date(totals.lastPaymentAt).getTime() : 0;
+    if (atMs && atMs >= prevMs) totals.lastPaymentAt = payment.at;
   }
   return totals;
 }
 
 function decorateCustomer(db, customer, totalsMap) {
-  const totals = totalsMap[customer.id] || { creditPurchases: 0, totalPaid: 0 };
+  const totals = totalsMap[customer.id] || { creditPurchases: 0, totalPaid: 0, lastPaymentAt: null };
+  let creditPurchases = money(totals.creditPurchases);
+  let totalPaid = money(totals.totalPaid);
+  let balance = money(customer.balance);
+  const hasRecordedTotal = customer.recordedTotal !== undefined && customer.recordedTotal !== null && customer.recordedTotal !== '';
+  const hasRecordedPaid = customer.recordedPaid !== undefined && customer.recordedPaid !== null && customer.recordedPaid !== '';
+  if (hasRecordedTotal) creditPurchases = money(customer.recordedTotal);
+  if (hasRecordedPaid) totalPaid = money(customer.recordedPaid);
+  if (hasRecordedTotal && hasRecordedPaid) balance = Math.max(0, creditPurchases - totalPaid);
   return {
     ...customer,
     cnicMasked: maskCnic(customer.cnic),
     cnic: undefined,
-    creditPurchases: money(totals.creditPurchases),
-    totalPaid: money(totals.totalPaid),
-    balance: money(customer.balance)
+    creditPurchases,
+    totalPaid,
+    balance,
+    lastPaymentAt: totals.lastPaymentAt || customer.lastPaymentAt || null
   };
+}
+
+function toLocalDateParts(value) {
+  const date = new Date(value);
+  if (isNaN(date.getTime())) return '';
+  const pad = n => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function toLocalTimeParts(value) {
+  const date = new Date(value);
+  if (isNaN(date.getTime())) return '';
+  const pad = n => String(n).padStart(2, '0');
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function combineDateTime(dateStr, timeStr) {
+  const dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateStr || ''));
+  const tm = /^(\d{1,2}):(\d{2})$/.exec(String(timeStr || ''));
+  if (!dm || !tm) return null;
+  const date = new Date(Number(dm[1]), Number(dm[2]) - 1, Number(dm[3]), Number(tm[1]), Number(tm[2]), 0, 0);
+  if (isNaN(date.getTime())) return null;
+  return date;
 }
 
 function returnedQtyByItem(db, saleId) {
@@ -641,6 +680,9 @@ function processReturn(db, body, actor) {
     const customer = db.customers.find(row => row.id === sale.customerId);
     if (customer) {
       customer.balance = Math.max(0, money(Number(customer.balance) - udharAdjustment));
+      if (customer.recordedTotal !== undefined && customer.recordedTotal !== null && customer.recordedTotal !== '') {
+        customer.recordedTotal = Math.max(0, money(Number(customer.recordedTotal) - udharAdjustment));
+      }
       customer._updatedAt = now();
     }
   }
@@ -679,9 +721,21 @@ function receiveUdharPayment(db, customerId, amountInput, actor, options = {}) {
   if (!(amount > 0)) throw new Error('Amount must be more than zero');
   const balance = money(customer.balance);
   if (amount > balance) throw new Error(`Amount is more than the udhar balance (Rs ${balance})`);
+  let paidAt;
+  if (options.at) {
+    paidAt = new Date(options.at);
+    if (isNaN(paidAt.getTime())) throw new Error('Invalid payment date');
+  } else {
+    paidAt = new Date();
+  }
+  const at = paidAt.toISOString();
   customer.balance = money(balance - amount);
   customer._updatedAt = now();
-  const payment = { id: uid('pay'), customerId, amount, at: now(), createdBy: actor.name || '', createdById: actor.id, saleId: options.saleId || null, note: options.note || '', _updatedAt: now() };
+  customer.lastPaymentAt = at;
+  if (customer.recordedPaid !== undefined && customer.recordedPaid !== null && customer.recordedPaid !== '') {
+    customer.recordedPaid = money(Number(customer.recordedPaid) + amount);
+  }
+  const payment = { id: uid('pay'), customerId, amount, at, createdBy: actor.name || '', createdById: actor.id, saleId: options.saleId || null, note: options.note || '', _updatedAt: now() };
   db.payments = [payment, ...(db.payments || [])];
   audit(db, actor, options.clear ? 'clear-udhar' : 'payment', 'customer', customerId, { amount, newBalance: customer.balance, note: options.note || '' });
   return { payment, balance: customer.balance };
@@ -1002,7 +1056,35 @@ async function handleApi(request, response) {
 
     if (method === 'GET' && url.pathname === '/api/customers') {
       const totalsMap = customerTotals(db);
-      return json(response, 200, db.customers.map(item => decorateCustomer(db, item, totalsMap)));
+      const q = String(url.searchParams.get('q') || '').trim().toLowerCase();
+      let rows = db.customers;
+      if (q) rows = rows.filter(item => `${item.name} ${item.phone || ''}`.toLowerCase().includes(q));
+      return json(response, 200, rows.map(item => decorateCustomer(db, item, totalsMap)));
+    }
+
+    if (method === 'GET' && url.pathname === '/api/customers/export.csv') {
+      if (!can(actor, 'customers')) return json(response, 403, { error: 'Permission denied' });
+      const totalsMap = customerTotals(db);
+      const rows = [['Customer Name', 'Phone', 'CNIC', 'Address', 'Credit Limit', 'Total Udhaar', 'Paid Amount', 'Remaining Amount', 'Payment Date', 'Payment Time', 'Status']];
+      for (const customer of db.customers) {
+        const decorated = decorateCustomer(db, customer, totalsMap);
+        const at = decorated.lastPaymentAt ? new Date(decorated.lastPaymentAt) : null;
+        rows.push([
+          decorated.name,
+          decorated.phone || '',
+          decorated.cnicMasked || '',
+          decorated.address || '',
+          money(decorated.creditLimit),
+          decorated.creditPurchases,
+          decorated.totalPaid,
+          decorated.balance,
+          at ? toLocalDateParts(at) : '',
+          at ? toLocalTimeParts(at) : '',
+          decorated.active === false ? 'Inactive' : 'Active'
+        ]);
+      }
+      response.writeHead(200, { ...securityHeaders, 'Content-Type': types['.csv'], 'Content-Disposition': 'attachment; filename="customers.csv"' });
+      return response.end(csv(rows));
     }
 
     if (method === 'POST' && url.pathname === '/api/customers') {
@@ -1025,8 +1107,38 @@ async function handleApi(request, response) {
       for (const field of ['name', 'phone', 'cnic', 'address', 'creditLimit']) {
         if (body[field] !== undefined) customer[field] = field === 'creditLimit' ? money(body[field]) : String(body[field]).trim();
       }
+      const wantsUdharEdit = body.udhaarTotal !== undefined || body.udhaarPaid !== undefined || body.paymentDate !== undefined || body.paymentTime !== undefined;
+      if (wantsUdharEdit && !can(actor, 'udhar')) {
+        return json(response, 403, { error: 'Only Admin or Manager can edit udhaar amounts and payment dates' });
+      }
+      if (can(actor, 'udhar') && wantsUdharEdit) {
+        if (body.udhaarTotal !== undefined) customer.recordedTotal = money(body.udhaarTotal);
+        if (body.udhaarPaid !== undefined) customer.recordedPaid = money(body.udhaarPaid);
+        if (body.udhaarTotal !== undefined || body.udhaarPaid !== undefined) {
+          const totalsMap = customerTotals(db);
+          const totals = totalsMap[id] || { creditPurchases: 0, totalPaid: 0 };
+          const hasRecordedTotal = customer.recordedTotal !== undefined && customer.recordedTotal !== null && customer.recordedTotal !== '';
+          const hasRecordedPaid = customer.recordedPaid !== undefined && customer.recordedPaid !== null && customer.recordedPaid !== '';
+          const total = hasRecordedTotal ? money(customer.recordedTotal) : money(totals.creditPurchases);
+          const paid = hasRecordedPaid ? money(customer.recordedPaid) : money(totals.totalPaid);
+          customer.balance = Math.max(0, total - paid);
+        }
+        if (body.paymentDate !== undefined || body.paymentTime !== undefined) {
+          const related = (db.payments || []).filter(p => p.customerId === id);
+          const latest = related.length ? related.reduce((a, b) => new Date(b.at).getTime() > new Date(a.at).getTime() ? b : a) : null;
+          const base = latest ? new Date(latest.at) : (customer.lastPaymentAt ? new Date(customer.lastPaymentAt) : new Date());
+          const dateStr = body.paymentDate !== undefined && body.paymentDate !== '' ? String(body.paymentDate) : toLocalDateParts(base);
+          const timeStr = body.paymentTime !== undefined && body.paymentTime !== '' ? String(body.paymentTime) : toLocalTimeParts(base);
+          const combined = combineDateTime(dateStr, timeStr);
+          if (combined) {
+            const iso = combined.toISOString();
+            if (latest) latest.at = iso;
+            customer.lastPaymentAt = iso;
+          }
+        }
+      }
       customer._updatedAt = now();
-      audit(db, actor, 'update', 'customer', customer.id, { name: customer.name });
+      audit(db, actor, 'update', 'customer', customer.id, { name: customer.name, ...(body.udhaarTotal !== undefined ? { udhaarTotal: money(body.udhaarTotal) } : {}), ...(body.udhaarPaid !== undefined ? { udhaarPaid: money(body.udhaarPaid) } : {}) });
       await saveDb(db);
       return json(response, 200, decorateCustomer(db, customer, customerTotals(db)));
     }
@@ -1067,8 +1179,13 @@ async function handleApi(request, response) {
       if (!can(actor, 'udhar')) return json(response, 403, { error: 'Only Admin or Manager can record udhar payments' });
       const id = url.pathname.split('/')[3];
       const body = await parseBody(request);
+      const options = { note: String(body.note || '').trim(), saleId: body.saleId || null };
+      if (body.atDate || body.atTime) {
+        const combined = combineDateTime(body.atDate, body.atTime);
+        if (combined) options.at = combined.toISOString();
+      }
       try {
-        const result = receiveUdharPayment(db, id, body.amount, actor, { note: String(body.note || '').trim(), saleId: body.saleId || null });
+        const result = receiveUdharPayment(db, id, body.amount, actor, options);
         await saveDb(db);
         return json(response, 201, { payment: result.payment, balance: result.balance });
       } catch (error) {
@@ -1421,5 +1538,7 @@ module.exports.receiveUdharPayment = receiveUdharPayment;
 module.exports.clearUdhar = clearUdhar;
 module.exports.returnedQtyByItem = returnedQtyByItem;
 module.exports.customerTotals = customerTotals;
+module.exports.decorateCustomer = decorateCustomer;
+module.exports.combineDateTime = combineDateTime;
 module.exports.can = can;
 module.exports.permissions = permissions;

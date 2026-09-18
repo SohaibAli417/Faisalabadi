@@ -1,6 +1,6 @@
 /* global React, ReactDOM */
-const APP_VERSION = 'v20';
-const APP_CHECKSUM = 'warehouse-security-v20';
+const APP_VERSION = 'v22';
+const APP_CHECKSUM = 'customer-product-edit-v22';
 (function() {
   var stored = null;
   try { stored = localStorage.getItem('faislabadi-pos-version'); } catch(_) {}
@@ -82,6 +82,19 @@ const UNITS = [
 ];
 const unitLabel = unit => (UNITS.find(item => item.value === unit) || {}).urdu || unit || '';
 const isWeightUnit = unit => ['kg', 'gram', 'litre', 'boree'].includes(unit);
+const pad2 = n => String(n).padStart(2, '0');
+const toDateInputValue = iso => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+};
+const toTimeInputValue = iso => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+};
 const LANG_KEY = 'faislabadi-pos-lang';
 let LANG = 'en';
 try { LANG = localStorage.getItem(LANG_KEY) === 'ur' ? 'ur' : 'en'; } catch (_) {}
@@ -110,6 +123,7 @@ const STRINGS = {
     offlineQueuedBadge: 'queued', management: 'MANAGEMENT',
     hName: 'Name', hPhone: 'Phone', hCnic: 'CNIC', hTotalCredit: 'Total Credit', hTotalPaid: 'Total Paid', hBalance: 'Balance',
     hActions: 'Actions', hProduct: 'Product', hSku: 'SKU', hCategory: 'Category', hStock: 'Stock', hCost: 'Cost', hProfit: 'Profit', hPrice: 'Price',
+    hPaymentDate: 'Payment Date', hPaymentTime: 'Payment Time', editLabel: 'Edit', saveLabel: 'Save', cancelLabel: 'Cancel',
     khata: 'Khata', payUdhar: 'Pay Udhar', clearShort: 'Clear', udharBadge: 'Udhar', clearBadge: 'Clear', activeBadge: 'Active', inactiveBadge: 'Inactive', lowBadge: 'Low',
     delete: 'Delete', saved: 'Saved.', addCustomer: 'Add customer', addProduct: 'Add product',
     phName: 'Name', phPhone: 'Phone', phCnicOptional: 'CNIC (optional)', phAddressOptional: 'Address (optional)',
@@ -173,6 +187,7 @@ const STRINGS = {
     offlineQueuedBadge: 'زیرِ انتظار', management: 'انتظامیہ',
     hName: 'نام', hPhone: 'موبائل', hCnic: 'شناختی نمبر', hTotalCredit: 'کل اُدھار', hTotalPaid: 'کل ادائیگی', hBalance: 'بقیہ',
     hActions: 'ایکشن', hProduct: 'پروڈکٹ', hSku: 'کوڈ', hCategory: 'قسم', hStock: 'اسٹاک', hCost: 'لاگت', hProfit: 'منافع', hPrice: 'قیمت',
+    hPaymentDate: 'ادائیگی کی تاریخ', hPaymentTime: 'ادائیگی کا وقت', editLabel: 'ترمیم', saveLabel: 'محفوظ', cancelLabel: 'منسوخ',
     khata: 'کھاتہ', payUdhar: 'اُدھار وصول', clearShort: 'کلیر', udharBadge: 'اُدھار', clearBadge: 'صاف', activeBadge: 'فعال', inactiveBadge: 'بند', lowBadge: 'کم',
     delete: 'ڈیلیٹ', saved: 'محفوظ ہو گیا۔', addCustomer: 'گاہک شامل کریں', addProduct: 'پروڈکٹ شامل کریں',
     phName: 'نام', phPhone: 'موبائل', phCnicOptional: 'شناختی نمبر (اختیاری)', phAddressOptional: 'پتہ (اختیاری)',
@@ -729,8 +744,17 @@ function DataPage({ page, data, client, refresh }) {
   const [message, setMessage] = useState('');
   const [form, setForm] = useState({});
   const [khata, setKhata] = useState(null);
+  const [search, setSearch] = useState('');
+  const [editCustomer, setEditCustomer] = useState(null);
+  const [editProduct, setEditProduct] = useState(null);
   const title = pages.find(item => item[0] === page)?.[1] || page;
-  const rows = page === 'customers' ? data.customers : data.products;
+  const allRows = page === 'customers' ? data.customers : data.products;
+  const searchTerm = search.trim().toLowerCase();
+  const rows = searchTerm
+    ? allRows.filter(row => page === 'customers'
+      ? `${row.name || ''} ${row.phone || ''}`.toLowerCase().includes(searchTerm)
+      : `${row.name || ''} ${row.sku || ''} ${row.barcode || ''} ${row.category || ''}`.toLowerCase().includes(searchTerm))
+    : allRows;
   function setProductField(field, value) {
     setForm(old => {
       const next = { ...old, [field]: value };
@@ -771,9 +795,12 @@ function DataPage({ page, data, client, refresh }) {
       h('td', null, money(row.creditPurchases || 0)),
       h('td', null, money(row.totalPaid || 0)),
       h('td', null, h('strong', { style: Number(row.balance) > 0 ? { color: '#c0392b' } : null }, money(row.balance))),
+      h('td', null, row.lastPaymentAt ? toDateInputValue(row.lastPaymentAt) : h('span', { className: 'muted' }, '-')),
+      h('td', null, row.lastPaymentAt ? toTimeInputValue(row.lastPaymentAt) : h('span', { className: 'muted' }, '-')),
       h('td', null, Number(row.balance) > 0 ? h(Badge, { tone: 'warning' }, t('udharBadge')) : h(Badge, { tone: 'success' }, t('clearBadge'))),
       h('td', null,
         h('button', { className: 'secondary khata-btn', onClick: () => setKhata(row) }, t('khata')),
+        h('button', { className: 'secondary khata-btn', onClick: () => setEditCustomer(row) }, t('editLabel')),
         canManageUdhar && Number(row.balance) > 0 && h('button', { className: 'secondary khata-btn pay-btn', onClick: () => setKhata(row) }, t('payUdhar')),
         canManageUdhar && Number(row.balance) > 0 && h('button', { className: 'secondary khata-btn danger-btn small', onClick: () => confirmClearUdhar(row) }, t('clearShort'))));
   }
@@ -806,6 +833,7 @@ function DataPage({ page, data, client, refresh }) {
       h('td', null, isWeightUnit(row.unit) ? `${money(row.price)}/${unitLabel(row.unit)}` : money(row.price)),
       h('td', null, row.active === false || row.status === 'inactive' ? h(Badge, { tone: 'neutral' }, t('inactiveBadge')) : h(Badge, { tone: 'success' }, t('activeBadge'))),
       h('td', null,
+        canDeleteProducts && h('button', { className: 'secondary small', onClick: () => setEditProduct(row) }, t('editLabel')),
         canDeleteProducts && (page === 'products' || page === 'inventory') && h('button', { className: 'secondary danger-btn small', onClick: () => confirmDeleteProduct(row) }, t('delete'))));
   }
   async function confirmDeleteProduct(row) {
@@ -844,13 +872,17 @@ function DataPage({ page, data, client, refresh }) {
     }
   }
   const headers = page === 'customers'
-    ? [t('hName'), t('hPhone'), t('hCnic'), t('hTotalCredit'), t('hTotalPaid'), t('hBalance'), t('thStatus'), t('hActions')]
+    ? [t('hName'), t('hPhone'), t('hCnic'), t('hTotalCredit'), t('hTotalPaid'), t('hBalance'), t('hPaymentDate'), t('hPaymentTime'), t('thStatus'), t('hActions')]
     : [t('hProduct'), t('hSku'), t('hCategory'), t('hStock'), t('hCost'), t('hProfit'), t('hPrice'), t('thStatus'), t('hActions')];
   const thead = h('thead', null, h('tr', null, headers.map((label, index) => h('th', { key: index }, label))));
-  const tbody = h('tbody', null, rows.map(row => (page === 'customers' ? customerRow(row) : productRow(row))));
+  const tbody = h('tbody', null, rows.length ? rows.map(row => (page === 'customers' ? customerRow(row) : productRow(row)))
+    : h('tr', null, h('td', { colSpan: headers.length }, LANG === 'ur' ? 'کچھ نہیں ملا' : 'No matching records found.')));
+  const customersExport = page === 'customers'
+    ? h('button', { className: 'secondary', onClick: () => client.exportCsv('/api/customers/export.csv', 'customers.csv') }, 'Export CSV')
+    : h('button', { className: 'secondary', onClick: () => client.exportCsv('/api/reports/export.csv', 'sales-report.csv') }, 'Export CSV');
 
   return h('div', { className: 'page' },
-    h('div', { className: 'page-title' }, h('div', null, h('p', { className: 'eyebrow' }, t('management')), h('h1', null, title)), h('button', { className: 'secondary', onClick: () => client.exportCsv('/api/reports/export.csv', 'sales-report.csv') }, 'Export CSV')),
+    h('div', { className: 'page-title' }, h('div', null, h('p', { className: 'eyebrow' }, t('management')), h('h1', null, title)), customersExport),
     message && h('div', { className: 'notice' }, message),
     ['products', 'inventory', 'customers'].includes(page) && h('form', { className: 'inline-form', onSubmit: addRecord },
       page === 'customers' ? [
@@ -873,8 +905,15 @@ function DataPage({ page, data, client, refresh }) {
         h('input', { key: 'reorderLevel', type: 'number', min: '0', placeholder: t('phLowAlertAt'), value: form.reorderLevel || '', onChange: e => setProductField('reorderLevel', e.target.value) }),
         h('button', { key: 'save', className: 'primary' }, t('addProduct'))
       ]),
+    ['products', 'inventory', 'customers'].includes(page) && h('div', { className: 'table-toolbar' },
+      h('label', { className: 'search' }, h('input', { type: 'search', value: search, onChange: e => setSearch(e.target.value), placeholder: page === 'customers'
+        ? (LANG === 'ur' ? 'گاہک کا نام تلاش کریں...' : 'Search customers by name...')
+        : (LANG === 'ur' ? 'پروڈکٹ کا نام تلاش کریں...' : 'Search products by name...') })),
+      rows.length < allRows.length && h('small', { className: 'muted' }, `${rows.length} / ${allRows.length}`)),
     h('article', { className: 'panel data-panel' }, h('div', { className: 'table-wrap' }, h('table', null, thead, tbody))),
-    khata && h(KhataModal, { customer: khata, client, onClose: () => setKhata(null), refresh }));
+    khata && h(KhataModal, { customer: khata, client, onClose: () => setKhata(null), refresh }),
+    editCustomer && h(CustomerEditModal, { customer: editCustomer, client, refresh, canEditUdhar: data.user.role === 'Admin' || data.user.role === 'Manager', onClose: () => setEditCustomer(null) }),
+    editProduct && h(ProductEditModal, { product: editProduct, client, refresh, onClose: () => setEditProduct(null) }));
 }
 
 function WarehousePage({ data, client, refresh }) {
@@ -1020,6 +1059,8 @@ function KhataModal({ customer, client, onClose, refresh }) {
   const [summary, setSummary] = useState({ creditPurchases: customer.creditPurchases || 0, totalPaid: customer.totalPaid || 0 });
   const [balance, setBalance] = useState(customer.balance);
   const [amount, setAmount] = useState('');
+  const [payDate, setPayDate] = useState(toDateInputValue(new Date().toISOString()));
+  const [payTime, setPayTime] = useState(toTimeInputValue(new Date().toISOString()));
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   async function loadLedger() {
@@ -1042,7 +1083,12 @@ function KhataModal({ customer, client, onClose, refresh }) {
     }
     setBusy(true);
     try {
-      const result = await client.post(`/api/customers/${customer.id}/payments`, { amount: Number(amount) });
+      const payload = { amount: Number(amount) };
+      if (payDate || payTime) {
+        payload.atDate = payDate;
+        payload.atTime = payTime;
+      }
+      const result = await client.post(`/api/customers/${customer.id}/payments`, payload);
       setBalance(result.balance);
       setAmount('');
       setMessage(LANG === 'ur' ? `${money(result.payment.amount)} وصول ہوئے۔ بقایا اُدھار: ${money(result.balance)}۔` : `Payment of ${money(result.payment.amount)} received. Remaining udhar: ${money(result.balance)}.`);
@@ -1101,8 +1147,10 @@ function KhataModal({ customer, client, onClose, refresh }) {
         h('div', null, h('span', null, t('totalPaidLabel')), h('strong', null, money(summary.totalPaid))),
         h('div', null, h('span', null, t('remaining')), h('strong', { style: Number(balance) > 0 ? { color: '#c0392b' } : { color: '#267152' } }, money(balance)))),
       message && h('div', { className: 'notice' }, message),
-      h('form', { className: 'payment-form', onSubmit: receivePayment },
+      h('form', { className: 'payment-form khata-pay-form', onSubmit: receivePayment },
         h('input', { type: 'number', min: '1', step: 'any', placeholder: `${t('payUdharMax')} ${money(balance)}`, value: amount, onChange: e => setAmount(e.target.value), required: true }),
+        h('input', { type: 'date', value: payDate, onChange: e => setPayDate(e.target.value), title: t('hPaymentDate') }),
+        h('input', { type: 'time', value: payTime, onChange: e => setPayTime(e.target.value), title: t('hPaymentTime') }),
         h('button', { className: 'primary', disabled: !(Number(balance) > 0) || busy }, t('payUdhar')),
         h('button', { type: 'button', className: 'danger-btn', disabled: !(Number(balance) > 0) || busy, onClick: clearUdhar }, t('clearUdharBtn'))),
       h('div', { className: 'ledger-list' },
@@ -1117,6 +1165,156 @@ function KhataModal({ customer, client, onClose, refresh }) {
             h('small', null, `${when(entry.at)}${entry.createdBy ? ' - ' + entry.createdBy : ''}${entry.note && entry.invoiceNo ? ' - ' + entry.note : ''}`)),
           h('b', { className: entry.type === 'sale' ? 'amount-due' : 'amount-paid' }, entry.type === 'sale' ? `+${money(entry.amount)}` : `-${money(entry.amount)}`)))),
       h('div', { className: 'success-actions no-print' }, h('button', { className: 'primary', onClick: onClose }, t('close')))),
+    document.body));
+}
+
+function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose }) {
+  const init = {
+    name: customer.name || '',
+    phone: customer.phone || '',
+    cnic: '',
+    address: customer.address || '',
+    creditLimit: customer.creditLimit || 0,
+    udhaarTotal: Number(customer.creditPurchases || 0),
+    udhaarPaid: Number(customer.totalPaid || 0),
+    paymentDate: customer.lastPaymentAt ? toDateInputValue(customer.lastPaymentAt) : '',
+    paymentTime: customer.lastPaymentAt ? toTimeInputValue(customer.lastPaymentAt) : ''
+  };
+  const [form, setForm] = useState(init);
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  const remaining = Math.max(0, (Number(form.udhaarTotal) || 0) - (Number(form.udhaarPaid) || 0));
+
+  async function save(event) {
+    event.preventDefault();
+    setMessage('');
+    setBusy(true);
+    try {
+      const payload = { name: form.name, phone: form.phone, address: form.address, creditLimit: Number(form.creditLimit || 0) };
+      if (form.cnic.trim()) payload.cnic = form.cnic.trim();
+      if (canEditUdhar) {
+        if (Number(form.udhaarTotal) !== init.udhaarTotal || Number(form.udhaarPaid) !== init.udhaarPaid) {
+          payload.udhaarTotal = Math.max(0, Number(form.udhaarTotal) || 0);
+          payload.udhaarPaid = Math.max(0, Math.min(Number(form.udhaarPaid) || 0, Number(payload.udhaarTotal)));
+        }
+        if (form.paymentDate !== init.paymentDate || form.paymentTime !== init.paymentTime) {
+          if (form.paymentDate) payload.paymentDate = form.paymentDate;
+          if (form.paymentTime) payload.paymentTime = form.paymentTime;
+        }
+      }
+      await client.put(`/api/customers/${customer.id}`, payload);
+      setMessage(LANG === 'ur' ? 'محفوظ ہو گیا۔' : 'Saved.');
+      await refresh();
+      onClose();
+    } catch (err) {
+      setMessage(friendlyError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return ReactDOM.createPortal(h('div', { className: 'modal', onClick: onClose },
+    h('section', { className: 'khata', onClick: e => e.stopPropagation() },
+      h('header', { className: 'khata-head' },
+        h('div', null, h('p', { className: 'eyebrow' }, t('udharKhataEyebrow')), h('h2', null, `${t('editLabel')}: ${customer.name}`)),
+        h('span', { className: `badge ${Number(customer.balance) > 0 ? 'warning' : 'success'}` }, Number(customer.balance) > 0 ? `${t('udharBadge')} ${money(customer.balance)}` : t('clearBadge'))),
+      message && h('div', { className: 'notice' }, message),
+      h('form', { className: 'edit-form', onSubmit: save },
+        h('div', { className: 'edit-form-row' },
+          h('div', null, h('label', null, t('hName')), h('input', { value: form.name, onChange: e => setForm({ ...form, name: e.target.value }), required: true })),
+          h('div', null, h('label', null, t('hPhone')), h('input', { value: form.phone, onChange: e => setForm({ ...form, phone: e.target.value }) })),
+          h('div', null, h('label', null, t('hCnic')), h('input', { value: form.cnic, placeholder: customer.cnicMasked || t('phCnicOptional'), onChange: e => setForm({ ...form, cnic: e.target.value }) }))),
+        h('div', { className: 'edit-form-row' },
+          h('div', null, h('label', null, t('phAddressOptional')), h('input', { value: form.address, onChange: e => setForm({ ...form, address: e.target.value }) })),
+          h('div', null, h('label', null, 'Credit Limit'), h('input', { type: 'number', min: '0', value: form.creditLimit, onChange: e => setForm({ ...form, creditLimit: e.target.value }) }))),
+        canEditUdhar && h('div', { className: 'section-label' }, t('udharKhataEyebrow')),
+        canEditUdhar && h('div', { className: 'edit-form-row' },
+          h('div', null, h('label', null, t('hTotalCredit')), h('input', { type: 'number', min: '0', value: form.udhaarTotal, onChange: e => setForm({ ...form, udhaarTotal: e.target.value }) })),
+          h('div', null, h('label', null, t('hTotalPaid')), h('input', { type: 'number', min: '0', value: form.udhaarPaid, onChange: e => setForm({ ...form, udhaarPaid: e.target.value }) })),
+          h('div', { className: 'remaining-row' }, h('label', null, t('remaining')), h('strong', null, money(remaining)))),
+        canEditUdhar && h('div', { className: 'edit-form-row' },
+          h('div', null, h('label', null, t('hPaymentDate')), h('input', { type: 'date', value: form.paymentDate, onChange: e => setForm({ ...form, paymentDate: e.target.value }) })),
+          h('div', null, h('label', null, t('hPaymentTime')), h('input', { type: 'time', value: form.paymentTime, onChange: e => setForm({ ...form, paymentTime: e.target.value }) }))),
+        canEditUdhar && h('p', { className: 'hint' }, LANG === 'ur'
+          ? 'نوٹ: ادائیگی درج کرنے کے لیے کھاتہ کھولیں۔ اُدھار رقم اور آخری ادائیگی کی تاریخ یہاں تبدیل کی جا سکتی ہے۔'
+          : 'Record payments from the Khata. Edit total / paid amounts and the last payment date/time here.'),
+        h('div', { className: 'form-actions' },
+          h('button', { className: 'primary', disabled: busy }, t('saveLabel')),
+          h('button', { type: 'button', className: 'secondary', onClick: onClose }, t('cancelLabel'))))),
+    document.body));
+}
+
+function ProductEditModal({ product, client, refresh, onClose }) {
+  const init = {
+    name: product.name || '',
+    sku: product.sku || '',
+    barcode: product.barcode || '',
+    category: product.category || '',
+    cost: product.cost ?? '',
+    price: product.price ?? '',
+    stock: product.stock ?? '',
+    reorderLevel: product.reorderLevel ?? 0,
+    unit: product.unit || 'pcs',
+    active: product.active !== false && product.status !== 'inactive'
+  };
+  const [form, setForm] = useState(init);
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function save(event) {
+    event.preventDefault();
+    setMessage('');
+    setBusy(true);
+    try {
+      await client.put(`/api/products/${product.id}`, {
+        name: form.name,
+        sku: form.sku,
+        barcode: form.barcode,
+        category: form.category,
+        cost: Number(form.cost) || 0,
+        price: Number(form.price) || 0,
+        stock: Number(form.stock) || 0,
+        reorderLevel: Number(form.reorderLevel) || 0,
+        unit: form.unit,
+        active: form.active,
+        status: form.active ? 'active' : 'inactive'
+      });
+      setMessage(LANG === 'ur' ? 'محفوظ ہو گیا۔' : 'Saved.');
+      await refresh();
+      onClose();
+    } catch (err) {
+      setMessage(friendlyError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return ReactDOM.createPortal(h('div', { className: 'modal', onClick: onClose },
+    h('section', { className: 'khata', onClick: e => e.stopPropagation() },
+      h('header', { className: 'khata-head' },
+        h('div', null, h('p', { className: 'eyebrow' }, t('management')), h('h2', null, `${t('editLabel')}: ${product.name}`))),
+      message && h('div', { className: 'notice' }, message),
+      h('form', { className: 'edit-form', onSubmit: save },
+        h('div', { className: 'edit-form-row' },
+          h('div', null, h('label', null, t('hProduct')), h('input', { value: form.name, onChange: e => setForm({ ...form, name: e.target.value }), required: true })),
+          h('div', null, h('label', null, t('hCategory')), h('input', { value: form.category, onChange: e => setForm({ ...form, category: e.target.value }) })),
+          h('div', null, h('label', null, t('hSku')), h('input', { value: form.sku, onChange: e => setForm({ ...form, sku: e.target.value }) }))),
+        h('div', { className: 'edit-form-row' },
+          h('div', null, h('label', null, 'Barcode'), h('input', { value: form.barcode, onChange: e => setForm({ ...form, barcode: e.target.value }) })),
+          h('div', null, h('label', null, t('hCost')), h('input', { type: 'number', min: '0', value: form.cost, onChange: e => setForm({ ...form, cost: e.target.value }) })),
+          h('div', null, h('label', null, t('hPrice')), h('input', { type: 'number', min: '0', value: form.price, onChange: e => setForm({ ...form, price: e.target.value }) }))),
+        h('div', { className: 'section-label' }, LANG === 'ur' ? 'اسٹاک اور یونٹ' : 'Stock and Unit'),
+        h('div', { className: 'edit-form-row' },
+          h('div', null, h('label', null, t('hStock')), h('input', { type: 'number', step: 'any', min: '0', value: form.stock, onChange: e => setForm({ ...form, stock: e.target.value }) })),
+          h('div', null, h('label', null, t('phLowAlertAt')), h('input', { type: 'number', min: '0', value: form.reorderLevel, onChange: e => setForm({ ...form, reorderLevel: e.target.value }) })),
+          h('div', null, h('label', null, `${t('hStock')} ${LANG === 'ur' ? 'اکائی' : 'Unit'}`), h('select', { value: form.unit, onChange: e => setForm({ ...form, unit: e.target.value }) }, UNITS.map(unit => h('option', { key: unit.value, value: unit.value }, unit.urdu))))),
+        h('div', { className: 'edit-form-row' },
+          h('label', { style: { display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700 } },
+            h('input', { type: 'checkbox', checked: form.active, onChange: e => setForm({ ...form, active: e.target.checked }) }),
+            form.active ? t('activeBadge') : t('inactiveBadge'))),
+        h('div', { className: 'form-actions' },
+          h('button', { className: 'primary', disabled: busy }, t('saveLabel')),
+          h('button', { type: 'button', className: 'secondary', onClick: onClose }, t('cancelLabel'))))),
     document.body));
 }
 

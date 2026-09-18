@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
   seedData, ensureSchema, createSale, processReturn, receiveUdharPayment,
-  clearUdhar, returnedQtyByItem, customerTotals, can
+  clearUdhar, returnedQtyByItem, customerTotals, decorateCustomer, can
 } = require('../server');
 const { mergeDbs } = require('../sync');
 
@@ -68,6 +68,36 @@ test('pay udhar reduces balance and keeps history; overpay is rejected', () => {
   assert.equal(result.balance, before - Math.floor(before / 2));
   assert.equal(db.payments.some(payment => payment.customerId === 'cus_2' && payment.amount === Math.floor(before / 2)), true);
   assert.throws(() => receiveUdharPayment(db, 'cus_2', 10_000_000, admin), /more than the udhar balance/);
+});
+
+test('receiveUdharPayment with options.at stamps the payment time and lastPaymentAt', () => {
+  const { db, admin } = fixture();
+  createSale(db, { customerId: 'cus_2', paymentType: 'Credit', items: [{ productId: 'prd_3', qty: 2 }] }, admin);
+  const customer = db.customers.find(item => item.id === 'cus_2');
+  const before = Number(customer.balance);
+  const at = '2024-05-10T09:30:00.000Z';
+  receiveUdharPayment(db, 'cus_2', Math.floor(before / 2), admin, { at });
+  const payment = db.payments.filter(item => item.customerId === 'cus_2').sort((a, b) => new Date(b.at) - new Date(a.at))[0];
+  assert.equal(payment.at, at);
+  assert.equal(db.customers.find(item => item.id === 'cus_2').lastPaymentAt, at);
+  const totals = customerTotals(db);
+  assert.equal(totals.cus_2.lastPaymentAt, at);
+});
+
+test('decorateCustomer honors recordedTotal/recordedPaid overrides and masks cnic', () => {
+  const { db, admin } = fixture();
+  const customer = db.customers.find(item => item.id === 'cus_2');
+  customer.cnic = '35202-1234567-1';
+  customer.recordedTotal = 12000;
+  customer.recordedPaid = 4500;
+  const view = decorateCustomer(db, customer, customerTotals(db));
+  assert.equal(view.creditPurchases, 12000);
+  assert.equal(view.totalPaid, 4500);
+  assert.equal(view.balance, 7500);
+  assert.equal(view.cnic, undefined);
+  assert.ok(view.cnicMasked);
+  customer.recordedPaid = 15000;
+  assert.equal(decorateCustomer(db, customer, customerTotals(db)).balance, 0);
 });
 
 test('clear udhar zeroes the balance and preserves every history record', () => {
