@@ -1,6 +1,6 @@
 /* global React, ReactDOM */
-const APP_VERSION = 'v25';
-const APP_CHECKSUM = 'customer-profile-product-v25';
+const APP_VERSION = 'v26';
+const APP_CHECKSUM = 'customer-multi-products-v26';
 (function() {
   var stored = null;
   try { stored = localStorage.getItem('faislabadi-pos-version'); } catch(_) {}
@@ -84,6 +84,11 @@ const unitLabel = unit => (UNITS.find(item => item.value === unit) || {}).urdu |
 const isWeightUnit = unit => ['kg', 'gram', 'litre', 'boree'].includes(unit);
 const pad2 = n => String(n).padStart(2, '0');
 const initialsOf = name => String(name || '?').trim().split(/\s+/).map(word => word[0] || '').join('').slice(0, 2).toUpperCase();
+const customerProductsList = customer => {
+  const list = (customer && customer.products) || [];
+  if (Array.isArray(list) && list.length) return list;
+  return customer && customer.profileProduct ? [customer.profileProduct] : [];
+};
 const toDateInputValue = iso => {
   if (!iso) return '';
   const d = new Date(iso);
@@ -1157,7 +1162,12 @@ function KhataModal({ customer, client, onClose, refresh }) {
         h('div', null, h('span', null, t('hCnic')), h('b', null, customer.cnicMasked || '-')),
         h('div', null, h('span', null, t('phAddressOptional')), h('b', null, customer.address || '-')),
         h('div', null, h('span', null, 'Credit Limit'), h('b', null, money(customer.creditLimit))),
-        h('div', null, h('span', null, t('productLabel')), h('b', null, (customer.profileProduct && customer.profileProduct.name) || '-'))),
+        h('div', { className: 'profile-products' },
+          h('span', null, t('productLabel')),
+          customerProductsList(customer).length
+            ? h('div', { className: 'profile-product-chips' }, customerProductsList(customer).map((prod, index) =>
+              h('span', { className: 'product-chip', key: `${prod.id || 'manual'}-${index}` }, prod.name)))
+            : h('b', null, '-'))),
       h('div', { className: 'khata-summary' },
         h('div', null, h('span', null, t('totalCreditPurchases')), h('strong', null, money(summary.creditPurchases))),
         h('div', null, h('span', null, t('totalPaidLabel')), h('strong', null, money(summary.totalPaid))),
@@ -1185,7 +1195,6 @@ function KhataModal({ customer, client, onClose, refresh }) {
 }
 
 function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, products }) {
-  const profileProduct = customer.profileProduct || null;
   const init = {
     name: customer.name || '',
     phone: customer.phone || '',
@@ -1196,9 +1205,8 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
     udhaarPaid: Number(customer.totalPaid || 0),
     paymentDate: customer.lastPaymentAt ? toDateInputValue(customer.lastPaymentAt) : '',
     paymentTime: customer.lastPaymentAt ? toTimeInputValue(customer.lastPaymentAt) : '',
-    productId: profileProduct && !profileProduct.manual ? profileProduct.id || '' : '',
-    productName: profileProduct ? profileProduct.name || '' : '',
-    manualMode: Boolean(profileProduct && profileProduct.manual)
+    products: customerProductsList(customer),
+    manualMode: false
   };
   const [form, setForm] = useState(init);
   const [productSearch, setProductSearch] = useState('');
@@ -1206,34 +1214,39 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const remaining = Math.max(0, (Number(form.udhaarTotal) || 0) - (Number(form.udhaarPaid) || 0));
+  const addedProductIds = new Set(form.products.filter(p => p.id).map(p => p.id));
   const productHits = productSearch.trim()
-    ? (products || []).filter(prod => `${prod.name || ''} ${prod.category || ''} ${prod.sku || ''}`.toLowerCase().includes(productSearch.trim().toLowerCase())).slice(0, 6)
+    ? (products || []).filter(prod => !addedProductIds.has(prod.id) && `${prod.name || ''} ${prod.category || ''} ${prod.sku || ''}`.toLowerCase().includes(productSearch.trim().toLowerCase())).slice(0, 6)
     : [];
-  const productSelected = Boolean(form.productId || form.productName);
-  function pickProduct(prod) {
-    setForm(old => ({ ...old, productId: prod.id, productName: prod.name, manualMode: false }));
+  const productSelected = form.products.length > 0;
+  function addProduct(prod) {
+    if (addedProductIds.has(prod.id)) return;
+    setForm(old => ({ ...old, products: [...old.products, { id: prod.id, name: prod.name, manual: false }] }));
     setProductSearch('');
     setManualDraft('');
   }
   function openManual() {
     setForm(old => ({ ...old, manualMode: true }));
-    setManualDraft(form.productName || '');
+    setManualDraft('');
   }
   function commitManual() {
-    const name = (manualDraft.trim() || form.productName || '').trim();
+    const name = manualDraft.trim();
     if (!name) return;
-    setForm(old => ({ ...old, productId: '', productName: name, manualMode: false }));
-    setProductSearch('');
+    setForm(old => ({
+      ...old,
+      manualMode: false,
+      products: old.products.some(p => !p.id && p.manual && p.name.toLowerCase() === name.toLowerCase())
+        ? old.products
+        : [...old.products, { id: null, name, manual: true }]
+    }));
     setManualDraft('');
   }
   function cancelManual() {
     setForm(old => ({ ...old, manualMode: false }));
     setManualDraft('');
   }
-  function clearProduct() {
-    setForm(old => ({ ...old, productId: '', productName: '', manualMode: false }));
-    setProductSearch('');
-    setManualDraft('');
+  function removeProduct(index) {
+    setForm(old => ({ ...old, products: old.products.filter((_, i) => i !== index) }));
   }
 
   async function save(event) {
@@ -1253,8 +1266,7 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
           if (form.paymentTime) payload.paymentTime = form.paymentTime;
         }
       }
-      payload.productId = form.productId || '';
-      payload.productName = form.productName || '';
+      payload.products = form.products.map(product => ({ id: product.id || '', name: product.name || '', manual: Boolean(!product.id) }));
       await client.put(`/api/customers/${customer.id}`, payload);
       setMessage(LANG === 'ur' ? 'محفوظ ہو گیا۔' : 'Saved.');
       await refresh();
@@ -1268,8 +1280,10 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
 
   const productPicker = h('div', { className: 'product-picker' },
     productSelected && h('div', { className: 'selected-product' },
-      h('span', { className: 'product-chip' }, h('b', null, t('productLabel')), ` — ${form.productName}`),
-      h('button', { type: 'button', className: 'secondary small', onClick: clearProduct }, t('clearProduct'))),
+      h('div', { className: 'product-chip-list' }, form.products.map((prod, index) =>
+        h('span', { className: 'chip-item', key: `${prod.id || 'manual'}-${index}` },
+          h('span', { className: `product-chip${prod.manual ? ' manual' : ''}` }, prod.name),
+          h('button', { type: 'button', className: 'chip-remove', title: t('clearProduct'), onClick: () => removeProduct(index) }, '×'))))),
     !form.manualMode && h('input', {
       key: 'search',
       className: 'product-search',
@@ -1281,11 +1295,12 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
       h('button', {
         key: prod.id,
         type: 'button',
-        className: `product-match${form.productId === prod.id ? ' selected' : ''}`,
-        onClick: () => pickProduct(prod)
+        className: 'product-match',
+        onClick: () => addProduct(prod)
       },
         h('strong', null, prod.name),
-        h('small', null, [prod.category, prod.sku].filter(Boolean).join(' · ') || t('productLabel'))))),
+        h('small', null, [prod.category, prod.sku].filter(Boolean).join(' · ') || t('productLabel')),
+        h('span', { className: 'add-tag' }, t('add'))))),
     productSearch.trim() && productHits.length === 0 && !form.manualMode && h('p', { className: 'hint', key: 'none' }, t('noMatchingProducts')),
     !form.manualMode && h('button', { type: 'button', className: 'secondary', key: 'manual-btn', onClick: openManual }, t('addProductManually')),
     form.manualMode && h('div', { className: 'manual-row', key: 'manual-row' },

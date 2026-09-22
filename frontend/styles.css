@@ -417,6 +417,19 @@ td {
   border-radius: 999px; padding: 7px 14px; font-weight: 700; font-size: 13px;
   overflow-wrap: anywhere;
 }
+.product-chip.manual { background: #fff7e6; border-color: #f0d49a; color: #8a5a00; }
+.product-chip-list { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.chip-item { display: inline-flex; align-items: center; gap: 2px; }
+.chip-remove {
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 1px solid var(--line); background: #fff; color: var(--muted);
+  font-size: 14px; line-height: 1; cursor: pointer; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.chip-remove:hover { color: var(--red); border-color: var(--red); }
+.add-tag { color: var(--green); font-weight: 800; font-size: 15px; }
+.profile-products { grid-column: 1 / -1; min-width: 0; }
+.profile-product-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 
 /* STOCK ROWS */
 .stock-row {

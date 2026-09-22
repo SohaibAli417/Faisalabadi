@@ -575,13 +575,28 @@ function decorateCustomer(db, customer, totalsMap) {
   if (hasRecordedTotal) creditPurchases = money(customer.recordedTotal);
   if (hasRecordedPaid) totalPaid = money(customer.recordedPaid);
   if (hasRecordedTotal && hasRecordedPaid) balance = Math.max(0, creditPurchases - totalPaid);
-  let profileProduct = null;
-  if (customer.productId) {
-    const linked = db.products.find(product => product.id === customer.productId);
-    if (linked) profileProduct = { id: linked.id, name: linked.name, manual: false };
-  }
-  if (!profileProduct && customer.productName) {
-    profileProduct = { id: null, name: String(customer.productName), manual: true };
+  let productList = [];
+  if (Array.isArray(customer.products) && customer.products.length) {
+    for (const item of customer.products) {
+      const id = item && item.id ? String(item.id) : null;
+      const name = String((item && (item.name || '')) || '').trim();
+      if (!name) continue;
+      if (id) {
+        const linked = db.products.find(product => product.id === id);
+        if (linked) productList.push({ id: linked.id, name: linked.name, manual: false });
+        else productList.push({ id: null, name, manual: true });
+      } else {
+        productList.push({ id: null, name, manual: true });
+      }
+    }
+  } else if (customer.productId || customer.productName) {
+    let single = null;
+    if (customer.productId) {
+      const linked = db.products.find(product => product.id === customer.productId);
+      if (linked) single = { id: linked.id, name: linked.name, manual: false };
+    }
+    if (!single && customer.productName) single = { id: null, name: String(customer.productName), manual: true };
+    if (single) productList = [single];
   }
   return {
     ...customer,
@@ -591,7 +606,8 @@ function decorateCustomer(db, customer, totalsMap) {
     totalPaid,
     balance,
     lastPaymentAt: totals.lastPaymentAt || customer.lastPaymentAt || null,
-    profileProduct
+    products: productList,
+    profileProduct: productList[0] || null
   };
 }
 
@@ -1132,10 +1148,22 @@ async function handleApi(request, response) {
       const body = await parseBody(request);
       if (!body.name || !String(body.name).trim()) return json(response, 400, { error: 'Customer name is required' });
       const customer = { id: uid('cus'), name: String(body.name).trim(), phone: String(body.phone || '').trim(), cnic: String(body.cnic || '').trim(), address: String(body.address || '').trim(), creditLimit: money(body.creditLimit), balance: money(body.balance), active: true, _updatedAt: now() };
-      const productId = String(body.productId || '').trim();
-      const productName = String(body.productName || '').trim();
-      if (productId) customer.productId = productId;
-      if (productName && !productId) customer.productName = productName;
+      const productList = [];
+      if (Array.isArray(body.products)) {
+        for (const item of body.products) {
+          const rawId = String((item && item.id) || '').trim();
+          const rawName = String((item && (item.name || '')) || '').trim();
+          if (!rawName) continue;
+          if (rawId) productList.push({ id: rawId, name: rawName, manual: false });
+          else productList.push({ id: null, name: rawName, manual: true });
+        }
+      } else {
+        const productId = String(body.productId || '').trim();
+        const productName = String(body.productName || '').trim();
+        if (productId) productList.push({ id: productId, name: productName, manual: false });
+        if (productName && !productId) productList.push({ id: null, name: productName, manual: true });
+      }
+      if (productList.length) customer.products = productList.slice(0, 50);
       db.customers.unshift(customer);
       audit(db, actor, 'create', 'customer', customer.id, { name: customer.name });
       await saveDb(db);
@@ -1151,7 +1179,24 @@ async function handleApi(request, response) {
       for (const field of ['name', 'phone', 'cnic', 'address', 'creditLimit']) {
         if (body[field] !== undefined) customer[field] = field === 'creditLimit' ? money(body[field]) : String(body[field]).trim();
       }
-      if (body.productId !== undefined || body.productName !== undefined) {
+      if (Array.isArray(body.products)) {
+        const productList = [];
+        for (const item of body.products) {
+          const rawId = String((item && item.id) || '').trim();
+          const rawName = String((item && (item.name || '')) || '').trim();
+          if (!rawName) continue;
+          if (rawId) {
+            const linked = db.products.find(product => product.id === rawId);
+            if (linked) productList.push({ id: linked.id, name: linked.name, manual: false });
+            else productList.push({ id: null, name: rawName, manual: true });
+          } else {
+            productList.push({ id: null, name: rawName, manual: true });
+          }
+        }
+        customer.products = productList.slice(0, 50);
+        delete customer.productId;
+        delete customer.productName;
+      } else if (body.productId !== undefined || body.productName !== undefined) {
         const pid = String(body.productId || '').trim();
         const pname = String(body.productName || '').trim();
         if (pid) {
