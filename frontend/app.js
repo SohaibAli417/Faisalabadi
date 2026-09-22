@@ -1,6 +1,6 @@
 /* global React, ReactDOM */
-const APP_VERSION = 'v26';
-const APP_CHECKSUM = 'customer-multi-products-v26';
+const APP_VERSION = 'v27';
+const APP_CHECKSUM = 'customer-product-qty-unit-logo-v27';
 (function() {
   var stored = null;
   try { stored = localStorage.getItem('faislabadi-pos-version'); } catch(_) {}
@@ -88,6 +88,12 @@ const customerProductsList = customer => {
   const list = (customer && customer.products) || [];
   if (Array.isArray(list) && list.length) return list;
   return customer && customer.profileProduct ? [customer.profileProduct] : [];
+};
+const productQtyLabel = product => {
+  const qty = Number((product && product.qty) || 1);
+  const unit = product && typeof product.unit === 'string' ? product.unit.trim() : '';
+  if (qty === 1 && !unit) return '';
+  return ` ×${qty}${unit ? ' ' + unitLabel(unit) : ''}`;
 };
 const toDateInputValue = iso => {
   if (!iso) return '';
@@ -422,7 +428,7 @@ function Login({ onLogin, langTick, bumpLang }) {
   return h('main', { className: 'login-page' },
     h('form', { className: 'login-card', onSubmit: submit },
       h('div', { style: { display: 'flex', justifyContent: 'flex-end' } }, h(LangToggle, { tick: bumpLang })),
-      h('div', { className: 'brand login-brand' }, h('span', { className: 'brand-logo' }, 'F'), h('div', null, h('strong', null, 'Faislabadi'), h('small', null, 'GENERAL STORE POS'))),
+      h('div', { className: 'brand login-brand' }, h('img', { className: 'brand-logo', src: 'logo.png?v=27', alt: '' }), h('div', null, h('strong', null, 'Faislabadi'), h('small', null, 'GENERAL STORE POS'))),
       h('p', { className: 'eyebrow' }, t('secureLogin')),
       h('h1', null, t('signInToPos')),
       isOffline && h('div', { className: 'notice' }, t('offlineModeNotice')),
@@ -702,7 +708,7 @@ function ReceiptModal({ sale, customers, settings, onClose }) {
   return ReactDOM.createPortal(h('div', { className: 'modal', onClick: onClose },
     h('section', { className: 'receipt ' + paperClass, onClick: function(e) { e.stopPropagation(); } },
       h('div', { className: 'receipt-header' },
-        h('div', { className: 'receipt-brand' }, h('span', { className: 'receipt-logo' }, 'F')),
+        h('div', { className: 'receipt-brand' }, h('img', { className: 'receipt-logo', src: 'logo.png?v=27', alt: '' })),
         h('h2', null, storeName),
         storeAddress && h('p', { className: 'receipt-info' }, storeAddress),
         storePhone && h('p', { className: 'receipt-info' }, storePhone)),
@@ -1166,7 +1172,7 @@ function KhataModal({ customer, client, onClose, refresh }) {
           h('span', null, t('productLabel')),
           customerProductsList(customer).length
             ? h('div', { className: 'profile-product-chips' }, customerProductsList(customer).map((prod, index) =>
-              h('span', { className: 'product-chip', key: `${prod.id || 'manual'}-${index}` }, prod.name)))
+              h('span', { className: 'product-chip', key: `${prod.id || 'manual'}-${index}` }, `${prod.name}${productQtyLabel(prod)}`)))
             : h('b', null, '-'))),
       h('div', { className: 'khata-summary' },
         h('div', null, h('span', null, t('totalCreditPurchases')), h('strong', null, money(summary.creditPurchases))),
@@ -1221,7 +1227,7 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
   const productSelected = form.products.length > 0;
   function addProduct(prod) {
     if (addedProductIds.has(prod.id)) return;
-    setForm(old => ({ ...old, products: [...old.products, { id: prod.id, name: prod.name, manual: false }] }));
+    setForm(old => ({ ...old, products: [...old.products, { id: prod.id, name: prod.name, manual: false, qty: 1, unit: '' }] }));
     setProductSearch('');
     setManualDraft('');
   }
@@ -1237,7 +1243,7 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
       manualMode: false,
       products: old.products.some(p => !p.id && p.manual && p.name.toLowerCase() === name.toLowerCase())
         ? old.products
-        : [...old.products, { id: null, name, manual: true }]
+        : [...old.products, { id: null, name, manual: true, qty: 1, unit: '' }]
     }));
     setManualDraft('');
   }
@@ -1247,6 +1253,12 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
   }
   function removeProduct(index) {
     setForm(old => ({ ...old, products: old.products.filter((_, i) => i !== index) }));
+  }
+  function setProductQty(index, qty) {
+    setForm(old => ({ ...old, products: old.products.map((p, i) => i === index ? { ...p, qty } : p) }));
+  }
+  function setProductUnit(index, unit) {
+    setForm(old => ({ ...old, products: old.products.map((p, i) => i === index ? { ...p, unit } : p) }));
   }
 
   async function save(event) {
@@ -1266,7 +1278,7 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
           if (form.paymentTime) payload.paymentTime = form.paymentTime;
         }
       }
-      payload.products = form.products.map(product => ({ id: product.id || '', name: product.name || '', manual: Boolean(!product.id) }));
+      payload.products = form.products.map(product => ({ id: product.id || '', name: product.name || '', manual: Boolean(!product.id), qty: Math.max(0, Number(product.qty) || 1), unit: String(product.unit || '').trim() }));
       await client.put(`/api/customers/${customer.id}`, payload);
       setMessage(LANG === 'ur' ? 'محفوظ ہو گیا۔' : 'Saved.');
       await refresh();
@@ -1282,7 +1294,10 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
     productSelected && h('div', { className: 'selected-product' },
       h('div', { className: 'product-chip-list' }, form.products.map((prod, index) =>
         h('span', { className: 'chip-item', key: `${prod.id || 'manual'}-${index}` },
-          h('span', { className: `product-chip${prod.manual ? ' manual' : ''}` }, prod.name),
+          h('span', { className: `product-chip${prod.manual ? ' manual' : ''}` },
+            `${prod.name}${productQtyLabel(prod)}`,
+            h('input', { type: 'number', min: '1', step: 'any', className: 'chip-qty', value: Number(prod.qty || 1), onChange: e => setProductQty(index, e.target.value) }),
+            h('select', { className: 'chip-unit', value: prod.unit || '', onChange: e => setProductUnit(index, e.target.value) }, UNITS.map(unit => h('option', { value: unit.value, key: unit.value }, unitLabel(unit.value))))),
           h('button', { type: 'button', className: 'chip-remove', title: t('clearProduct'), onClick: () => removeProduct(index) }, '×'))))),
     !form.manualMode && h('input', {
       key: 'search',
@@ -2026,7 +2041,7 @@ function App() {
   const visiblePages = pages.filter(([id]) => canSee(data.user, id));
   const activePage = visiblePages.some(([id]) => id === page) ? page : (visiblePages[0] || ['dashboard'])[0];
   return h('main', { className: 'app-shell', dir: LANG === 'ur' ? 'rtl' : 'ltr' },
-    h('aside', { className: 'sidebar' }, h('div', { className: 'brand' }, h('span', { className: 'brand-logo' }, 'F'), h('div', null, h('strong', null, 'Faislabadi'), h('small', null, 'GENERAL STORE'))), h('nav', null, visiblePages.map(([id]) => h('button', { key: id, className: activePage === id ? 'nav-item active' : 'nav-item', onClick: () => setPage(id) }, h('span', null, t('nav_' + id)))), h(LangToggle, { tick: bumpLang })), h('div', { className: 'sidebar-footer' }, h('div', { className: 'avatar' }, data.user.name.split(' ').map(part => part[0]).join('').slice(0, 2)), h('div', null, h('strong', null, data.user.name), h('small', null, role)), h('button', { className: 'more', onClick: () => { try { client.post('/api/auth/logout', {}).catch(() => {}); } catch (_) {} localStorage.removeItem(stateKey); setSession(null); } }, t('logout')))),
+    h('aside', { className: 'sidebar' }, h('div', { className: 'brand' }, h('img', { className: 'brand-logo', src: 'logo.png?v=27', alt: '' }), h('div', null, h('strong', null, 'Faislabadi'), h('small', null, 'GENERAL STORE'))), h('nav', null, visiblePages.map(([id]) => h('button', { key: id, className: activePage === id ? 'nav-item active' : 'nav-item', onClick: () => setPage(id) }, h('span', null, t('nav_' + id)))), h(LangToggle, { tick: bumpLang })), h('div', { className: 'sidebar-footer' }, h('div', { className: 'avatar' }, data.user.name.split(' ').map(part => part[0]).join('').slice(0, 2)), h('div', null, h('strong', null, data.user.name), h('small', null, role)), h('button', { className: 'more', onClick: () => { try { client.post('/api/auth/logout', {}).catch(() => {}); } catch (_) {} localStorage.removeItem(stateKey); setSession(null); } }, t('logout')))),
     h('section', { className: 'main-area' }, h('header', { className: 'topbar' }, h('div', { className: 'crumb' }, 'Faislabadi General Store / ', h('strong', null, t('nav_' + activePage))), h('div', { className: 'top-actions' },
       cloudSync && cloudSync.enabled && h('span', { className: cloudSync.lastError ? 'sync-status offline' : 'sync-status', title: cloudSync.lastSuccessAt ? `${t('cloudSyncedAt')} ${new Date(cloudSync.lastSuccessAt).toLocaleTimeString()}` : t('waitingFirstSync') }, cloudSync.lastError ? t('cloudPending') : (cloudSync.lastSuccessAt ? t('cloudSynced') : t('cloudConnecting'))),
       h('span', { className: online ? 'sync-status' : 'sync-status offline' }, online ? t('online') : t('offline')), h('button', { className: 'secondary', onClick: refresh }, t('refresh')), h(LangToggle, { tick: bumpLang }))), dataWarning && h('div', { className: 'notice danger', style: { margin: '12px 20px 0' } }, dataWarning), storageNotice && h('div', { className: 'notice warning', style: { margin: '12px 20px 0' } }, storageNotice),     activePage === 'dashboard' ? h(Dashboard, { data, go: setPage, client }) : activePage === 'pos' ? h(POS, { client, data, refresh, online, setOnline, go: setPage }) : activePage === 'users' ? h(UsersAdmin, { client }) : activePage === 'returns' ? h(ReturnsPage, { data, client, refresh }) : activePage === 'reports' ? h(Reports, { data, client }) : activePage === 'purchases' ? h(Purchases, { data, client, refresh }) : activePage === 'settings' ? h(Settings, { data, client }) : activePage === 'warehouse' ? h(WarehousePage, { data, client, refresh }) : h(DataPage, { page: activePage, data, client, refresh })));

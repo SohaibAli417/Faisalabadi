@@ -85,26 +85,33 @@ test('receiveUdharPayment with options.at stamps the payment time and lastPaymen
   assert.equal(totals.cus_2.lastPaymentAt, at);
 });
 
-test('decorateCustomer exposes linked and manual customer products (multi + legacy single)', () => {
+test('decorateCustomer exposes linked and manual customer products (multi + legacy single) with qty and unit', () => {
   const { db } = fixture();
   const customer = db.customers.find(item => item.id === 'cus_1');
   customer.products = [
-    { id: 'prd_1', name: 'stale name', manual: false },
-    { id: null, name: 'Chai ka saman', manual: true }
+    { id: 'prd_1', name: 'stale name', manual: false, qty: 2, unit: 'kg' },
+    { id: null, name: 'Chai ka saman', manual: true, qty: 3, unit: 'dozen' }
   ];
   const multi = decorateCustomer(db, customer, customerTotals(db));
   assert.equal(multi.products.length, 2);
   assert.equal(multi.products[0].manual, false);
   assert.equal(multi.products[0].name, db.products.find(item => item.id === 'prd_1').name);
+  assert.equal(multi.products[0].qty, 2);
+  assert.equal(multi.products[0].unit, 'kg');
   assert.equal(multi.products[1].manual, true);
   assert.equal(multi.products[1].name, 'Chai ka saman');
+  assert.equal(multi.products[1].qty, 3);
+  assert.equal(multi.products[1].unit, 'dozen');
   assert.equal(multi.profileProduct.name, db.products.find(item => item.id === 'prd_1').name);
+  assert.equal(multi.profileProduct.qty, 2);
   customer.products = [];
   delete customer.products;
   customer.productId = 'prd_1';
   const legacy = decorateCustomer(db, customer, customerTotals(db));
   assert.equal(legacy.products.length, 1);
   assert.equal(legacy.products[0].name, db.products.find(item => item.id === 'prd_1').name);
+  assert.equal(legacy.products[0].qty, 1);
+  assert.equal(legacy.products[0].unit, '');
   assert.equal(legacy.profileProduct.manual, false);
   const none = decorateCustomer(db, db.customers.find(item => item.id === 'cus_2'), customerTotals(db));
   assert.equal(none.products.length, 0);

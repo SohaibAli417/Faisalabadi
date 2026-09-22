@@ -1,13 +1,16 @@
-const CACHE_NAME = 'faislabadi-pos-v26';
+const CACHE_NAME = 'faislabadi-pos-v27';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
-  '/styles.css?v=26',
-  '/manual.css?v=26',
-  '/app.js?v=26',
+  '/styles.css?v=27',
+  '/manual.css?v=27',
+  '/app.js?v=27',
   '/vendor/react.production.min.js',
   '/vendor/react-dom.production.min.js',
-  '/manifest.json'
+  '/manifest.json',
+  '/logo.png',
+  '/icon-192.png',
+  '/favicon.png'
 ];
 
 const URDU_FONT_CSS = 'https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;700&display=swap';

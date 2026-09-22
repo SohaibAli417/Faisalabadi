@@ -13,7 +13,10 @@ const types = {
   '.css': 'text/css; charset=utf-8',
   '.js': 'application/javascript; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
-  '.csv': 'text/csv; charset=utf-8'
+  '.csv': 'text/csv; charset=utf-8',
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon'
 };
 
 const loginAttempts = new Map();
@@ -565,6 +568,12 @@ function customerTotals(db) {
   return totals;
 }
 
+function productQtyUnit(item) {
+  const qty = Number((item && item.qty) || 1);
+  const unit = item && typeof item.unit === 'string' ? item.unit.trim().slice(0, 20) : '';
+  return { qty: qty > 0 ? Math.round(qty * 100) / 100 : 1, unit };
+}
+
 function decorateCustomer(db, customer, totalsMap) {
   const totals = totalsMap[customer.id] || { creditPurchases: 0, totalPaid: 0, lastPaymentAt: null };
   let creditPurchases = money(totals.creditPurchases);
@@ -583,19 +592,19 @@ function decorateCustomer(db, customer, totalsMap) {
       if (!name) continue;
       if (id) {
         const linked = db.products.find(product => product.id === id);
-        if (linked) productList.push({ id: linked.id, name: linked.name, manual: false });
-        else productList.push({ id: null, name, manual: true });
+        if (linked) productList.push({ id: linked.id, name: linked.name, manual: false, ...productQtyUnit(item) });
+        else productList.push({ id: null, name, manual: true, ...productQtyUnit(item) });
       } else {
-        productList.push({ id: null, name, manual: true });
+        productList.push({ id: null, name, manual: true, ...productQtyUnit(item) });
       }
     }
   } else if (customer.productId || customer.productName) {
     let single = null;
     if (customer.productId) {
       const linked = db.products.find(product => product.id === customer.productId);
-      if (linked) single = { id: linked.id, name: linked.name, manual: false };
+      if (linked) single = { id: linked.id, name: linked.name, manual: false, ...productQtyUnit(customer) };
     }
-    if (!single && customer.productName) single = { id: null, name: String(customer.productName), manual: true };
+    if (!single && customer.productName) single = { id: null, name: String(customer.productName), manual: true, ...productQtyUnit(customer) };
     if (single) productList = [single];
   }
   return {
@@ -1154,8 +1163,8 @@ async function handleApi(request, response) {
           const rawId = String((item && item.id) || '').trim();
           const rawName = String((item && (item.name || '')) || '').trim();
           if (!rawName) continue;
-          if (rawId) productList.push({ id: rawId, name: rawName, manual: false });
-          else productList.push({ id: null, name: rawName, manual: true });
+          if (rawId) productList.push({ id: rawId, name: rawName, manual: false, ...productQtyUnit(item) });
+          else productList.push({ id: null, name: rawName, manual: true, ...productQtyUnit(item) });
         }
       } else {
         const productId = String(body.productId || '').trim();
@@ -1187,10 +1196,10 @@ async function handleApi(request, response) {
           if (!rawName) continue;
           if (rawId) {
             const linked = db.products.find(product => product.id === rawId);
-            if (linked) productList.push({ id: linked.id, name: linked.name, manual: false });
-            else productList.push({ id: null, name: rawName, manual: true });
+            if (linked) productList.push({ id: linked.id, name: linked.name, manual: false, ...productQtyUnit(item) });
+            else productList.push({ id: null, name: rawName, manual: true, ...productQtyUnit(item) });
           } else {
-            productList.push({ id: null, name: rawName, manual: true });
+            productList.push({ id: null, name: rawName, manual: true, ...productQtyUnit(item) });
           }
         }
         customer.products = productList.slice(0, 50);

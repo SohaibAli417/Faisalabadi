@@ -46,14 +46,10 @@ button, a { cursor: pointer; }
 }
 
 .brand-logo {
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
+  object-fit: contain;
   border-radius: 8px;
-  background: #ef7b44;
-  display: grid;
-  place-items: center;
-  font: 800 20px system-ui;
-  color: white;
   flex-shrink: 0;
 }
 
@@ -419,7 +415,15 @@ td {
 }
 .product-chip.manual { background: #fff7e6; border-color: #f0d49a; color: #8a5a00; }
 .product-chip-list { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.chip-item { display: inline-flex; align-items: center; gap: 2px; }
+.chip-item { display: inline-flex; align-items: center; gap: 4px; }
+.chip-qty {
+  width: 52px; padding: 4px 8px; font-size: 12px; font-weight: 650; text-align: center;
+  border: 1px solid var(--line); border-radius: 6px; background: #fff; color: inherit;
+}
+.chip-unit {
+  max-width: 92px; padding: 4px 6px; font-size: 12px; font-weight: 650;
+  border: 1px solid var(--line); border-radius: 6px; background: #fff; color: inherit;
+}
 .chip-remove {
   width: 22px; height: 22px; border-radius: 50%;
   border: 1px solid var(--line); background: #fff; color: var(--muted);
@@ -681,12 +685,8 @@ td {
 .receipt-logo {
   width: 36px;
   height: 36px;
+  object-fit: contain;
   border-radius: 8px;
-  background: var(--deep);
-  display: inline-grid;
-  place-items: center;
-  font: 800 18px system-ui;
-  color: #fff;
 }
 
 .receipt h2 { font-size: 16px; font-weight: 800; margin: 0 0 4px; letter-spacing: 0.5px; }
