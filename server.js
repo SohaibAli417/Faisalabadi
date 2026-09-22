@@ -575,6 +575,14 @@ function decorateCustomer(db, customer, totalsMap) {
   if (hasRecordedTotal) creditPurchases = money(customer.recordedTotal);
   if (hasRecordedPaid) totalPaid = money(customer.recordedPaid);
   if (hasRecordedTotal && hasRecordedPaid) balance = Math.max(0, creditPurchases - totalPaid);
+  let profileProduct = null;
+  if (customer.productId) {
+    const linked = db.products.find(product => product.id === customer.productId);
+    if (linked) profileProduct = { id: linked.id, name: linked.name, manual: false };
+  }
+  if (!profileProduct && customer.productName) {
+    profileProduct = { id: null, name: String(customer.productName), manual: true };
+  }
   return {
     ...customer,
     cnicMasked: maskCnic(customer.cnic),
@@ -582,7 +590,8 @@ function decorateCustomer(db, customer, totalsMap) {
     creditPurchases,
     totalPaid,
     balance,
-    lastPaymentAt: totals.lastPaymentAt || customer.lastPaymentAt || null
+    lastPaymentAt: totals.lastPaymentAt || customer.lastPaymentAt || null,
+    profileProduct
   };
 }
 
@@ -1123,6 +1132,10 @@ async function handleApi(request, response) {
       const body = await parseBody(request);
       if (!body.name || !String(body.name).trim()) return json(response, 400, { error: 'Customer name is required' });
       const customer = { id: uid('cus'), name: String(body.name).trim(), phone: String(body.phone || '').trim(), cnic: String(body.cnic || '').trim(), address: String(body.address || '').trim(), creditLimit: money(body.creditLimit), balance: money(body.balance), active: true, _updatedAt: now() };
+      const productId = String(body.productId || '').trim();
+      const productName = String(body.productName || '').trim();
+      if (productId) customer.productId = productId;
+      if (productName && !productId) customer.productName = productName;
       db.customers.unshift(customer);
       audit(db, actor, 'create', 'customer', customer.id, { name: customer.name });
       await saveDb(db);
@@ -1137,6 +1150,18 @@ async function handleApi(request, response) {
       const body = await parseBody(request);
       for (const field of ['name', 'phone', 'cnic', 'address', 'creditLimit']) {
         if (body[field] !== undefined) customer[field] = field === 'creditLimit' ? money(body[field]) : String(body[field]).trim();
+      }
+      if (body.productId !== undefined || body.productName !== undefined) {
+        const pid = String(body.productId || '').trim();
+        const pname = String(body.productName || '').trim();
+        if (pid) {
+          customer.productId = pid;
+          delete customer.productName;
+        } else {
+          delete customer.productId;
+          if (pname) customer.productName = pname;
+          else delete customer.productName;
+        }
       }
       const wantsUdharEdit = body.udhaarTotal !== undefined || body.udhaarPaid !== undefined || body.paymentDate !== undefined || body.paymentTime !== undefined;
       if (wantsUdharEdit && !can(actor, 'udhar')) {

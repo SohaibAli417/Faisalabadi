@@ -85,6 +85,21 @@ test('receiveUdharPayment with options.at stamps the payment time and lastPaymen
   assert.equal(totals.cus_2.lastPaymentAt, at);
 });
 
+test('decorateCustomer resolves a linked product name and exposes manual product entries', () => {
+  const { db } = fixture();
+  const customer = db.customers.find(item => item.id === 'cus_1');
+  customer.productId = 'prd_1';
+  const linked = decorateCustomer(db, customer, customerTotals(db));
+  assert.equal(linked.profileProduct.manual, false);
+  assert.equal(linked.profileProduct.name, db.products.find(item => item.id === 'prd_1').name);
+  customer.productName = 'Chai ka saman';
+  assert.equal(decorateCustomer(db, customer, customerTotals(db)).profileProduct.name, db.products.find(item => item.id === 'prd_1').name);
+  customer.productId = null;
+  const manual = decorateCustomer(db, customer, customerTotals(db));
+  assert.equal(manual.profileProduct.manual, true);
+  assert.equal(manual.profileProduct.name, 'Chai ka saman');
+});
+
 test('decorateCustomer honors recordedTotal/recordedPaid overrides and masks cnic', () => {
   const { db, admin } = fixture();
   const customer = db.customers.find(item => item.id === 'cus_2');
