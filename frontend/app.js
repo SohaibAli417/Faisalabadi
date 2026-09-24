@@ -1,6 +1,6 @@
 /* global React, ReactDOM */
-const APP_VERSION = 'v27';
-const APP_CHECKSUM = 'customer-product-qty-unit-logo-v27';
+const APP_VERSION = 'v28';
+const APP_CHECKSUM = 'customer-product-qty-unit-logo-v28';
 (function() {
   var stored = null;
   try { stored = localStorage.getItem('faislabadi-pos-version'); } catch(_) {}
@@ -176,7 +176,36 @@ const STRINGS = {
     phTransferQty: 'Quantity', transferDone: 'Stock transferred successfully.', linkedProduct: 'Linked Product', linkProduct: 'Link product', unlinkProduct: 'Unlink',
     productLabel: 'Product', addProductManually: '+ Add Product Manually', searchProducts: 'Search products...',
     noMatchingProducts: 'No matching products.', clearProduct: 'Remove product',
-    productPickHint: 'Only saved on this customer - it does not create a new product in the Products tab.'
+    productPickHint: 'Only saved on this customer - it does not create a new product in the Products tab.',
+    voucherNo: 'Voucher No', pendingInvoice: 'Pending - assigned on save', dateLabel: 'Date', paymentTerms: 'Payment Terms',
+    referenceLabel: 'Reference', customerLabelShort: 'Customer', selectCustomerPh: 'Search customer by name or phone...',
+    scanCamera: 'Scan with camera', amountReceived: 'Amount received', changeLabel: 'Change',
+    balanceChangeLabel: 'Balance / Change', additionalDiscount: 'Additional Discount', totalQtyLabel: 'Total Qty',
+    totalPacksLabel: 'Total Packs', grandTotalLabel: 'Grand Total', saveDraft: 'Save Draft', draftsLabel: 'Drafts',
+    printInvoice: 'Print Invoice', completeSale: 'Complete Sale', completeAndPrint: 'Complete & Print',
+    cancelSale: 'Cancel', cameraScanTitle: 'Scan barcode with camera', cameraUnsupported: 'Camera barcode scanning is not supported in this browser.',
+    cameraDenied: 'Camera access was denied. Allow camera access and try again, or type the barcode below.',
+    noCamera: 'No camera found on this device.',
+    typeBarcodeLabel: 'Type or scan barcode', closeScan: 'Close', startScanning: 'Start camera', stopScanning: 'Stop camera',
+    partialPayment: 'Partial', udhaarPayment: 'Credit / Udhaar', deliveryInfo: 'Additional / Delivery Information',
+    deliveryInfoNote: 'Optional - shown on the printed invoice', deliverTo: 'Deliver To', deliverAddress: 'Deliver Address',
+    transport: 'Transport', trNo: 'TR #', noCases: 'No. of Cases', freightCharges: 'Freight Charges',
+    deliveryDate: 'Delivery Date', orderTaker: 'Order Taker', salesPerson: 'Sales Person', packedBy: 'Packed By',
+    preparedBy: 'Prepared By', checkedBy: 'Checked By', locationLabel: 'Location', removeLabel: 'Remove',
+    amountWord: 'Amount', quantityWord: 'Quantity', qtyShort: 'Qty', unitLabelWord: 'UOM', rateLabel: 'Rate',
+    totalWord: 'Total', draftSavedMsg: 'Draft saved.', draftDeletedMsg: 'Draft deleted.', draftLoadedMsg: 'Draft loaded.',
+    unavailable: 'Unavailable', notSavedPreview: 'PREVIEW - NOT SAVED', loadingDrafts: 'Load', openDrafts: 'Open draft',
+    saveDraftFirst: 'Save a draft first', noDrafts: 'No drafts saved yet.', createdBy2: 'By', itemsShort: 'items',
+    newSaleConfirm: 'Start a new sale? Current bill will be cleared.', cancelSaleConfirm: 'Cancel current bill? Items will be cleared.',
+    printPreviewNote: 'The bill below is a preview. Complete the sale to assign an invoice number.',
+    refreshHint: 'Press F2 to complete, F3 to scan, F4 to print',
+    cameraNote: 'Position the barcode inside the frame', deleteDraftConfirm: 'Delete this draft?',
+    balanceForCustomer: 'Udhar balance', discountOn: 'Discount', walkInCustomer: 'Walk-in',
+    completeSaleBlockedCart: 'Add at least one item before completing the sale.',
+    cashNeedsFull: 'Amount received is less than the total. Enter the full amount or switch to Partial/Credit.',
+    partialNeedsCustomer: 'Select a registered customer before leaving a balance as udhar.',
+    quantityTooHigh: 'Only {stock} {unit} of {name} available in stock',
+    todayLabel: 'Today', saleCompleteMessage: 'Sale completed successfully.'
   },
   ur: {
     nav_dashboard: 'ڈیش بورڈ', nav_pos: 'نئی فروخت', nav_products: 'پروڈکٹس', nav_warehouse: 'گودام', nav_inventory: 'اسٹاک',
@@ -243,7 +272,36 @@ const STRINGS = {
     phTransferQty: 'تعداد', transferDone: 'اسٹاک منتقل ہو گیا۔', linkedProduct: 'لنکڈ پروڈکٹ', linkProduct: 'لنک کریں', unlinkProduct: 'لنک ہٹائیں',
     productLabel: 'پروڈکٹ', addProductManually: '+ پروڈکٹ خود لکھیں', searchProducts: 'پروڈکٹ تلاش کریں...',
     noMatchingProducts: 'کوئی پروڈکٹ نہیں ملی۔', clearProduct: 'پروڈکٹ ہٹائیں',
-    productPickHint: 'صرف اس گاہک پر محفوظ ہوتا ہے - پروڈکٹس ٹیب میں کوئی نئی پروڈکٹ نہیں بنتی۔'
+    productPickHint: 'صرف اس گاہک پر محفوظ ہوتا ہے - پروڈکٹس ٹیب میں کوئی نئی پروڈکٹ نہیں بنتی۔',
+    voucherNo: 'واؤچر نمبر', pendingInvoice: 'زیرِ التوا - سیل محفوظ ہونے پر ملے گا', dateLabel: 'تاریخ', paymentTerms: 'ادائیگی کی شرائط',
+    referenceLabel: 'حوالہ', customerLabelShort: 'گاہک', selectCustomerPh: 'گاہک کا نام یا موبائل تلاش کریں...',
+    scanCamera: 'کیمرے سے اسکین', amountReceived: 'موصول شدہ رقم', changeLabel: 'باقی رقم',
+    balanceChangeLabel: 'باقی رقم / تبدیلی', additionalDiscount: 'اضافی رعایت', totalQtyLabel: 'کل تعداد',
+    totalPacksLabel: 'کل پیک', grandTotalLabel: 'کل رقم', saveDraft: 'ڈرافٹ محفوظ کریں', draftsLabel: 'ڈرافٹس',
+    printInvoice: 'بل پرنٹ کریں', completeSale: 'سیل مکمل کریں', completeAndPrint: 'مکمل کریں اور پرنٹ',
+    cancelSale: 'منسوخ', cameraScanTitle: 'کیمرے سے بارکوڈ اسکین کریں', cameraUnsupported: 'اس براؤزر میں کیمرے سے بارکوڈ اسکیننگ دستیاب نہیں۔',
+    cameraDenied: 'کیمرے تک رسائی سے انکار ہوا۔ کیمرے کی اجازت دیں اور دوبارہ کوشش کریں، یا نیچے بارکوڈ لکھیں۔',
+    noCamera: 'اس ڈیوائس پر کوئی کیمرہ نہیں ملا۔',
+    typeBarcodeLabel: 'بارکوڈ لکھیں یا اسکین کریں', closeScan: 'بند کریں', startScanning: 'کیمرہ شروع کریں', stopScanning: 'کیمرہ بند کریں',
+    partialPayment: 'جزوی ادائیگی', udhaarPayment: 'اُدھار', deliveryInfo: 'اضافی / ڈیلیوری معلومات',
+    deliveryInfoNote: 'اختیاری - پرنٹ شدہ بل پر دکھائی جائے گی', deliverTo: 'ڈیلیور کس کو', deliverAddress: 'ڈیلیوری کا پتہ',
+    transport: 'ٹرانسپورٹ', trNo: 'ٹی آر نمبر', noCases: 'کیسز کی تعداد', freightCharges: 'فریٹ چارجز',
+    deliveryDate: 'ڈیلیوری کی تاریخ', orderTaker: 'آرڈر لینے والا', salesPerson: 'سیلز پرسن', packedBy: 'پیک کرنے والا',
+    preparedBy: 'تیار کرنے والا', checkedBy: 'چیک کرنے والا', locationLabel: 'لوکیشن', removeLabel: 'ہٹائیں',
+    amountWord: 'رقم', quantityWord: 'تعداد', qtyShort: 'تعداد', unitLabelWord: 'اکائی', rateLabel: 'ریٹ',
+    totalWord: 'کل', draftSavedMsg: 'ڈرافٹ محفوظ ہو گیا۔', draftDeletedMsg: 'ڈرافٹ ڈیلیٹ ہو گیا۔', draftLoadedMsg: 'ڈرافٹ لوڈ ہو گیا۔',
+    unavailable: 'دستیاب نہیں', notSavedPreview: 'پری ویو - محفوظ نہیں', loadingDrafts: 'کھولیں', openDrafts: 'ڈرافٹ کھولیں',
+    saveDraftFirst: 'پہلے ڈرافٹ محفوظ کریں', noDrafts: 'ابھی کوئی ڈرافٹ محفوظ نہیں۔', createdBy2: 'بذریعہ', itemsShort: 'آئٹمز',
+    newSaleConfirm: 'نئی سیل شروع کریں؟ موجودہ بل صاف ہو جائے گا۔', cancelSaleConfirm: 'موجودہ بل منسوخ کریں؟ آئٹمز صاف ہو جائیں گے۔',
+    printPreviewNote: 'نیچے بل ایک پری ویو ہے۔ انوائس نمبر کے لیے سیل مکمل کریں۔',
+    refreshHint: 'F2 مکمل، F3 اسکین، F4 پرنٹ',
+    cameraNote: 'بارکوڈ کو فریم کے اندر رکھیں', deleteDraftConfirm: 'یہ ڈرافٹ ڈیلیٹ کریں؟',
+    balanceForCustomer: 'اُدھار بیلنس', discountOn: 'رعایت', walkInCustomer: 'عمومی گاہک',
+    completeSaleBlockedCart: 'سیل مکمل کرنے سے پہلے کم از کم ایک آئٹم شامل کریں۔',
+    cashNeedsFull: 'موصول شدہ رقم کل رقم سے کم ہے۔ پوری رقم درج کریں یا جزوی/اُدھار منتخب کریں۔',
+    partialNeedsCustomer: 'اُدھار چھوڑنے سے پہلے رجسٹرڈ گاہک منتخب کریں۔',
+    quantityTooHigh: 'صرف {stock} {unit} {name} اسٹاک میں موجود ہیں',
+    todayLabel: 'آج', saleCompleteMessage: 'سیل کامیابی سے مکمل ہوئی۔'
   }
 };
 const t = key => (STRINGS[LANG] && STRINGS[LANG][key]) || STRINGS.en[key] || key;
@@ -470,69 +528,258 @@ function SalesTable({ sales, customers }) {
     }) : h('tr', null, h('td', { colSpan: 6 }, t('noSalesYet'))))));
 }
 
+function round3(value) { return Math.round((Number(value) || 0) * 1000) / 1000; }
+const EMPTY_DELIVERY = () => ({ deliverTo: '', deliverAddress: '', transport: '', trNo: '', cases: '', freight: '', deliveryDate: '', orderTaker: '', salesPerson: '', packedBy: '', preparedBy: '', checkedBy: '' });
+const DELIVERY_FIELDS = [
+  ['deliverTo', 'deliverTo'], ['deliverAddress', 'deliverAddress'], ['transport', 'transport'],
+  ['trNo', 'trNo'], ['cases', 'noCases'], ['freight', 'freightCharges'], ['deliveryDate', 'deliveryDate'],
+  ['orderTaker', 'orderTaker'], ['salesPerson', 'salesPerson'], ['packedBy', 'packedBy'],
+  ['preparedBy', 'preparedBy'], ['checkedBy', 'checkedBy']
+];
+const DELIVERY_LABELS = { deliverTo: 'deliverTo', deliverAddress: 'deliverAddress', transport: 'transport', trNo: 'trNo', cases: 'noCases', freight: 'freightCharges', deliveryDate: 'deliveryDate', orderTaker: 'orderTaker', salesPerson: 'salesPerson', packedBy: 'packedBy', preparedBy: 'preparedBy', checkedBy: 'checkedBy' };
+const paymentMethodLabel = type => ({ Cash: 'cash', Card: 'card', Credit: 'udhaarPayment', Partial: 'partialPayment' }[type] ? t({ Cash: 'cash', Card: 'card', Credit: 'udhaarPayment', Partial: 'partialPayment' }[type]) : type);
+
+function ScanCamera({ onCode, onClose }) {
+  const videoRef = React.useRef(null);
+  const [error, setError] = useState('');
+  const [manual, setManual] = useState('');
+  useEffect(() => {
+    if (!('BarcodeDetector' in window) || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setError(t('cameraUnsupported'));
+      return undefined;
+    }
+    let cancelled = false;
+    let raf = 0;
+    function stopTracks() {
+      if (videoRef.current && videoRef.current.srcObject) {
+        videoRef.current.srcObject.getTracks().forEach(track => track.stop());
+        videoRef.current.srcObject = null;
+      }
+    }
+    async function start() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+        });
+        if (cancelled) { stream.getTracks().forEach(track => track.stop()); return; }
+        videoRef.current.srcObject = stream;
+        const detector = new window.BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf', 'qr_code'] });
+        const tick = async () => {
+          if (cancelled || !videoRef.current) return;
+          if (videoRef.current.readyState >= 2) {
+            try {
+              const codes = await detector.detect(videoRef.current);
+              if (codes && codes.length && codes[0].rawValue) {
+                stopTracks();
+                onCode(String(codes[0].rawValue));
+                return;
+              }
+            } catch (_) {}
+          }
+          raf = requestAnimationFrame(tick);
+        };
+        try { await videoRef.current.play(); } catch (_) {}
+        raf = requestAnimationFrame(tick);
+      } catch (err) {
+        if (err && err.name === 'NotAllowedError') setError(t('cameraDenied'));
+        else if (err && err.name === 'NotFoundError') setError(t('noCamera'));
+        else setError(t('cameraUnsupported'));
+      }
+    }
+    start();
+    return () => { cancelled = true; stopTracks(); cancelAnimationFrame(raf); };
+  }, []);
+  function submitManual(event) {
+    event.preventDefault();
+    const code = manual.trim();
+    if (!code) return;
+    onCode(code);
+  }
+  return ReactDOM.createPortal(h('div', { className: 'modal', onClick: onClose },
+    h('section', { className: 'scan-card', onClick: function(e) { e.stopPropagation(); } },
+      h('header', { className: 'khata-head' }, h('div', null, h('p', { className: 'eyebrow' }, t('cameraScanTitle')), h('h2', null, t('scanCamera')))),
+      h('div', { className: 'scan-feed' }, h('video', { ref: videoRef, className: 'scan-video', autoPlay: true, playsInline: true, muted: true })),
+      error && h('div', { className: 'notice' }, error),
+      !error && h('p', { className: 'scan-hint' }, t('cameraNote')),
+      h('form', { className: 'scan-manual', onSubmit: submitManual },
+        h('input', { value: manual, onChange: e => setManual(e.target.value), placeholder: t('typeBarcodeLabel'), autoCapitalize: 'none', autoCorrect: 'off', spellCheck: false }),
+        h('button', { className: 'primary', type: 'submit' }, t('add'))),
+      h('div', { className: 'success-actions' }, h('button', { className: 'secondary', onClick: onClose }, t('closeScan'))))),
+    document.body);
+}
+
+function DraftsModal({ drafts, customers, onLoad, onDelete, onClose }) {
+  const nameOf = id => (customers.find(c => c.id === id) || {}).name || t('walkInCustomer');
+  return ReactDOM.createPortal(h('div', { className: 'modal', onClick: onClose },
+    h('section', { className: 'draft-modal', onClick: function(e) { e.stopPropagation(); } },
+      h('header', { className: 'khata-head' }, h('div', null, h('p', { className: 'eyebrow' }, t('draftsLabel')), h('h2', null, t('openDrafts'))), h('button', { className: 'secondary small', onClick: onClose }, t('close'))),
+      drafts.length ? h('div', { className: 'draft-list' }, drafts.map(draft => {
+        const count = (draft.items || []).length;
+        const estimate = (draft.items || []).reduce((sum, item) => sum + Number(item.price) * Number(item.qty), 0);
+        const when = new Date(draft.updatedAt || draft.createdAt).toLocaleString();
+        return h('div', { className: 'draft-row', key: draft.id },
+          h('div', { className: 'draft-info' },
+            h('strong', null, `${count} ${t('itemsShort')} - ${money(estimate)}`),
+            h('small', null, `${nameOf(draft.customerId)} - ${when}${draft.createdByName ? ` - ${t('createdBy2')} ${draft.createdByName}` : ''}`)),
+          h('div', { className: 'draft-actions' },
+            h('button', { className: 'secondary small', onClick: () => onLoad(draft) }, t('loadingDrafts')),
+            h('button', { className: 'secondary small danger-btn', onClick: () => onDelete(draft) }, t('delete'))));
+      })) : h('div', { className: 'empty' }, h('h3', null, t('noDrafts'))),
+      h('div', { className: 'success-actions' }, h('button', { className: 'primary', onClick: onClose }, t('close'))))),
+    document.body);
+}
+
 function POS({ client, data, refresh, online, setOnline, go }) {
   const [query, setQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchIndex, setSearchIndex] = useState(-1);
   const [cart, setCart] = useState([]);
+  const [draftId, setDraftId] = useState(null);
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [customerOpen, setCustomerOpen] = useState(false);
+  const [customerIdx, setCustomerIdx] = useState(-1);
   const [customerId, setCustomerId] = useState('cus_walkin');
   const [paymentType, setPaymentType] = useState('Cash');
-  const [paidInput, setPaidInput] = useState('');
-  const [discount, setDiscount] = useState(0);
-  const [applyTax, setApplyTax] = useState(true);
+  const [receivedInput, setReceivedInput] = useState('');
+  const [discount, setDiscount] = useState('');
+  const [additionalDiscount, setAdditionalDiscount] = useState('');
+  const [reference, setReference] = useState('');
+  const [delivery, setDelivery] = useState(EMPTY_DELIVERY());
+  const [manualOpen, setManualOpen] = useState(false);
   const [manual, setManual] = useState({ name: '', price: '', qty: '1', unit: 'pcs' });
   const [receipt, setReceipt] = useState(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [draftsModal, setDraftsModal] = useState(false);
   const [message, setMessage] = useState('');
   const searchRef = React.useRef(null);
+  const customerInputRef = React.useRef(null);
   const printerCfg = loadJson(printerConfigKey, { autoPrint: false, paperSize: '80' });
-  const products = data.products.filter(product => product.active && product.status !== 'inactive');
-  const shown = products.filter(product => `${product.name} ${product.sku} ${product.barcode || ''} ${product.category}`.toLowerCase().includes(query.toLowerCase()));
+  const activeProducts = (data.products || []).filter(product => product.active && product.status !== 'inactive');
+  const barcodeMap = React.useMemo(() => {
+    const map = {};
+    activeProducts.forEach(product => {
+      if (product.barcode) map[String(product.barcode).toLowerCase()] = product;
+      if (product.sku) map[String(product.sku).toLowerCase()] = map[String(product.sku).toLowerCase()] || product;
+    });
+    return map;
+  }, [data.products]);
+  const whLocByProduct = React.useMemo(() => {
+    const map = {};
+    (data.warehouses || []).forEach(wh => { if (wh.linkedProductId && wh.location) map[wh.linkedProductId] = wh.location; });
+    return map;
+  }, [data.warehouses]);
+  const q = query.trim().toLowerCase();
+  const shown = q
+    ? activeProducts.filter(product => `${product.name} ${product.sku} ${product.barcode || ''} ${product.category || ''} ${product.nameUrdu || ''} ${product.urduName || ''}`.toLowerCase().includes(q))
+    : activeProducts.slice(0, 8);
   const subtotal = cart.reduce((sum, item) => sum + Number(item.price) * Number(item.qty), 0);
-  const tax = applyTax ? Math.round(Math.max(0, subtotal - discount) * Number(data.settings.taxRate)) : 0;
-  const total = Math.max(0, subtotal - discount) + tax;
-  const isCredit = paymentType === 'Credit';
-  const paidNow = !isCredit ? total : Math.max(0, Math.min(total, Math.round(Number(paidInput || 0))));
+  const discountNum = Math.max(0, Number(discount) || 0);
+  const addDiscNum = Math.max(0, Number(additionalDiscount) || 0);
+  const mainD = Math.min(discountNum, subtotal);
+  const extraD = Math.min(addDiscNum, Math.max(0, subtotal - mainD));
+  const combinedD = Math.round(mainD + extraD);
+  const total = Math.max(0, Math.round(subtotal) - combinedD);
+  const isCredit = paymentType === 'Credit' || paymentType === 'Partial';
+  let receivedNum = Math.max(0, Math.round(Number(receivedInput) || 0));
+  if (!isCredit && receivedInput === '') receivedNum = total;
+  if (isCredit) receivedNum = Math.min(total, receivedNum);
+  const paidNow = isCredit ? receivedNum : total;
   const dueAmount = Math.max(0, total - paidNow);
+  const changeAmount = !isCredit ? Math.max(0, receivedNum - total) : 0;
   const selectedCustomer = data.customers.find(item => item.id === customerId);
+  const totalQty = cart.reduce((sum, item) => sum + Number(item.qty), 0);
+  const totalPacks = cart.filter(item => ['pack', 'dozen', 'boree'].includes(item.unit)).reduce((sum, item) => sum + Number(item.qty), 0);
+  const hasDelivery = (delivery && Object.keys(delivery).some(key => String(delivery[key] || '').trim() !== '')) || false;
+
+  function flash(text) { setMessage(text); setTimeout(() => { setMessage(m => (m === text ? '' : m)); }, 2600); }
 
   function addProduct(product) {
     setCart(items => {
       const old = items.find(item => item.productId === product.id);
-      if (old) return items.map(item => item.productId === product.id ? { ...item, qty: item.qty + 1 } : item);
-      return [...items, { productId: product.id, name: product.name, price: product.price, qty: 1, unit: product.unit }];
+      if (old) return items.map(item => item.productId === product.id ? { ...item, qty: round3(Number(item.qty) + (isWeightUnit(item.unit) ? 0.25 : 1)) } : item);
+      return [...items, { productId: product.id, name: product.name, sku: product.sku || '', price: Number(product.price), qty: 1, unit: product.unit, manual: false, mode: 'qty' }];
     });
+    flash(LANG === 'ur' ? `${product.name} شامل ہو گئی۔` : `${product.name} added.`);
   }
 
-  function scanBarcode(event) {
-    if (event.key !== 'Enter') return;
-    event.preventDefault();
-    const code = query.trim();
-    if (!code) return;
-    const codeLower = code.toLowerCase();
-    const exact = products.find(product =>
-      String(product.barcode || '').toLowerCase() === codeLower ||
-      String(product.sku || '').toLowerCase() === codeLower
-    );
-    if (exact) {
-      addProduct(exact);
-      setQuery('');
-      setMessage(LANG === 'ur' ? `${exact.name} بارکوڈ سے شامل ہو گیا۔` : `${exact.name} added by barcode.`);
-    } else {
-      setMessage(LANG === 'ur'
-        ? `"${code}" سے کوئی پروڈکٹ نہیں ملا۔`
-        : `No product found for "${code}". Check the barcode or search by name.`);
-    }
-  }
-
-  function addManual(event) {
+  function addManualItem(event) {
     event.preventDefault();
     const price = Number(manual.price);
     const qty = Number(manual.qty);
-    if (!manual.name.trim() || price <= 0 || qty <= 0) return;
-    setCart(items => [...items, { productId: null, name: manual.name.trim(), price, qty, unit: manual.unit }]);
+    if (!manual.name.trim() || price <= 0 || qty <= 0) { flash(LANG === 'ur' ? 'نام، قیمت اور تعداد درست لکھیں۔' : 'Enter a valid name, price and quantity.'); return; }
+    setCart(items => [...items, { productId: null, name: manual.name.trim(), sku: '', price, qty, unit: manual.unit, manual: true, mode: 'qty' }]);
     setManual({ name: '', price: '', qty: '1', unit: 'pcs' });
+    flash(`${manual.name.trim()} ${LANG === 'ur' ? 'شامل ہوئی۔' : 'added.'}`);
   }
 
   function changeQty(index, delta) {
-    setCart(items => items.map((item, itemIndex) => itemIndex === index ? { ...item, qty: item.qty + delta } : item).filter(item => item.qty > 0));
+    setCart(items => items.map((item, itemIndex) => itemIndex === index ? { ...item, qty: round3((Number(item.qty) || 0) + delta) } : item).filter(item => Number(item.qty) > 0));
+  }
+
+  function setLineQty(index, value) {
+    setCart(items => items.map((item, itemIndex) => {
+      if (itemIndex !== index) return item;
+      const price = Number(item.price) || 0;
+      const qty = Math.max(0, round3(Number(value) || 0));
+      return { ...item, qty, amount: round3(price * qty) };
+    }));
+  }
+
+  function setLineAmount(index, value) {
+    setCart(items => items.map((item, itemIndex) => {
+      if (itemIndex !== index) return item;
+      const price = Number(item.price) || 0;
+      const amount = Math.max(0, round3(Number(value) || 0));
+      return { ...item, amount, qty: price ? round3(amount / price) : 0 };
+    }));
+  }
+
+  function toggleLineMode(index) {
+    setCart(items => items.map((item, itemIndex) => {
+      if (itemIndex !== index) return item;
+      const price = Number(item.price) || 0;
+      const qty = Number(item.qty) || 1;
+      const amount = Number(item.amount) || round3(price * qty) || 0;
+      if (item.mode === 'qty') return { ...item, mode: 'amt', amount: round3(price * qty) };
+      return { ...item, mode: 'qty', qty: price ? round3(amount / price) : qty };
+    }));
+  }
+
+  function removeLine(index) {
+    setCart(items => items.filter((_, itemIndex) => itemIndex !== index));
+  }
+
+  const customers = (data.customers || []).filter(customer => {
+    if (!customerSearch.trim()) return true;
+    const customerQ = customerSearch.trim().toLowerCase();
+    return `${customer.name || ''} ${customer.phone || ''}`.toLowerCase().includes(customerQ);
+  });
+
+  function selectCustomer(customer) {
+    setCustomerId(customer.id);
+    setCustomerSearch(customer.id === 'cus_walkin' ? '' : customer.name);
+    setCustomerOpen(false);
+    setCustomerIdx(-1);
+  }
+
+  function resetSale() {
+    setCart([]);
+    setDraftId(null);
+    setCustomerId('cus_walkin');
+    setCustomerSearch('');
+    setCustomerOpen(false);
+    setCustomerIdx(-1);
+    setPaymentType('Cash');
+    setReceivedInput('');
+    setDiscount('');
+    setAdditionalDiscount('');
+    setReference('');
+    setDelivery(EMPTY_DELIVERY());
+    setManualOpen(false);
+    setManual({ name: '', price: '', qty: '1', unit: 'pcs' });
+    setSearchOpen(false);
+    setSearchIndex(-1);
+    setQuery('');
   }
 
   async function syncQueuedSales() {
@@ -541,32 +788,102 @@ function POS({ client, data, refresh, online, setOnline, go }) {
     try {
       await client.post('/api/sync', { sales: queued });
       saveJson(queueKey, []);
-      setMessage(LANG === 'ur' ? 'آف لائن سیلز سنک ہو گئیں۔' : 'Offline sales synced.');
+      flash(LANG === 'ur' ? 'آف لائن سیلز سنک ہو گئیں۔' : 'Offline sales synced.');
       await refresh();
     } catch (_) {
       setOnline(false);
     }
   }
 
-  async function charge() {
-    if (!cart.length) return;
-    if (dueAmount > 0 && (!selectedCustomer || customerId === 'cus_walkin')) {
-      setMessage(LANG === 'ur'
-        ? `اُدھار چھوڑنے سے پہلے رجسٹرڈ گاہک منتخب کریں۔ بقایا: روپے ${dueAmount.toLocaleString('en-PK')}`
-        : 'Select a registered customer before leaving Rs ' + dueAmount.toLocaleString('en-PK') + ' as udhar.');
+  function sanitizedDelivery() {
+    const cleaned = {};
+    DELIVERY_FIELDS.forEach(([key]) => {
+      const value = delivery && delivery[key];
+      if (String(value || '').trim()) cleaned[key] = String(value).trim();
+    });
+    return Object.keys(cleaned).length ? cleaned : null;
+  }
+
+  function buildPayload() {
+    const payload = {
+      clientId: `client_${Date.now()}`,
+      customerId,
+      paymentType: paymentType === 'Partial' ? 'Credit' : paymentType,
+      discount: mainD,
+      additionalDiscount: extraD,
+      items: cart.map(item => ({ ...item })),
+      taxRate: 0,
+      reference: reference.trim(),
+      delivery: sanitizedDelivery()
+    };
+    if (isCredit) payload.paidAmount = paidNow;
+    return payload;
+  }
+
+  function previewSale() {
+    if (!cart.length || cart.some(item => !(Number(item.qty) > 0))) {
+      flash(t('completeSaleBlockedCart'));
       return;
     }
-    const payload = { clientId: `client_${Date.now()}`, customerId, paymentType, discount: Number(discount || 0), items: cart, taxRate: applyTax ? undefined : 0 };
-    if (isCredit) payload.paidAmount = paidNow;
+    if (dueAmount > 0 && (!selectedCustomer || customerId === 'cus_walkin')) {
+      flash(t('partialNeedsCustomer'));
+      return;
+    }
+    setReceipt({
+      preview: true,
+      invoiceNo: null,
+      createdAt: new Date().toISOString(),
+      createdBy: (data.user && data.user.name) || '',
+      customerId,
+      paymentType,
+      source: 'preview',
+      items: cart.map(item => ({ ...item, manual: !item.productId })),
+      subtotal: Math.round(subtotal),
+      discount: combinedD,
+      additionalDiscount: extraD,
+      tax: 0,
+      taxRate: 0,
+      total,
+      paidAmount: isCredit ? paidNow : total,
+      dueAmount: isCredit ? dueAmount : 0,
+      reference: reference.trim(),
+      delivery: sanitizedDelivery(),
+      returnStatus: 'none'
+    });
+  }
+
+  async function charge(printAfter) {
+    if (!cart.length || cart.some(item => !(Number(item.qty) > 0))) {
+      setMessage(t('completeSaleBlockedCart'));
+      return;
+    }
+    if (dueAmount > 0 && (!selectedCustomer || customerId === 'cus_walkin')) {
+      setMessage(t('partialNeedsCustomer'));
+      return;
+    }
+    if (!isCredit && receivedNum < total) {
+      setMessage(t('cashNeedsFull'));
+      return;
+    }
+    for (const item of cart) {
+      if (item.manual || !item.productId) continue;
+      const product = activeProducts.find(p => p.id === item.productId);
+      if (product && Number(item.qty) > Number(product.stock || 0)) {
+        setMessage(t('quantityTooHigh').replace('{stock}', String(product.stock)).replace('{unit}', unitLabel(product.unit)).replace('{name}', product.name));
+        return;
+      }
+    }
+    const payload = buildPayload();
     try {
       const sale = await client.post('/api/sales', payload);
+      if (draftId) {
+        try { await client.del(`/api/drafts/${draftId}`); } catch (_) {}
+      }
       setReceipt(sale);
-      setCart([]);
-      setDiscount(0);
-      setPaidInput('');
-      setPaymentType('Cash');
+      resetSale();
       await refresh();
-      if (printerCfg.autoPrint) {
+      setMessage(t('saleCompleteMessage'));
+      if (printAfter || printerCfg.autoPrint) {
         setTimeout(() => window.print(), 500);
       }
     } catch (err) {
@@ -581,18 +898,20 @@ function POS({ client, data, refresh, online, setOnline, go }) {
           customerId,
           paymentType,
           source: 'offline',
-          items: cart.map(item => ({ productId: item.productId, name: item.name, unit: item.unit, qty: Number(item.qty), price: Number(item.price), cost: 0, manual: !item.productId })),
+          items: cart.map(item => ({ productId: item.productId, name: item.name, sku: item.sku || '', unit: item.unit, qty: Number(item.qty), price: Number(item.price), cost: 0, manual: !item.productId })),
           subtotal: Math.round(subtotal),
-          discount: Math.round(Number(discount || 0)),
-          taxRate: applyTax ? Number(data.settings.taxRate) : 0,
-          tax,
+          discount: combinedD,
+          additionalDiscount: extraD,
+          tax: 0,
+          taxRate: 0,
           total,
           paidAmount: isCredit ? paidNow : total,
           dueAmount: isCredit ? dueAmount : 0,
+          reference: reference.trim(),
+          delivery: sanitizedDelivery(),
           returnStatus: 'none'
         });
-        setCart([]);
-        setDiscount(0);
+        resetSale();
         setOnline(false);
         setMessage(LANG === 'ur'
           ? 'آف لائن محفوظ ہو گیا۔ رسید نیچے پرنٹ کریں - انٹرنیٹ آنے پر سیل خود بخود سنک ہو جائے گی۔'
@@ -603,6 +922,89 @@ function POS({ client, data, refresh, online, setOnline, go }) {
     }
   }
 
+  const chargeRef = React.useRef(null);
+  chargeRef.current = () => charge(false);
+
+  function addFromCode(code) {
+    const target = barcodeMap[String(code).toLowerCase().trim()];
+    if (target) {
+      addProduct(target);
+      setQuery('');
+      setSearchOpen(false);
+      setSearchIndex(-1);
+    } else {
+      setQuery(String(code));
+      setSearchOpen(true);
+      flash(LANG === 'ur' ? `${code} نہیں ملی۔` : `${code} not found.`);
+    }
+  }
+
+  function onScanCode(code) {
+    setCameraOpen(false);
+    addFromCode(code);
+  }
+
+  async function saveDraft() {
+    if (!cart.length || cart.some(item => !(Number(item.qty) > 0))) {
+      flash(t('saveDraftFirst'));
+      return;
+    }
+    try {
+      const response = await client.post('/api/drafts', {
+        ...(draftId ? { id: draftId } : {}),
+        clientId: `client_${Date.now()}`,
+        customerId,
+        paymentType,
+        discount: discountNum,
+        additionalDiscount: addDiscNum,
+        receivedAmount: receivedNum,
+        reference,
+        delivery: sanitizedDelivery(),
+        items: cart
+      });
+      const saved = response.draft || response;
+      setDraftId(saved.id);
+      flash(t('draftSavedMsg'));
+      await refresh();
+    } catch (err) {
+      setMessage(friendlyError(err));
+    }
+  }
+
+  async function deleteDraft(draft) {
+    const ok = await askConfirm(LANG === 'ur' ? `یہ ڈرافٹ ڈیلیٹ کریں؟` : t('deleteDraftConfirm'));
+    if (!ok) return;
+    try {
+      await client.del(`/api/drafts/${draft.id}`);
+      if (draftId === draft.id) setDraftId(null);
+      await refresh();
+      flash(t('draftDeletedMsg'));
+    } catch (err) {
+      setMessage(friendlyError(err));
+    }
+  }
+
+  function loadDraft(draft) {
+    setDraftId(draft.id);
+    setCart((draft.items || []).map(item => ({ productId: item.productId || null, name: item.name, sku: item.sku || '', unit: item.unit || 'pcs', price: Number(item.price) || 0, qty: Number(item.qty) || 1, manual: !!item.manual, mode: 'qty' })));
+    if (draft.customerId) {
+      setCustomerId(draft.customerId);
+      setCustomerSearch((data.customers.find(c => c.id === draft.customerId) || {}).name || '');
+    }
+    setPaymentType(draft.paymentType === 'Credit' || draft.paymentType === 'Partial' ? (draft.paymentType === 'Partial' ? 'Partial' : 'Credit') : (draft.paymentType === 'Card' ? 'Card' : 'Cash'));
+    setDiscount(String(draft.discount || ''));
+    setAdditionalDiscount(String(draft.additionalDiscount || ''));
+    setReceivedInput(draft.receivedAmount ? String(draft.receivedAmount) : '');
+    setReference(draft.reference || '');
+    setDelivery(Object.assign(EMPTY_DELIVERY(), draft.delivery || {}));
+    setDraftsModal(false);
+    flash(t('draftLoadedMsg'));
+  }
+
+  function setDeliveryField(key, value) {
+    setDelivery(d => ({ ...d, [key]: value }));
+  }
+
   useEffect(() => {
     syncQueuedSales();
     const timer = setInterval(syncQueuedSales, 15000);
@@ -610,81 +1012,260 @@ function POS({ client, data, refresh, online, setOnline, go }) {
   }, [client]);
 
   useEffect(() => {
+    let buffer = '';
+    let bufferTimer = null;
     function handleKey(e) {
       if (e.key === 'F2') {
         e.preventDefault();
-        if (cart.length && !receipt) charge();
+        if (cart.length && !receipt && !cameraOpen && !draftsModal) chargeRef.current();
+        return;
       }
       if (e.key === 'F3') {
         e.preventDefault();
         if (searchRef.current) searchRef.current.focus();
+        return;
       }
+      const active = document.activeElement;
+      if (active && active.tagName && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT')) return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key === 'Enter') {
+        if (buffer.length >= 4) {
+          const code = buffer.toLowerCase();
+          buffer = '';
+          addFromCode(code);
+        }
+        return;
+      }
+      if (e.key.length !== 1) return;
+      buffer += String(e.key).toLowerCase();
+      if (bufferTimer) clearTimeout(bufferTimer);
+      bufferTimer = setTimeout(() => { buffer = ''; }, 120);
     }
     window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-  }, [cart, receipt]);
+    return () => { window.removeEventListener('keydown', handleKey); if (bufferTimer) clearTimeout(bufferTimer); };
+  }, [cart, receipt, cameraOpen, draftsModal, barcodeMap, client]);
 
-  const posTitle = h('div', { className: 'page-title compact' },
-    h('div', null, h('p', { className: 'eyebrow' }, online ? t('counterOnline') : t('counterOffline')), h('h1', null, t('newSale'))),
-    h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' } },
-      h(Badge, { tone: online ? 'success' : 'warning' }, online ? t('synced') : `${loadJson(queueKey, []).length} ${t('queued')}`),
-      go && h('button', { className: 'secondary', onClick: () => go('returns') }, t('revertBill'))));
+  function handleSearchKey(e) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (!shown.length) return;
+      setSearchIndex(i => (i + 1) % shown.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (!shown.length) return;
+      setSearchIndex(i => (i - 1 + shown.length) % shown.length);
+    } else if (e.key === 'Enter') {
+      if (searchOpen && shown.length && searchIndex >= 0 && searchIndex < shown.length) {
+        e.preventDefault();
+        addProduct(shown[searchIndex]);
+        setQuery('');
+        setSearchOpen(false);
+        setSearchIndex(-1);
+      }
+    } else if (e.key === 'Escape') {
+      setSearchOpen(false);
+    }
+  }
 
-  const cartTotals = h('div', { className: 'totals' },
-    h('div', null, h('span', null, t('subtotal')), h('strong', null, money(subtotal))),
-    applyTax && h('div', null, h('span', null, t('taxWord')), h('strong', null, money(tax))),
-    isCredit && h('div', { className: 'paid-line' }, h('span', null, t('customerPaysNow')), h('strong', null, money(paidNow))),
-    isCredit && h('div', { className: dueAmount > 0 ? 'due-line' : '' },
-      h('span', null, dueAmount > 0 ? t('udharRemaining') : t('fullyPaid')),
-      h('strong', { style: dueAmount > 0 ? { color: '#c0392b' } : { color: '#267152' } }, money(dueAmount))),
-    h('div', { className: 'grand-total' }, h('span', null, t('total')), h('strong', null, money(total))));
+  function handleCustomerKey(e) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (!customers.length) return;
+      setCustomerIdx(i => (i + 1) % customers.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (!customers.length) return;
+      setCustomerIdx(i => (i - 1 + customers.length) % customers.length);
+    } else if (e.key === 'Enter') {
+      if (customerOpen && customerIdx >= 0 && customers[customerIdx]) {
+        e.preventDefault();
+        selectCustomer(customers[customerIdx]);
+      }
+    } else if (e.key === 'Escape') {
+      setCustomerOpen(false);
+    }
+  }
+
+  function renderBillRow(item, index) {
+    const product = item.productId ? activeProducts.find(p => p.id === item.productId) : null;
+    const priceNum = Number(item.price) || 0;
+    const amt = item.mode === 'amt' ? (Number(item.amount) || 0) : round3(priceNum * (Number(item.qty) || 0));
+    const low = product && Number(item.qty) > Number(product.stock || 0);
+    const location = product ? (product.location || whLocByProduct[product.id] || '—') : '—';
+    const step = isWeightUnit(item.unit) ? 0.25 : 1;
+    return h('div', { className: 'bill-row' + (low ? ' low-stock' : ''), key: `${item.productId || item.name}-${index}` },
+      h('span', { className: 'bill-no' }, index + 1),
+      h('div', { className: 'bill-product' },
+        h('strong', null, item.name),
+        item.sku ? h('small', null, item.sku) : null,
+        low && h('span', { className: 'low-badge' }, t('lowBadge'))),
+      h('div', { className: 'bill-qty' },
+        h('button', { className: 'step-btn', onClick: () => changeQty(index, -step) }, '−'),
+        item.mode === 'qty'
+          ? h('input', { type: 'number', min: '0', step: isWeightUnit(item.unit) ? '0.25' : '1', value: item.qty, onChange: e => setLineQty(index, e.target.value) })
+          : h('input', { type: 'number', min: '0', step: 'any', value: Number(item.amount) || 0, onChange: e => setLineAmount(index, e.target.value) }),
+        h('button', { className: 'step-btn', onClick: () => changeQty(index, step) }, '+'),
+        h('button', { className: 'mode-btn', title: item.mode === 'qty' ? t('amountWord') : t('quantityWord') + ' mode', onClick: () => toggleLineMode(index) }, item.mode === 'qty' ? 'Qty' : 'Rs')),
+      h('span', { className: 'bill-uom' }, unitLabel(item.unit)),
+      h('span', { className: 'bill-rate' }, money(priceNum)),
+      h('span', { className: 'bill-loc' }, location),
+      h('span', { className: 'bill-total' }, money(amt)),
+      h('button', { className: 'bill-remove', title: t('removeLabel'), onClick: () => removeLine(index) }, '×'));
+  }
+
+  function renderCustomerPanel() {
+    return h('div', null,
+      h('div', { className: 'checkout-title' }, h('h3', null, t('customerLabelShort'))),
+      h('div', { className: 'customer-combobox' },
+        h('input', { ref: customerInputRef, value: customerSearch, onFocus: () => setCustomerOpen(true), onChange: e => { setCustomerSearch(e.target.value); setCustomerOpen(true); setCustomerIdx(-1); }, onKeyDown: handleCustomerKey, placeholder: t('selectCustomerPh'), autoComplete: 'off' }),
+        customerOpen && h('div', { className: 'search-dropdown customer-dropdown' },
+          h('button', { className: 'search-item walkin-item', onClick: () => selectCustomer({ id: 'cus_walkin', name: t('walkInCustomer') }) },
+            h('span', { className: 'search-item-name' }, t('walkInCustomer'))),
+          customers.map((customer, index) => h('button', { key: customer.id, className: 'search-item' + (index === customerIdx ? ' active' : ''), onMouseEnter: () => setCustomerIdx(index), onClick: () => selectCustomer(customer) },
+            h('span', { className: 'search-item-name' }, customer.name),
+            h('span', { className: 'search-item-meta' }, customer.phone || ''),
+            Number(customer.balance) > 0 ? h('span', { className: 'search-item-price' }, `${t('udharBadge')} ${money(customer.balance)}`) : null)))),
+      customerId !== 'cus_walkin' && selectedCustomer && h('div', { className: 'customer-balance' },
+        h('span', null, t('balanceForCustomer')),
+        h('strong', { style: Number(selectedCustomer.balance) > 0 ? { color: '#c0392b' } : { color: '#267152' } }, money(selectedCustomer.balance))));
+  }
+
+  function renderPaymentPanel() {
+    return h('div', null,
+      h('div', { className: 'checkout-title' }, h('h3', null, t('paymentLabel'))),
+      h('div', { className: 'pay-options' },
+        ['Cash', 'Card', 'Credit', 'Partial'].map(type => h('button', { key: type, className: 'pay-option' + (paymentType === type ? ' active' : ''), onClick: () => { setPaymentType(type); if (type === 'Cash') setReceivedInput(''); } }, paymentMethodLabel(type)))),
+      h('div', { className: 'received-row' },
+        h('label', null, t('amountReceived')),
+        h('input', { type: 'number', min: '0', step: 'any', value: receivedInput, onChange: e => setReceivedInput(e.target.value), placeholder: isCredit ? '0' : String(total) }),
+        isCredit && h('button', { className: 'secondary small', onClick: () => setReceivedInput(String(total)) }, t('full')),
+        isCredit && h('button', { className: 'secondary small', onClick: () => setReceivedInput('0') }, t('none'))),
+      isCredit && dueAmount > 0 && (!selectedCustomer || customerId === 'cus_walkin') && h('div', { className: 'notice danger', style: { margin: '8px 0 0' } }, t('selectCustomerForUdhar')));
+  }
+
+  function renderDiscountPanel() {
+    return h('div', null,
+      h('div', { className: 'checkout-title' }, h('h3', null, t('discountOn'))),
+      h('div', { className: 'discount-fields' },
+        h('label', null, t('discount')),
+        h('input', { type: 'number', min: '0', step: 'any', value: discount, onChange: e => setDiscount(e.target.value) }),
+        h('label', null, t('additionalDiscount')),
+        h('input', { type: 'number', min: '0', step: 'any', value: additionalDiscount, onChange: e => setAdditionalDiscount(e.target.value) })));
+  }
+
+  function renderSummaryPanel() {
+    return h('div', null,
+      h('div', { className: 'checkout-title' }, h('h3', null, t('grandTotalLabel'))),
+      h('div', { className: 'summary-rows' },
+        h('div', { className: 'summary-row' }, h('span', null, t('totalQtyLabel')), h('strong', null, totalQty)),
+        h('div', { className: 'summary-row' }, h('span', null, t('totalPacksLabel')), h('strong', null, totalPacks ? totalPacks : '—')),
+        h('div', { className: 'summary-row' }, h('span', null, t('subtotal')), h('strong', null, money(subtotal))),
+        mainD > 0 && h('div', { className: 'summary-row discount' }, h('span', null, t('discountOn')), h('strong', null, '- ' + money(mainD))),
+        extraD > 0 && h('div', { className: 'summary-row discount' }, h('span', null, t('additionalDiscount')), h('strong', null, '- ' + money(extraD))),
+        h('div', { className: 'summary-row grand' }, h('span', null, t('grandTotalLabel')), h('strong', null, money(total))),
+        h('div', { className: 'summary-row' }, h('span', null, t('amountReceived')), h('strong', null, money(paidNow))),
+        isCredit && dueAmount > 0
+          ? h('div', { className: 'summary-row due' }, h('span', null, t('udharRemaining')), h('strong', null, money(dueAmount)))
+          : h('div', { className: 'summary-row change' }, h('span', null, t('changeLabel')), h('strong', null, money(changeAmount)))));
+  }
+
+  function confirmNewSale() {
+    if (!cart.length) { resetSale(); return; }
+    askConfirm(LANG === 'ur' ? 'نئی سیل شروع کریں؟ موجودہ بل صاف ہو جائے گا۔' : t('newSaleConfirm'))
+      .then(ok => { if (ok) resetSale(); });
+  }
+
+  function confirmCancelSale() {
+    if (!cart.length) return;
+    askConfirm(LANG === 'ur' ? 'موجودہ بل منسوخ کریں؟ آئٹمز صاف ہو جائیں گے۔' : t('cancelSaleConfirm'))
+      .then(ok => { if (ok) resetSale(); });
+  }
+
+  const cameraGlyph = h('svg', { className: 'icon', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: '2', strokeLinecap: 'round', strokeLinejoin: 'round' },
+    h('path', { d: 'M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z' }),
+    h('circle', { cx: '12', cy: '13', r: '4' }));
+
+  const invoiceHeader = h('section', { className: 'invoice-header' },
+    h('div', { className: 'inv-block' }, h('label', null, t('voucherNo')), h('div', { className: 'inv-value voucher-pending' }, t('pendingInvoice'))),
+    h('div', { className: 'inv-block inv-customer' }, h('label', null, t('customerLabelShort')), h('div', { className: 'inv-value' }, selectedCustomer ? selectedCustomer.name : t('walkInCustomer'))),
+    h('div', { className: 'inv-block' }, h('label', null, t('dateLabel')), h('div', { className: 'inv-value' }, new Date().toLocaleDateString('en-PK', { day: 'numeric', month: 'short', year: 'numeric' }))),
+    h('div', { className: 'inv-block' }, h('label', null, t('paymentTerms')),
+      h('select', { value: paymentType, onChange: e => { setPaymentType(e.target.value); if (e.target.value === 'Cash') setReceivedInput(''); } },
+        ['Cash', 'Card', 'Credit', 'Partial'].map(type => h('option', { key: type, value: type }, paymentMethodLabel(type))))),
+    h('div', { className: 'inv-block inv-reference' }, h('label', null, t('referenceLabel')),
+      h('input', { value: reference, onChange: e => setReference(e.target.value), placeholder: '#' })));
+
+  const searchSection = h('section', { className: 'search-section pos-panel' },
+    h('div', { className: 'search-row' },
+      h('label', { className: 'search' },
+        h('input', { ref: searchRef, autoFocus: true, value: query, onChange: e => { setQuery(e.target.value); setSearchOpen(true); setSearchIndex(0); }, onFocus: () => setSearchOpen(true), onKeyDown: handleSearchKey, placeholder: t('searchPlaceholder'), autoComplete: 'off', autoCapitalize: 'none', autoCorrect: 'off', spellCheck: false })),
+      h('button', { className: 'secondary icon-btn', title: t('scanCamera'), onClick: () => setCameraOpen(true) }, cameraGlyph),
+      h('button', { className: 'secondary' + (manualOpen ? ' active' : ''), onClick: () => setManualOpen(v => !v) }, t('looseItem')),
+      h('button', { className: 'secondary', onClick: () => setDraftsModal(true) }, `${t('draftsLabel')} (${(data.drafts || []).length})`)),
+    searchOpen && shown.length ? h('div', { className: 'search-dropdown' },
+      shown.map((product, index) => h('button', { key: product.id, className: 'search-item' + (index === searchIndex ? ' active' : ''), onMouseEnter: () => setSearchIndex(index), onClick: () => { addProduct(product); setQuery(''); setSearchOpen(false); setSearchIndex(-1); } },
+        h('span', { className: 'search-item-name' }, product.name),
+        h('span', { className: 'search-item-meta' }, `${product.sku ? product.sku + ' · ' : ''}${product.stock} ${unitLabel(product.unit)}`),
+        isWeightUnit(product.unit)
+          ? h('span', { className: 'search-item-price' }, `${money(product.price)}/${unitLabel(product.unit)}`)
+          : h('span', { className: 'search-item-price' }, money(product.price)))))
+      : searchOpen && h('div', { className: 'search-dropdown' }, h('div', { className: 'search-empty' }, t('noMatchingProducts'))),
+    manualOpen && h('form', { className: 'manual-form', onSubmit: addManualItem },
+      h('input', { value: manual.name, onChange: e => setManual({ ...manual, name: e.target.value }), placeholder: t('productName'), required: true }),
+      h('input', { type: 'number', min: '0', step: 'any', value: manual.price, onChange: e => setManual({ ...manual, price: e.target.value }), placeholder: `${t('ratePer')} ${unitLabel(manual.unit)}`, required: true }),
+      h('input', { type: 'number', min: '0', step: 'any', value: manual.qty, onChange: e => setManual({ ...manual, qty: e.target.value }), placeholder: t('weightQty'), required: true }),
+      h('select', { value: manual.unit, onChange: e => setManual({ ...manual, unit: e.target.value }) }, UNITS.map(unit => h('option', { key: unit.value, value: unit.value }, unit.urdu))),
+      h('button', { className: 'primary', type: 'submit' }, t('add'))));
+
+  const billSection = h('section', { className: 'bill-section pos-panel' },
+    h('div', { className: 'panel-head bill-head' },
+      h('div', null, h('h2', null, t('currentInvoice')), h('p', null, `${cart.length} ${t('itemsShort')}`)),
+      h(Badge, { tone: online ? 'success' : 'warning' }, online ? t('synced') : `${loadJson(queueKey, []).length} ${t('queued')}`)),
+    cart.length ? h('div', { className: 'bill-grid' },
+      h('div', { className: 'bill-grid-head' },
+        ...[h('span', { key: 'n' }, '#'), h('span', { key: 'p' }, t('hProduct')), h('span', { key: 'q' }, t('qtyShort')), h('span', { key: 'u' }, t('unitLabelWord')), h('span', { key: 'r' }, t('rateLabel')), h('span', { key: 'l' }, t('locationLabel')), h('span', { key: 't' }, t('totalWord')), h('span', { key: 'x' }, '')]),
+      ...cart.map((item, index) => renderBillRow(item, index)))
+      : h('div', { className: 'empty bill-empty' }, h('h3', null, t('cartEmpty')), h('p', null, t('scanOrSelect'))));
+
+  const deliverySection = h('section', { className: 'delivery-section pos-panel' },
+    h('div', { className: 'panel-head' }, h('div', null, h('h2', null, t('deliveryInfo')), h('p', null, t('deliveryInfoNote')))),
+    h('div', { className: 'delivery-grid' },
+      DELIVERY_FIELDS.map(([key, labelKey]) => h('div', { className: 'delivery-field', key },
+        h('label', null, t(labelKey)),
+        key === 'deliveryDate'
+          ? h('input', { type: 'date', value: delivery[key] || '', onChange: e => setDeliveryField(key, e.target.value) })
+          : h('input', { value: delivery[key] || '', onChange: e => setDeliveryField(key, e.target.value) })))));
+
+  const checkoutSection = h('section', { className: 'checkout-section pos-panel' },
+    h('div', { className: 'checkout-grid' },
+      h('article', { className: 'checkout-panel customer-panel' }, renderCustomerPanel()),
+      h('article', { className: 'checkout-panel payment-panel' }, renderPaymentPanel()),
+      h('article', { className: 'checkout-panel discount-panel' }, renderDiscountPanel()),
+      h('article', { className: 'checkout-panel summary-panel' }, renderSummaryPanel())));
+
+  const actionsSection = h('section', { className: 'actions-section' },
+    h('div', { className: 'actions-left' },
+      h('button', { className: 'primary', onClick: confirmNewSale }, t('newSale')),
+      h('button', { className: 'secondary', onClick: () => saveDraft() }, t('saveDraft')),
+      h('button', { className: 'secondary danger-btn', onClick: confirmCancelSale }, t('cancelSale')),
+      go && h('button', { className: 'secondary', onClick: () => go('returns') }, t('revertBill'))),
+    h('div', { className: 'actions-right' },
+      h('button', { className: 'secondary', onClick: previewSale }, t('printInvoice')),
+      h('button', { className: 'primary', onClick: () => charge(true) }, t('completeAndPrint')),
+      h('button', { className: 'primary', onClick: () => charge(false) }, t('completeSale'))));
 
   return h('div', { className: 'pos-page' },
-    h('section', { className: 'pos-catalog' },
-      posTitle,
-      message && h('div', { className: 'notice' }, message),
-      h('label', { className: 'search' }, h('input', { ref: searchRef, autoFocus: true, value: query, onChange: event => setQuery(event.target.value), onKeyDown: scanBarcode, placeholder: t('searchPlaceholder') })),
-      h('form', { className: 'manual-form', onSubmit: addManual },
-        h('strong', null, t('looseItem')),
-        h('input', { value: manual.name, onChange: event => setManual({ ...manual, name: event.target.value }), placeholder: t('productName'), required: true }),
-        h('input', { type: 'number', min: '1', value: manual.price, onChange: event => setManual({ ...manual, price: event.target.value }), placeholder: `${t('ratePer')} ${unitLabel(manual.unit)}`, required: true }),
-        h('input', { type: 'number', min: '0.01', step: '0.01', value: manual.qty, onChange: event => setManual({ ...manual, qty: event.target.value }), placeholder: t('weightQty'), required: true }),
-        h('select', { value: manual.unit, onChange: event => setManual({ ...manual, unit: event.target.value }) }, UNITS.map(unit => h('option', { key: unit.value, value: unit.value }, unit.urdu))),
-        h('button', { className: 'secondary' }, t('add'))),
-      h('div', { className: 'catalog-grid' }, shown.map(product => h('button', { className: 'pos-product', key: product.id, onClick: () => addProduct(product) },
-        h('strong', null, product.name),
-        h('small', null, `${product.sku ? product.sku + ' - ' : ''}${product.stock} ${unitLabel(product.unit)} ${t('available')}`),
-        h('b', null, isWeightUnit(product.unit) ? `${money(product.price)}/${unitLabel(product.unit)}` : money(product.price)))))),
-    h('aside', { className: 'cart-panel' },
-      h('header', null, h('div', null, h('p', { className: 'eyebrow' }, t('currentInvoice')), h('h2', null, t('cart')))),
-      h('select', { className: 'customer-select', value: customerId, onChange: event => setCustomerId(event.target.value) },
-        data.customers.map(customer => h('option', { value: customer.id, key: customer.id }, `${customer.name}${customer.balance ? ` - ${t('udharBadge')} ${money(customer.balance)}` : ''}`))),
-      h('select', { className: 'customer-select', value: paymentType, onChange: event => setPaymentType(event.target.value) },
-        ['Cash', 'Card', 'Credit'].map(type => h('option', { key: type, value: type }, LANG === 'ur' ? { Cash: t('cash'), Card: t('card'), Credit: t('credit') }[type] : type))),
-      h('div', { className: 'cart-list' }, cart.length ? cart.map((item, index) => h('div', { className: 'cart-line', key: `${item.productId || item.name}-${index}` },
-        h('div', { className: 'line-info' },
-          h('strong', null, item.name),
-          h('small', null, `${money(item.price)} x ${item.qty} ${unitLabel(item.unit)}`),
-          h('div', { className: 'quantity' },
-            h('button', { onClick: () => changeQty(index, isWeightUnit(item.unit) ? -0.25 : -1) }, '-'),
-            h('input', { className: 'qty-input', type: 'number', min: '0.01', step: isWeightUnit(item.unit) ? '0.25' : '1', value: item.qty, onChange: event => setCart(items => items.map((old, oldIndex) => oldIndex === index ? { ...old, qty: Number(event.target.value) || 0 } : old)) }),
-            h('button', { onClick: () => changeQty(index, isWeightUnit(item.unit) ? 0.25 : 1) }, '+'))),
-        h('strong', null, money(item.price * item.qty)))) : h('div', { className: 'empty' }, h('h3', null, t('cartEmpty')), h('p', null, t('scanOrSelect')))),
-      h('div', { className: 'cart-footer' },
-        h('label', null, t('discount')),
-        h('input', { className: 'discount-input', type: 'number', min: '0', value: discount, onChange: event => setDiscount(Number(event.target.value)) }),
-        h('label', { className: 'tax-toggle' },
-          h('input', { type: 'checkbox', checked: applyTax, onChange: event => setApplyTax(event.target.checked) }),
-          ` ${t('taxWord')} (${(data.settings.taxRate * 100).toFixed(0)}%)`),
-        cartTotals,
-        isCredit && h('div', { className: 'partial-pay-row' },
-          h('input', { type: 'number', min: '0', max: total, value: paidInput, placeholder: LANG === 'ur' ? `ابھی ادائیگی (0 = پورا اُدھار ${money(total)})` : `Paid now (0 = full udhar of ${money(total)})`, onChange: event => setPaidInput(event.target.value) }),
-          h('button', { className: 'secondary', onClick: () => setPaidInput(String(total)) }, t('full')),
-          h('button', { className: 'secondary', onClick: () => setPaidInput('0') }, t('none'))),
-        isCredit && dueAmount > 0 && (!selectedCustomer || customerId === 'cus_walkin') && h('div', { className: 'notice danger', style: { margin: '8px 20px 0' } }, t('selectCustomerForUdhar')),
-        h('button', { className: 'charge', disabled: !cart.length || cart.some(item => !(Number(item.qty) > 0)), onClick: charge },
-          isCredit && dueAmount > 0 ? `${t('saveSaleUdhar')} ${money(dueAmount)}` : t('chargePayment')))),
-    receipt && h(ReceiptModal, { sale: receipt, customers: data.customers, settings: data.settings, onClose: () => setReceipt(null) }));
+    message && h('div', { className: 'notice pos-notice' }, message),
+    h('main', { className: 'pos-layout' },
+      invoiceHeader,
+      searchSection,
+      billSection,
+      deliverySection,
+      checkoutSection,
+      actionsSection),
+    receipt && h(ReceiptModal, { sale: receipt, customers: data.customers, settings: data.settings, onClose: () => setReceipt(null) }),
+    cameraOpen && h(ScanCamera, { onCode: onScanCode, onClose: () => setCameraOpen(false) }),
+    draftsModal && h(DraftsModal, { drafts: data.drafts || [], customers: data.customers, onLoad: loadDraft, onDelete: deleteDraft, onClose: () => setDraftsModal(false) }));
 }
 
 function ReceiptModal({ sale, customers, settings, onClose }) {
@@ -692,21 +1273,27 @@ function ReceiptModal({ sale, customers, settings, onClose }) {
   const saleDate = new Date(sale.createdAt);
   const dateStr = saleDate.toLocaleDateString('en-PK', { year: 'numeric', month: 'short', day: 'numeric' });
   const timeStr = saleDate.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' });
-  const hasDiscount = sale.discount > 0;
-  const hasTax = sale.tax > 0;
   const storeName = (settings && settings.storeName) || 'Faislabadi General Store';
   const storePhone = (settings && settings.phone) || '';
   const storeAddress = (settings && settings.address) || '';
-  var taxPercent = (settings && settings.taxRate) ? (settings.taxRate * 100).toFixed(0) : '18';
   const printerCfg = loadJson(printerConfigKey, { autoPrint: false, paperSize: '80' });
   const paperClass = 'paper-' + printerCfg.paperSize;
+  const isCredit = sale.paymentType === 'Credit';
+  const isPartial = isCredit && Number(sale.paidAmount) > 0 && Number(sale.paidAmount) < Number(sale.total);
+  const methodLabel = isPartial ? t('partialPayment') : (isCredit ? t('udhaarPayment') : (sale.paymentType === 'Card' ? t('card') : t('cash')));
+  const due = Math.max(0, Number(sale.total) - Number(sale.paidAmount));
+  const handed = Math.max(Number(sale.paidAmount), Number(sale.receivedAmount) || 0);
+  const change = !isCredit ? Math.max(0, handed - Number(sale.total)) : 0;
+  const delivery = sale.delivery && typeof sale.delivery === 'object' ? sale.delivery : null;
+  const closingBalance = due > 0 ? money((Number(customer && customer.balance) || 0) + (sale.preview ? due : 0)) : null;
   useEffect(() => {
     function handlePrintKey(e) { if (e.key === 'F4') { e.preventDefault(); window.print(); } }
     window.addEventListener('keydown', handlePrintKey);
     return () => window.removeEventListener('keydown', handlePrintKey);
   }, []);
-  return ReactDOM.createPortal(h('div', { className: 'modal', onClick: onClose },
+  return ReactDOM.createPortal(h('div', { className: 'modal receipt-modal', onClick: onClose },
     h('section', { className: 'receipt ' + paperClass, onClick: function(e) { e.stopPropagation(); } },
+      sale.preview && h('div', { className: 'receipt-banner no-print' }, t('notSavedPreview')),
       h('div', { className: 'receipt-header' },
         h('div', { className: 'receipt-brand' }, h('img', { className: 'receipt-logo', src: 'logo.png?v=27', alt: '' })),
         h('h2', null, storeName),
@@ -714,18 +1301,20 @@ function ReceiptModal({ sale, customers, settings, onClose }) {
         storePhone && h('p', { className: 'receipt-info' }, storePhone)),
       h('div', { className: 'receipt-divider' }),
       h('div', { className: 'receipt-meta' },
-        h('div', { className: 'receipt-row' }, h('span', null, 'Invoice'), h('span', null, sale.invoiceNo)),
-        h('div', { className: 'receipt-row' }, h('span', null, 'Date'), h('span', null, dateStr)),
-        h('div', { className: 'receipt-row' }, h('span', null, 'Time'), h('span', null, timeStr)),
-        h('div', { className: 'receipt-row' }, h('span', null, 'Cashier'), h('span', null, sale.createdBy || '-')),
-        h('div', { className: 'receipt-row' }, h('span', null, 'Customer'), h('span', null, (customer && customer.name) || 'Walk-in')),
-        sale.offlineDraft && h('div', { className: 'receipt-row' }, h('span', null, 'Status'), h('span', null, 'OFFLINE - WILL SYNC'))),
+        h('div', { className: 'receipt-row' }, h('span', null, t('invoiceWord')), h('span', null, sale.invoiceNo || t('pendingInvoice'))),
+        h('div', { className: 'receipt-row' }, h('span', null, t('dateLabel')), h('span', null, dateStr)),
+        h('div', { className: 'receipt-row' }, h('span', null, t('hPaymentTime')), h('span', null, timeStr)),
+        h('div', { className: 'receipt-row' }, h('span', null, t('cashierLabel')), h('span', null, sale.createdBy || '-')),
+        h('div', { className: 'receipt-row' }, h('span', null, t('customerLabel')), h('span', null, (customer && customer.name) || t('walkIn'))),
+        h('div', { className: 'receipt-row' }, h('span', null, t('paymentLabel')), h('span', null, methodLabel)),
+        sale.reference && h('div', { className: 'receipt-row' }, h('span', null, t('referenceLabel')), h('span', null, sale.reference)),
+        sale.offlineDraft && h('div', { className: 'receipt-row receipt-status' }, h('span', null, 'Status'), h('span', null, 'OFFLINE - WILL SYNC'))),
       h('div', { className: 'receipt-divider' }),
       h('div', { className: 'receipt-items-header' },
-        h('span', { className: 'ri-name' }, 'Item'),
-        h('span', { className: 'ri-qty' }, 'Qty'),
-        h('span', { className: 'ri-price' }, 'Rate'),
-        h('span', { className: 'ri-total' }, 'Total')),
+        h('span', { className: 'ri-name' }, t('hProduct')),
+        h('span', { className: 'ri-qty' }, t('qtyShort')),
+        h('span', { className: 'ri-price' }, t('rateLabel')),
+        h('span', { className: 'ri-total' }, t('totalWord'))),
       h('div', { className: 'receipt-items' },
         sale.items.map(function(item) {
           return h('div', { className: 'receipt-item', key: item.name + '-' + item.qty },
@@ -736,15 +1325,23 @@ function ReceiptModal({ sale, customers, settings, onClose }) {
         })),
       h('div', { className: 'receipt-divider' }),
       h('div', { className: 'receipt-totals' },
-        h('div', { className: 'receipt-row' }, h('span', null, 'Subtotal'), h('span', null, money(sale.subtotal))),
-        hasDiscount && h('div', { className: 'receipt-row receipt-discount' }, h('span', null, 'Discount'), h('span', null, '- ' + money(sale.discount))),
-        hasTax && h('div', { className: 'receipt-row' }, h('span', null, 'Tax (' + taxPercent + '%)'), h('span', null, money(sale.tax))),
-        h('div', { className: 'receipt-row receipt-grand' }, h('span', null, 'TOTAL'), h('span', null, money(sale.total))),
-        Number(sale.paidAmount) < Number(sale.total) && h('div', { className: 'receipt-row' }, h('span', null, 'Paid now'), h('span', null, money(sale.paidAmount))),
-        Number(sale.paidAmount) < Number(sale.total) && h('div', { className: 'receipt-row receipt-due' }, h('span', null, 'UDHAR REMAINING'), h('span', null, money(Math.max(0, sale.total - sale.paidAmount))))),
+        h('div', { className: 'receipt-row' }, h('span', null, t('subtotal')), h('span', null, money(sale.subtotal))),
+        Number(sale.discount) > 0 && h('div', { className: 'receipt-row receipt-discount' }, h('span', null, t('discount')), h('span', null, '- ' + money(sale.discount))),
+        Number(sale.additionalDiscount) > 0 && h('div', { className: 'receipt-row receipt-discount' }, h('span', null, t('additionalDiscount')), h('span', null, '- ' + money(sale.additionalDiscount))),
+        Number(sale.tax) > 0 && h('div', { className: 'receipt-row' }, h('span', null, t('taxWord') + ' (' + (settings && settings.taxRate ? (settings.taxRate * 100).toFixed(0) : '18') + '%)'), h('span', null, money(sale.tax))),
+        h('div', { className: 'receipt-row receipt-grand' }, h('span', null, t('grandTotalLabel')), h('span', null, money(sale.total))),
+        handed > 0 && h('div', { className: 'receipt-row' }, h('span', null, t('amountReceived')), h('span', null, money(handed))),
+        change > 0 && h('div', { className: 'receipt-row receipt-change' }, h('span', null, t('changeLabel')), h('span', null, money(change))),
+        due > 0 && h('div', { className: 'receipt-row receipt-due' }, h('span', null, t('udharRemaining')), h('span', null, money(due))),
+        closingBalance && h('div', { className: 'receipt-row' }, h('span', null, t('balanceForCustomer')), h('span', null, closingBalance))),
+      delivery && h('div', { className: 'receipt-delivery' },
+        h('div', { className: 'receipt-row receipt-delivery-head' }, h('span', null, t('deliveryInfo')), h('span', null, '')),
+        DELIVERY_FIELDS.filter(([key]) => delivery[key]).map(function([key, labelKey]) {
+          return h('div', { className: 'receipt-row', key: key }, h('span', null, t(labelKey)), h('span', null, delivery[key]));
+        })),
       h('div', { className: 'receipt-divider' }),
       h('div', { className: 'receipt-paytype' },
-        h('span', { className: 'receipt-badge ' + (sale.paymentType === 'Credit' ? 'badge-credit' : 'badge-cash') }, sale.paymentType)),
+        h('span', { className: 'receipt-badge ' + (isCredit ? 'badge-credit' : 'badge-cash') }, methodLabel)),
       h('div', { className: 'receipt-footer' },
         h('p', null, 'Thank you for shopping with us!'),
         h('p', { className: 'receipt-info' }, 'Goods once sold will not be exchanged or returned')),
@@ -753,8 +1350,8 @@ function ReceiptModal({ sale, customers, settings, onClose }) {
         h('p', { className: 'credit-name' }, 'Sohaib Ali'),
         h('p', { className: 'credit-phone' }, 'Mobile No: 03074224449')),
       h('div', { className: 'success-actions no-print' },
-        h('button', { className: 'secondary', onClick: function() { window.print(); } }, 'Print receipt (F4)'),
-        h('button', { className: 'primary', onClick: onClose }, 'Close')))),
+        h('button', { className: 'secondary', onClick: function() { window.print(); } }, 'Print (F4)'),
+        h('button', { className: 'primary', onClick: onClose }, t('close'))))),
     document.body);
 }
 
@@ -1363,6 +1960,7 @@ function ProductEditModal({ product, client, refresh, onClose }) {
     sku: product.sku || '',
     barcode: product.barcode || '',
     category: product.category || '',
+    location: product.location || '',
     cost: product.cost ?? '',
     price: product.price ?? '',
     stock: product.stock ?? '',
@@ -1384,6 +1982,7 @@ function ProductEditModal({ product, client, refresh, onClose }) {
         sku: form.sku,
         barcode: form.barcode,
         category: form.category,
+        location: form.location,
         cost: Number(form.cost) || 0,
         price: Number(form.price) || 0,
         stock: Number(form.stock) || 0,
@@ -1421,6 +2020,8 @@ function ProductEditModal({ product, client, refresh, onClose }) {
           h('div', null, h('label', null, t('hStock')), h('input', { type: 'number', step: 'any', min: '0', value: form.stock, onChange: e => setForm({ ...form, stock: e.target.value }) })),
           h('div', null, h('label', null, t('phLowAlertAt')), h('input', { type: 'number', min: '0', value: form.reorderLevel, onChange: e => setForm({ ...form, reorderLevel: e.target.value }) })),
           h('div', null, h('label', null, `${t('hStock')} ${LANG === 'ur' ? 'اکائی' : 'Unit'}`), h('select', { value: form.unit, onChange: e => setForm({ ...form, unit: e.target.value }) }, UNITS.map(unit => h('option', { key: unit.value, value: unit.value }, unit.urdu))))),
+        h('div', { className: 'edit-form-row' },
+          h('div', null, h('label', null, t('locationLabel')), h('input', { value: form.location, onChange: e => setForm({ ...form, location: e.target.value }), placeholder: t('whLocation') }))),
         h('div', { className: 'edit-form-row' },
           h('label', { style: { display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700 } },
             h('input', { type: 'checkbox', checked: form.active, onChange: e => setForm({ ...form, active: e.target.checked }) }),
@@ -1917,7 +2518,7 @@ function Settings({ data, client }) {
   }
   useEffect(() => { loadBackups(); }, [client]);
   return h('div', { className: 'page' },
-    h('div', { className: 'page-title' }, h('div', null, h('p', { className: 'eyebrow' }, t('storeSettings')), h('h1', null, data.settings.storeName), h('p', { className: 'subtitle' }, `${data.settings.address} - ${t('taxWord')} ${(data.settings.taxRate * 100).toFixed(0)}%`)), h('button', { className: 'primary', onClick: createBackup }, t('createBackup'))),
+    h('div', { className: 'page-title' }, h('div', null, h('p', { className: 'eyebrow' }, t('storeSettings')), h('h1', null, data.settings.storeName), h('p', { className: 'subtitle' }, data.settings.address || '')), h('button', { className: 'primary', onClick: createBackup }, t('createBackup'))),
     message && h('div', { className: 'notice' }, message),
     h('section', { className: 'settings-grid' },
       h('article', { className: 'panel' },
@@ -1963,6 +2564,7 @@ function App() {
   const [session, setSession] = useState(() => loadJson(stateKey, null));
   const [data, setData] = useState(null);
   const [page, setPage] = useState('dashboard');
+  const [navOpen, setNavOpen] = useState(false);
   const [online, setOnline] = useState(navigator.onLine);
   const [error, setError] = useState('');
   const [dataWarning, setDataWarning] = useState('');
@@ -2041,10 +2643,11 @@ function App() {
   const visiblePages = pages.filter(([id]) => canSee(data.user, id));
   const activePage = visiblePages.some(([id]) => id === page) ? page : (visiblePages[0] || ['dashboard'])[0];
   return h('main', { className: 'app-shell', dir: LANG === 'ur' ? 'rtl' : 'ltr' },
-    h('aside', { className: 'sidebar' }, h('div', { className: 'brand' }, h('img', { className: 'brand-logo', src: 'logo.png?v=27', alt: '' }), h('div', null, h('strong', null, 'Faislabadi'), h('small', null, 'GENERAL STORE'))), h('nav', null, visiblePages.map(([id]) => h('button', { key: id, className: activePage === id ? 'nav-item active' : 'nav-item', onClick: () => setPage(id) }, h('span', null, t('nav_' + id)))), h(LangToggle, { tick: bumpLang })), h('div', { className: 'sidebar-footer' }, h('div', { className: 'avatar' }, data.user.name.split(' ').map(part => part[0]).join('').slice(0, 2)), h('div', null, h('strong', null, data.user.name), h('small', null, role)), h('button', { className: 'more', onClick: () => { try { client.post('/api/auth/logout', {}).catch(() => {}); } catch (_) {} localStorage.removeItem(stateKey); setSession(null); } }, t('logout')))),
-    h('section', { className: 'main-area' }, h('header', { className: 'topbar' }, h('div', { className: 'crumb' }, 'Faislabadi General Store / ', h('strong', null, t('nav_' + activePage))), h('div', { className: 'top-actions' },
+    h('aside', { className: 'sidebar' + (activePage === 'pos' ? ' pos-hidden' : '') + (navOpen ? ' open' : '') }, h('div', { className: 'brand' }, h('img', { className: 'brand-logo', src: 'logo.png?v=27', alt: '' }), h('div', null, h('strong', null, 'Faislabadi'), h('small', null, 'GENERAL STORE'))), h('nav', null, visiblePages.map(([id]) => h('button', { key: id, className: activePage === id ? 'nav-item active' : 'nav-item', onClick: () => { setPage(id); setNavOpen(false); } }, h('span', null, t('nav_' + id)))), h(LangToggle, { tick: bumpLang })), h('div', { className: 'sidebar-footer' }, h('div', { className: 'avatar' }, data.user.name.split(' ').map(part => part[0]).join('').slice(0, 2)), h('div', null, h('strong', null, data.user.name), h('small', null, role)), h('button', { className: 'more', onClick: () => { try { client.post('/api/auth/logout', {}).catch(() => {}); } catch (_) {} localStorage.removeItem(stateKey); setSession(null); } }, t('logout')))),
+    h('section', { className: 'main-area' }, h('header', { className: 'topbar' }, activePage === 'pos' && h('button', { className: 'menu-btn', 'aria-label': LANG === 'ur' ? 'مینو کھولیں' : 'Open menu', onClick: () => setNavOpen(!navOpen) }, h('span', { className: 'menu-btn-icon' }, '☰')), h('div', { className: 'crumb' }, 'Faislabadi General Store / ', h('strong', null, t('nav_' + activePage))), h('div', { className: 'top-actions' },
       cloudSync && cloudSync.enabled && h('span', { className: cloudSync.lastError ? 'sync-status offline' : 'sync-status', title: cloudSync.lastSuccessAt ? `${t('cloudSyncedAt')} ${new Date(cloudSync.lastSuccessAt).toLocaleTimeString()}` : t('waitingFirstSync') }, cloudSync.lastError ? t('cloudPending') : (cloudSync.lastSuccessAt ? t('cloudSynced') : t('cloudConnecting'))),
       h('span', { className: online ? 'sync-status' : 'sync-status offline' }, online ? t('online') : t('offline')), h('button', { className: 'secondary', onClick: refresh }, t('refresh')), h(LangToggle, { tick: bumpLang }))), dataWarning && h('div', { className: 'notice danger', style: { margin: '12px 20px 0' } }, dataWarning), storageNotice && h('div', { className: 'notice warning', style: { margin: '12px 20px 0' } }, storageNotice),     activePage === 'dashboard' ? h(Dashboard, { data, go: setPage, client }) : activePage === 'pos' ? h(POS, { client, data, refresh, online, setOnline, go: setPage }) : activePage === 'users' ? h(UsersAdmin, { client }) : activePage === 'returns' ? h(ReturnsPage, { data, client, refresh }) : activePage === 'reports' ? h(Reports, { data, client }) : activePage === 'purchases' ? h(Purchases, { data, client, refresh }) : activePage === 'settings' ? h(Settings, { data, client }) : activePage === 'warehouse' ? h(WarehousePage, { data, client, refresh }) : h(DataPage, { page: activePage, data, client, refresh })));
+    navOpen && h('div', { className: 'menu-backdrop', onClick: () => setNavOpen(false) });
 }
 
 if ('serviceWorker' in navigator) {

@@ -60,6 +60,26 @@ test('stock decreases only when the sale completes and a movement is recorded', 
   assert.equal(movement.qty, -2);
 });
 
+test('rejected sale deducts NO stock and records NO movement or invoice for any item', () => {
+  const { db, admin } = fixture();
+  const first = db.products.find(item => item.id === 'prd_1');
+  const short = db.products.find(item => item.id === 'prd_4');
+  const firstBefore = Number(first.stock);
+  const shortBefore = Number(short.stock);
+  const invoiceSeqBefore = db.meta.invoiceSeq;
+  const movementsBefore = db.stockMovements.length;
+  assert.throws(() => createSale(db, {
+    customerId: 'cus_walkin',
+    paymentType: 'Cash',
+    items: [{ productId: 'prd_1', qty: 2 }, { productId: 'prd_4', qty: 999 }]
+  }, admin), /insufficient stock/);
+  assert.equal(Number(first.stock), firstBefore, 'valid item must not be deducted when the sale is rejected');
+  assert.equal(Number(short.stock), shortBefore);
+  assert.equal(db.stockMovements.length, movementsBefore, 'no movement allowed for a rejected sale');
+  assert.equal(db.meta.invoiceSeq, invoiceSeqBefore, 'no invoice number consumed for a rejected sale');
+  assert.equal(db.sales.length, 0, 'no sale persisted for a rejected sale');
+});
+
 test('pay udhar reduces balance and keeps history; overpay is rejected', () => {
   const { db, admin } = fixture();
   createSale(db, { customerId: 'cus_2', paymentType: 'Credit', items: [{ productId: 'prd_3', qty: 2 }] }, admin);
@@ -317,4 +337,70 @@ test('delete guard logic flags products referenced by sales or purchases', () =>
   const usedByPurchase = db.purchases.some(purchase => (purchase.items || []).some(item => item.productId === target.id));
   assert.equal(typeof usedBySale, 'boolean');
   assert.equal(typeof usedByPurchase, 'boolean');
+});
+
+test('main discount plus additional discount combine into a single stored discount', () => {
+  const { db, admin } = fixture();
+  const sale = createSale(db, { customerId: 'cus_walkin', paymentType: 'Cash', discount: 100, additionalDiscount: 50, items: [{ productId: 'prd_1', qty: 2 }], taxRate: 0 }, admin);
+  assert.equal(sale.subtotal, 1780);
+  assert.equal(sale.discount, 150);
+  assert.equal(sale.additionalDiscount, 50);
+  assert.equal(sale.total, 1630);
+});
+
+test('additional discount is clamped so totals never go negative', () => {
+  const { db, admin } = fixture();
+  const sale = createSale(db, { customerId: 'cus_walkin', paymentType: 'Cash', discount: 500, additionalDiscount: 99999, items: [{ productId: 'prd_1', qty: 1 }], taxRate: 0 }, admin);
+  assert.equal(sale.discount, 890);
+  assert.equal(sale.total, 0);
+  assert.equal(sale.dueAmount, 0);
+});
+
+test('cash sale records the amount handed over as receivedAmount', () => {
+  const { db, admin } = fixture();
+  const sale = createSale(db, { customerId: 'cus_walkin', paymentType: 'Cash', receivedAmount: 2000, items: [{ productId: 'prd_1', qty: 2 }], taxRate: 0 }, admin);
+  assert.equal(sale.total, 1780);
+  assert.equal(sale.paidAmount, 1780);
+  assert.equal(sale.receivedAmount, 2000);
+});
+
+test('partial payment via Credit stores the received amount on the sale', () => {
+  const { db, admin } = fixture();
+  const sale = createSale(db, { customerId: 'cus_1', paymentType: 'Credit', paidAmount: 500, receivedAmount: 500, items: [{ productId: 'prd_1', qty: 1 }], taxRate: 0 }, admin);
+  assert.equal(sale.paidAmount, 500);
+  assert.equal(sale.receivedAmount, 500);
+  assert.equal(sale.dueAmount, sale.total - 500);
+});
+
+test('reference and delivery details are stored on the sale and empty delivery is omitted', () => {
+  const { db, admin } = fixture();
+  const sale = createSale(db, {
+    customerId: 'cus_walkin', paymentType: 'Cash', reference: 'Order #42',
+    delivery: { deliverTo: 'Ali', transport: 'Pathan Coach', trNo: 'PK-123', cases: '10', freight: '500' },
+    items: [{ productId: 'prd_1', qty: 1 }], taxRate: 0
+  }, admin);
+  assert.equal(sale.reference, 'Order #42');
+  assert.equal(sale.delivery.deliverTo, 'Ali');
+  assert.equal(sale.delivery.transport, 'Pathan Coach');
+  const clean = createSale(db, { customerId: 'cus_walkin', paymentType: 'Cash', delivery: { deliverTo: '   ' }, items: [{ productId: 'prd_1', qty: 1 }], taxRate: 0 }, admin);
+  assert.equal(clean.delivery, null);
+});
+
+test('invalid client price falls back to the product price server-side', () => {
+  const { db, admin } = fixture();
+  const product = db.products.find(item => item.id === 'prd_1');
+  const sale = createSale(db, { customerId: 'cus_walkin', paymentType: 'Cash', items: [{ productId: 'prd_1', qty: 1, price: 'oops' }], taxRate: 0 }, admin);
+  assert.equal(sale.items[0].price, Number(product.price));
+  assert.equal(sale.total, Number(product.price));
+});
+
+test('ensureSchema creates the drafts collection and product location field', () => {
+  const { db } = fixture();
+  delete db.drafts;
+  const changed = ensureSchema(db);
+  assert.equal(changed, true);
+  assert.equal(Array.isArray(db.drafts), true);
+  ensureSchema(db);
+  const product = db.products.find(item => !('location' in item));
+  if (product) assert.equal(product.location, '');
 });

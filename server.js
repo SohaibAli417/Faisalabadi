@@ -80,7 +80,7 @@ const securityHeaders = {
   'X-Content-Type-Options': 'nosniff',
   'X-Frame-Options': 'DENY',
   'Referrer-Policy': 'no-referrer',
-  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+  'Permissions-Policy': 'camera=(self), microphone=(), geolocation=()',
   'Cross-Origin-Resource-Policy': 'same-origin',
   'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; connect-src 'self'; img-src 'self' data:; font-src 'self' https://fonts.gstatic.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
 };
@@ -183,6 +183,8 @@ function ensureSchema(db) {
   if (!Array.isArray(db.returns)) { db.returns = []; changed = true; }
   if (!Array.isArray(db.payments)) { db.payments = []; changed = true; }
   if (!Array.isArray(db.stockMovements)) { db.stockMovements = []; changed = true; }
+  if (!Array.isArray(db.drafts)) { db.drafts = []; changed = true; }
+  if (!db.meta || typeof db.meta !== 'object') { db.meta = { createdAt: now(), updatedAt: now(), invoiceSeq: 0 }; changed = true; }
   for (const customer of db.customers) {
     if (!('address' in customer)) { customer.address = ''; changed = true; }
     if (!('active' in customer)) { customer.active = true; changed = true; }
@@ -192,6 +194,7 @@ function ensureSchema(db) {
     if (!('image' in product)) { product.image = ''; changed = true; }
     if (!('category' in product) || !product.category) { product.category = 'General'; changed = true; }
     if (!('reorderLevel' in product)) { product.reorderLevel = 5; changed = true; }
+    if (!('location' in product)) { product.location = ''; changed = true; }
     if (!('active' in product)) { product.active = true; changed = true; }
     if (!('status' in product)) { product.status = product.active === false ? 'inactive' : 'active'; changed = true; }
   }
@@ -400,6 +403,11 @@ function money(value) {
   return Math.round(Number(value || 0));
 }
 
+function safeMoney(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? Math.round(n) : fallback;
+}
+
 function resolveProductPricing(input) {
   const cost = money(input.cost);
   const explicitPrice = input.price !== undefined && input.price !== null && String(input.price).trim() !== '';
@@ -470,18 +478,17 @@ function createSale(db, payload, actor, source = 'online') {
       const qty = Number(item.qty || 1);
       if (qty <= 0) throw new Error('Quantity must be positive');
       if (Number(product.stock) < qty) throw new Error(`${product.name} has insufficient stock`);
-      product.stock = Number(product.stock) - qty;
-      product._updatedAt = now();
-      db.stockMovements.unshift({ id: uid('stm'), at: now(), productId: product.id, type: 'sale', qty: -qty, note: 'POS sale' });
-      return { productId: product.id, name: product.name, sku: product.sku, unit: product.unit, qty, price: money(item.price ?? product.price), cost: money(product.cost), manual: false };
+      return { productId: product.id, name: product.name, sku: product.sku, unit: product.unit, qty, price: safeMoney(item.price, product.price), cost: money(product.cost), manual: false };
     }
     const qty = Number(item.qty || 1);
     const price = money(item.price);
     if (!item.name || qty <= 0 || price <= 0) throw new Error('Manual items require name, price, and quantity');
-    return { productId: null, name: String(item.name).trim(), sku: '', unit: item.unit || 'pcs', qty, price, cost: money(item.cost), manual: true };
+    return { productId: null, name: String(item.name).trim(), sku: item.sku || '', unit: item.unit || 'pcs', qty, price, cost: money(item.cost), manual: true };
   });
   const subtotal = money(saleItems.reduce((sum, item) => sum + item.price * item.qty, 0));
-  const discount = Math.min(money(payload.discount), subtotal);
+  const discountMain = Math.min(safeMoney(payload.discount), subtotal);
+  const additionalDiscount = Math.min(safeMoney(payload.additionalDiscount), Math.max(0, subtotal - discountMain));
+  const discount = money(discountMain + additionalDiscount);
   const taxable = Math.max(0, subtotal - discount);
   const taxRate = Number(payload.taxRate ?? db.settings.taxRate);
   const tax = money(taxable * taxRate);
@@ -500,6 +507,10 @@ function createSale(db, payload, actor, source = 'online') {
   if (!(paidAmount > 0)) paidAmount = 0;
   if (paidAmount > total) paidAmount = total;
   const dueAmount = money(total - paidAmount);
+  let receivedAmount = paidAmount;
+  if (payload.receivedAmount !== undefined && payload.receivedAmount !== null && payload.receivedAmount !== '') {
+    receivedAmount = Math.max(paidAmount, safeMoney(payload.receivedAmount, paidAmount));
+  }
 
   if (dueAmount > 0) {
     if (!customer || customerId === 'cus_walkin') {
@@ -509,12 +520,11 @@ function createSale(db, payload, actor, source = 'online') {
     if (limit > 0 && money(customer.balance) + dueAmount > limit) {
       throw new Error(`Credit limit exceeded. ${customer.name} can take Rs ${money(limit - money(customer.balance))} more udhar.`);
     }
-    customer.balance = money(Number(customer.balance) + dueAmount);
-    if (customer.recordedTotal !== undefined && customer.recordedTotal !== null && customer.recordedTotal !== '') {
-      customer.recordedTotal = money(Number(customer.recordedTotal) + dueAmount);
-    }
-    customer._updatedAt = now();
   }
+
+  const delivery = (payload.delivery && typeof payload.delivery === 'object' && !Array.isArray(payload.delivery))
+    ? Object.fromEntries(Object.entries(payload.delivery).filter(([, value]) => String(value ?? '').trim() !== ''))
+    : null;
 
   const sale = {
     id: uid('sal'),
@@ -529,14 +539,36 @@ function createSale(db, payload, actor, source = 'online') {
     items: saleItems,
     subtotal,
     discount,
+    additionalDiscount,
     taxRate,
     tax,
     total,
     paidAmount,
+    receivedAmount,
     dueAmount,
+    reference: String(payload.reference ?? '').trim(),
+    delivery: delivery && Object.keys(delivery).length ? delivery : null,
     returnStatus: 'none',
     voided: false
   };
+  const changedAt = now();
+  for (const item of saleItems) {
+    if (item.productId) {
+      const product = db.products.find(row => row.id === item.productId);
+      if (product) {
+        product.stock = Number(product.stock) - item.qty;
+        product._updatedAt = changedAt;
+        db.stockMovements.unshift({ id: uid('stm'), at: changedAt, productId: product.id, type: 'sale', qty: -item.qty, note: 'POS sale' });
+      }
+    }
+  }
+  if (dueAmount > 0) {
+    customer.balance = money(Number(customer.balance) + dueAmount);
+    if (customer.recordedTotal !== undefined && customer.recordedTotal !== null && customer.recordedTotal !== '') {
+      customer.recordedTotal = money(Number(customer.recordedTotal) + dueAmount);
+    }
+    customer._updatedAt = changedAt;
+  }
   db.sales.unshift(sale);
   if (paidAmount > 0) {
     db.payments = [{ id: uid('pay'), customerId, amount: paidAmount, at: sale.createdAt, createdBy: actor.name || '', createdById: actor.id, saleId: sale.id, note: `Paid at billing (${sale.invoiceNo})`, _updatedAt: now() }, ...(db.payments || [])];
@@ -931,6 +963,7 @@ async function handleApi(request, response) {
         suppliers: db.suppliers,
         sales: db.sales.slice(0, 50),
         returns: db.returns.slice(0, 50),
+        drafts: (db.drafts || []).slice(0, 50),
         lowStock: lowStock(db),
         reports: { day: calculateReport(db, 'day'), month: calculateReport(db, 'month'), year: calculateReport(db, 'year') }
       });
@@ -1347,6 +1380,58 @@ async function handleApi(request, response) {
       const sale = createSale(db, await parseBody(request), actor, 'online');
       await saveDb(db);
       return json(response, 201, sale);
+    }
+
+    if (method === 'GET' && url.pathname === '/api/drafts') {
+      if (!can(actor, 'pos')) return json(response, 403, { error: 'Permission denied' });
+      return json(response, 200, { drafts: (db.drafts || []).slice(0, 50) });
+    }
+
+    if (method === 'POST' && url.pathname === '/api/drafts') {
+      if (!can(actor, 'pos')) return json(response, 403, { error: 'Permission denied' });
+      const body = await parseBody(request);
+      const items = Array.isArray(body.items)
+        ? body.items.map(item => ({
+            productId: item.productId || null,
+            name: String(item.name || '').trim(),
+            sku: item.sku || '',
+            unit: item.unit || 'pcs',
+            qty: Number.isFinite(Number(item.qty)) && Number(item.qty) > 0 ? Math.round(Number(item.qty) * 1000) / 1000 : 0,
+            price: safeMoney(item.price, 0),
+            manual: !!item.manual
+          })).filter(item => item.name && item.qty > 0)
+        : [];
+      if (!items.length) return json(response, 400, { error: 'Draft must include at least one item' });
+      let draft = db.drafts.find(item => item.id === body.id || (body.clientId && item.clientId === body.clientId));
+      if (!draft) {
+        draft = { id: uid('drf'), clientId: body.clientId || uid('drfc'), createdAt: now(), createdByName: actor.name || '' };
+        db.drafts.unshift(draft);
+      }
+      draft.updatedAt = now();
+      draft.customerId = body.customerId || 'cus_walkin';
+      draft.paymentType = body.paymentType || 'Cash';
+      draft.discount = safeMoney(body.discount);
+      draft.additionalDiscount = safeMoney(body.additionalDiscount);
+      draft.receivedAmount = safeMoney(body.receivedAmount);
+      draft.reference = String(body.reference ?? '').trim();
+      draft.items = items;
+      if (body.delivery && typeof body.delivery === 'object' && !Array.isArray(body.delivery)) {
+        draft.delivery = Object.fromEntries(Object.entries(body.delivery).filter(([, value]) => String(value ?? '').trim() !== ''));
+      } else {
+        delete draft.delivery;
+      }
+      await saveDb(db);
+      return json(response, 200, { draft });
+    }
+
+    if (method === 'DELETE' && url.pathname.startsWith('/api/drafts/')) {
+      if (!can(actor, 'pos')) return json(response, 403, { error: 'Permission denied' });
+      const id = url.pathname.split('/')[3];
+      const before = db.drafts.length;
+      db.drafts = db.drafts.filter(item => item.id !== id && item.clientId !== id);
+      if (db.drafts.length === before) return json(response, 404, { error: 'Draft not found' });
+      await saveDb(db);
+      return json(response, 200, { ok: true });
     }
 
     if (method === 'POST' && url.pathname === '/api/sync') {
