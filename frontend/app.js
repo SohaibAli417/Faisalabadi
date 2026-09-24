@@ -1112,9 +1112,8 @@ function POS({ client, data, refresh, online, setOnline, go }) {
 
   useEffect(() => {
     if (!cart.length) return;
-    const rows = billRef.current ? billRef.current.querySelectorAll('.bill-row') : [];
-    const last = rows[rows.length - 1];
-    if (last && last.scrollIntoView) last.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    const scroller = billRef.current ? billRef.current.querySelector('.bill-scroller') : null;
+    if (scroller) scroller.scrollTop = scroller.scrollHeight;
   }, [cart.length]);
 
   useEffect(() => {
@@ -1382,10 +1381,10 @@ function POS({ client, data, refresh, online, setOnline, go }) {
     h('div', { className: 'panel-head bill-head' },
       h('div', null, h('h2', null, t('currentInvoice')), h('p', null, `${cart.length} ${t('itemsShort')}`)),
       h(Badge, { tone: online ? 'success' : 'warning' }, online ? t('synced') : `${loadJson(queueKey, []).length} ${t('queued')}`)),
-    cart.length ? h('div', { className: 'bill-grid' },
+    cart.length ? h('div', { className: 'bill-scroller' }, h('div', { className: 'bill-grid' },
       h('div', { className: 'bill-grid-head' },
         ...[h('span', { key: 'n' }, '#'), h('span', { key: 'p' }, t('hProduct')), h('span', { key: 'q' }, t('qtyShort')), h('span', { key: 'u' }, t('unitLabelWord')), h('span', { key: 'r' }, t('rateLabel')), h('span', { key: 'l' }, t('locationLabel')), h('span', { key: 't' }, t('totalWord')), h('span', { key: 'x' }, '')]),
-      ...cart.map((item, index) => renderBillRow(item, index)))
+      ...cart.map((item, index) => renderBillRow(item, index))))
       : h('div', { className: 'empty bill-empty' }, h('h3', null, t('cartEmpty')), h('p', null, t('scanOrSelect'))));
 
   const deliverySection = h('section', { className: 'delivery-section pos-panel' },
@@ -1579,7 +1578,31 @@ function DataPage({ page, data, client, refresh }) {
         h('button', { className: 'secondary khata-btn', onClick: () => setKhata(row) }, t('khata')),
         h('button', { className: 'secondary khata-btn', onClick: () => setEditCustomer(row) }, t('editLabel')),
         canManageUdhar && Number(row.balance) > 0 && h('button', { className: 'secondary khata-btn pay-btn', onClick: () => setKhata(row) }, t('payUdhar')),
-        canManageUdhar && Number(row.balance) > 0 && h('button', { className: 'secondary khata-btn danger-btn small', onClick: () => confirmClearUdhar(row) }, t('clearShort'))));
+        canManageUdhar && Number(row.balance) > 0 && h('button', { className: 'secondary khata-btn danger-btn small', onClick: () => confirmClearUdhar(row) }, t('clearShort')),
+        h('button', { className: 'secondary khata-btn danger-btn small', onClick: () => confirmDeleteCustomer(row) }, t('delete'))));
+  }
+  async function confirmDeleteCustomer(row) {
+    const ok = await askConfirm(LANG === 'ur'
+      ? `"${row.name}" کو ڈیلیٹ کریں؟`
+      : `Delete customer "${row.name}"?`,
+      LANG === 'ur'
+      ? `یہ گاہک حذف ہو جائے گا۔ اگر اس کی بِلنگ یا اُدھار تاریخ ہے تو حذف نہیں ہو گا۔`
+      : `This customer will be deleted. If the customer has billing or udhaar history, deletion is blocked to keep old bills correct.`);
+    if (!ok) return;
+    try {
+      await client.del(`/api/customers/${row.id}`);
+      setMessage(LANG === 'ur' ? `"${row.name}" ڈیلیٹ ہو گیا۔` : `"${row.name}" deleted.`);
+      await refresh();
+    } catch (err) {
+      const msg = String((err && err.error) || (err && err.message) || '');
+      if (/CUSTOMER_IN_USE/i.test(msg) || /billing or udhaar history/i.test(msg)) {
+        setMessage(LANG === 'ur'
+          ? `"${row.name}" کی بِلنگ/اُدھار تاریخ ہے، اس لیے ڈیلیٹ نہیں ہو سکتا۔ پرانے بل محفوظ رکھنے کے لیے رکھا جاتا ہے۔`
+          : `"${row.name}" has billing/udhaar history and cannot be deleted. It is kept so old bills stay correct.`);
+      } else {
+        setMessage(friendlyError(err));
+      }
+    }
   }
   async function confirmClearUdhar(row) {
     const ok = await askConfirm(LANG === 'ur'

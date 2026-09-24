@@ -635,6 +635,18 @@ td {
 
 /* Bill / current invoice */
 .bill-section { grid-area: bill; }
+
+.bill-scroller {
+  max-height: 46vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 4px 6px;
+  scrollbar-width: thin;
+}
+.bill-scroller::-webkit-scrollbar { width: 8px; }
+.bill-scroller::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 6px; }
 .bill-head { margin-bottom: 8px; }
 
 .bill-grid {
@@ -1419,6 +1431,7 @@ td {
   .search-dropdown { position: static !important; box-shadow: none !important; max-height: 240px !important; margin-top: 8px !important; }
 
   .bill-grid { display: contents !important; }
+  .bill-scroller { max-height: 52vh !important; border: 0 !important; padding: 0 !important; }
   .bill-grid-head { display: none !important; }
   .bill-row {
     display: grid !important;

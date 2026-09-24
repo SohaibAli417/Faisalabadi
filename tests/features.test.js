@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const {
   seedData, ensureSchema, createSale, processReturn, receiveUdharPayment,
   clearUdhar, returnedQtyByItem, customerTotals, decorateCustomer,
-  createSupplier, updateSupplier, deleteSupplier, can
+  createSupplier, updateSupplier, deleteSupplier, deleteCustomer, can
 } = require('../server');
 const { mergeDbs } = require('../sync');
 
@@ -171,6 +171,21 @@ test('supplier create/update/delete works, audited, and delete is blocked once p
   const cashier = db.users.find(user => user.role === 'Cashier');
   assert.equal(can(cashier, 'purchases'), false);
   assert.equal(can(admin, 'purchases'), true);
+});
+
+test('customer create/delete works, audited, and delete is blocked once billing or udhaar history exists', () => {
+  const { db, admin } = fixture();
+  db.customers.unshift({ id: 'cus_new', name: 'Temp Buyer', phone: '0300-1234567', balance: 0, active: true });
+  deleteCustomer(db, 'cus_new', admin);
+  assert.equal(db.customers.some(item => item.id === 'cus_new'), false);
+  assert.equal(db.auditLogs.some(log => log.entity === 'customer' && log.action === 'delete'), true);
+  db.customers.unshift({ id: 'cus_keep', name: 'Has History', balance: 0, active: true });
+  db.sales = [{ id: 'sal_x', customerId: 'cus_keep', items: [], total: 50 }];
+  assert.throws(() => deleteCustomer(db, 'cus_keep', admin), /billing or udhaar history/);
+  db.sales = [];
+  db.customers = db.customers.filter(item => item.id !== 'cus_keep');
+  db.customers.unshift({ id: 'cus_debt', name: 'Owes Money', balance: 250, active: true });
+  assert.throws(() => deleteCustomer(db, 'cus_debt', admin), /billing or udhaar history/);
 });
 
 test('clear udhar zeroes the balance and preserves every history record', () => {

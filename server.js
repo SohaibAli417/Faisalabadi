@@ -838,6 +838,20 @@ function deleteSupplier(db, id, actor) {
   return { ok: true };
 }
 
+function deleteCustomer(db, id, actor) {
+  const customer = db.customers.find(item => item.id === id);
+  if (!customer) throw new Error('Customer not found');
+  const hasSales = (db.sales || []).some(sale => sale.customerId === id);
+  const hasPayments = (db.payments || []).some(payment => payment.customerId === id);
+  const hasBalance = Number(customer.balance || 0) > 0;
+  if (hasSales || hasPayments || hasBalance) {
+    throw new Error('This customer has billing or udhaar history and cannot be deleted');
+  }
+  db.customers = db.customers.filter(item => item.id !== id);
+  audit(db, actor, 'delete', 'customer', id, { name: customer.name });
+  return { ok: true };
+}
+
 function clearUdhar(db, customerId, actor) {
   const customer = db.customers.find(item => item.id === customerId);
   if (!customer) throw new Error('Customer not found');
@@ -1284,6 +1298,18 @@ async function handleApi(request, response) {
       audit(db, actor, 'update', 'customer', customer.id, { name: customer.name, ...(body.udhaarTotal !== undefined ? { udhaarTotal: money(body.udhaarTotal) } : {}), ...(body.udhaarPaid !== undefined ? { udhaarPaid: money(body.udhaarPaid) } : {}) });
       await saveDb(db);
       return json(response, 200, decorateCustomer(db, customer, customerTotals(db)));
+    }
+
+    if (method === 'DELETE' && /^\/api\/customers\/[^/]+$/.test(url.pathname)) {
+      if (!can(actor, 'customers')) return json(response, 403, { error: 'Permission denied' });
+      const id = url.pathname.split('/')[3];
+      try {
+        const result = deleteCustomer(db, id, actor);
+        await saveDb(db);
+        return json(response, 200, result);
+      } catch (err) {
+        return json(response, 409, { error: 'CUSTOMER_IN_USE', message: err.message });
+      }
     }
 
     if (method === 'GET' && /^\/api\/customers\/[^/]+\/ledger$/.test(url.pathname)) {
@@ -1783,5 +1809,6 @@ module.exports.combineDateTime = combineDateTime;
 module.exports.createSupplier = createSupplier;
 module.exports.updateSupplier = updateSupplier;
 module.exports.deleteSupplier = deleteSupplier;
+module.exports.deleteCustomer = deleteCustomer;
 module.exports.can = can;
 module.exports.permissions = permissions;
