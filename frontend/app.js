@@ -653,6 +653,7 @@ function POS({ client, data, refresh, online, setOnline, go }) {
   const [message, setMessage] = useState('');
   const searchRef = React.useRef(null);
   const customerInputRef = React.useRef(null);
+  const billRef = React.useRef(null);
   const printerCfg = loadJson(printerConfigKey, { autoPrint: false, paperSize: '80' });
   const activeProducts = (data.products || []).filter(product => product.active && product.status !== 'inactive');
   const barcodeMap = React.useMemo(() => {
@@ -700,6 +701,14 @@ function POS({ client, data, refresh, online, setOnline, go }) {
       return [...items, { productId: product.id, name: product.name, sku: product.sku || '', price: Number(product.price), qty: 1, unit: product.unit, manual: false, mode: 'qty' }];
     });
     flash(LANG === 'ur' ? `${product.name} شامل ہو گئی۔` : `${product.name} added.`);
+  }
+
+  function addFromSearch(product) {
+    addProduct(product);
+    setQuery('');
+    setSearchOpen(false);
+    setSearchIndex(-1);
+    if (searchRef.current) searchRef.current.focus();
   }
 
   function addManualItem(event) {
@@ -1012,6 +1021,13 @@ function POS({ client, data, refresh, online, setOnline, go }) {
   }, [client]);
 
   useEffect(() => {
+    if (!cart.length) return;
+    const rows = billRef.current ? billRef.current.querySelectorAll('.bill-row') : [];
+    const last = rows[rows.length - 1];
+    if (last && last.scrollIntoView) last.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [cart.length]);
+
+  useEffect(() => {
     let buffer = '';
     let bufferTimer = null;
     function handleKey(e) {
@@ -1057,11 +1073,9 @@ function POS({ client, data, refresh, online, setOnline, go }) {
     } else if (e.key === 'Enter') {
       if (searchOpen && shown.length && searchIndex >= 0 && searchIndex < shown.length) {
         e.preventDefault();
-        addProduct(shown[searchIndex]);
-        setQuery('');
-        setSearchOpen(false);
-        setSearchIndex(-1);
+        addFromSearch(shown[searchIndex]);
       }
+      setSearchOpen(false);
     } else if (e.key === 'Escape') {
       setSearchOpen(false);
     }
@@ -1203,7 +1217,7 @@ function POS({ client, data, refresh, online, setOnline, go }) {
       h('button', { className: 'secondary' + (manualOpen ? ' active' : ''), onClick: () => setManualOpen(v => !v) }, t('looseItem')),
       h('button', { className: 'secondary', onClick: () => setDraftsModal(true) }, `${t('draftsLabel')} (${(data.drafts || []).length})`)),
     searchOpen && shown.length ? h('div', { className: 'search-dropdown' },
-      shown.map((product, index) => h('button', { key: product.id, className: 'search-item' + (index === searchIndex ? ' active' : ''), onMouseEnter: () => setSearchIndex(index), onClick: () => { addProduct(product); setQuery(''); setSearchOpen(false); setSearchIndex(-1); } },
+      shown.map((product, index) => h('button', { key: product.id, className: 'search-item' + (index === searchIndex ? ' active' : ''), onMouseEnter: () => setSearchIndex(index), onClick: () => addFromSearch(product) },
         h('span', { className: 'search-item-name' }, product.name),
         h('span', { className: 'search-item-meta' }, `${product.sku ? product.sku + ' · ' : ''}${product.stock} ${unitLabel(product.unit)}`),
         isWeightUnit(product.unit)
@@ -1217,7 +1231,7 @@ function POS({ client, data, refresh, online, setOnline, go }) {
       h('select', { value: manual.unit, onChange: e => setManual({ ...manual, unit: e.target.value }) }, UNITS.map(unit => h('option', { key: unit.value, value: unit.value }, unit.urdu))),
       h('button', { className: 'primary', type: 'submit' }, t('add'))));
 
-  const billSection = h('section', { className: 'bill-section pos-panel' },
+  const billSection = h('section', { className: 'bill-section pos-panel', ref: billRef },
     h('div', { className: 'panel-head bill-head' },
       h('div', null, h('h2', null, t('currentInvoice')), h('p', null, `${cart.length} ${t('itemsShort')}`)),
       h(Badge, { tone: online ? 'success' : 'warning' }, online ? t('synced') : `${loadJson(queueKey, []).length} ${t('queued')}`)),
@@ -2643,7 +2657,7 @@ function App() {
   const visiblePages = pages.filter(([id]) => canSee(data.user, id));
   const activePage = visiblePages.some(([id]) => id === page) ? page : (visiblePages[0] || ['dashboard'])[0];
   return h('main', { className: 'app-shell', dir: LANG === 'ur' ? 'rtl' : 'ltr' },
-    h('aside', { className: 'sidebar' + (activePage === 'pos' ? ' pos-hidden' : '') + (navOpen ? ' open' : '') }, h('div', { className: 'brand' }, h('img', { className: 'brand-logo', src: 'logo.png?v=27', alt: '' }), h('div', null, h('strong', null, 'Faislabadi'), h('small', null, 'GENERAL STORE'))), h('nav', null, visiblePages.map(([id]) => h('button', { key: id, className: activePage === id ? 'nav-item active' : 'nav-item', onClick: () => { setPage(id); setNavOpen(false); } }, h('span', null, t('nav_' + id)))), h(LangToggle, { tick: bumpLang })), h('div', { className: 'sidebar-footer' }, h('div', { className: 'avatar' }, data.user.name.split(' ').map(part => part[0]).join('').slice(0, 2)), h('div', null, h('strong', null, data.user.name), h('small', null, role)), h('button', { className: 'more', onClick: () => { try { client.post('/api/auth/logout', {}).catch(() => {}); } catch (_) {} localStorage.removeItem(stateKey); setSession(null); } }, t('logout')))),
+    h('aside', { className: 'sidebar' + (navOpen ? ' open' : '') }, h('div', { className: 'brand' }, h('img', { className: 'brand-logo', src: 'logo.png?v=27', alt: '' }), h('div', null, h('strong', null, 'Faislabadi'), h('small', null, 'GENERAL STORE'))), h('nav', null, visiblePages.map(([id]) => h('button', { key: id, className: activePage === id ? 'nav-item active' : 'nav-item', onClick: () => { setPage(id); setNavOpen(false); } }, h('span', null, t('nav_' + id)))), h(LangToggle, { tick: bumpLang })), h('div', { className: 'sidebar-footer' }, h('div', { className: 'avatar' }, data.user.name.split(' ').map(part => part[0]).join('').slice(0, 2)), h('div', null, h('strong', null, data.user.name), h('small', null, role)), h('button', { className: 'more', onClick: () => { try { client.post('/api/auth/logout', {}).catch(() => {}); } catch (_) {} localStorage.removeItem(stateKey); setSession(null); } }, t('logout')))),
     h('section', { className: 'main-area' }, h('header', { className: 'topbar' }, activePage === 'pos' && h('button', { className: 'menu-btn', 'aria-label': LANG === 'ur' ? 'مینو کھولیں' : 'Open menu', onClick: () => setNavOpen(!navOpen) }, h('span', { className: 'menu-btn-icon' }, '☰')), h('div', { className: 'crumb' }, 'Faislabadi General Store / ', h('strong', null, t('nav_' + activePage))), h('div', { className: 'top-actions' },
       cloudSync && cloudSync.enabled && h('span', { className: cloudSync.lastError ? 'sync-status offline' : 'sync-status', title: cloudSync.lastSuccessAt ? `${t('cloudSyncedAt')} ${new Date(cloudSync.lastSuccessAt).toLocaleTimeString()}` : t('waitingFirstSync') }, cloudSync.lastError ? t('cloudPending') : (cloudSync.lastSuccessAt ? t('cloudSynced') : t('cloudConnecting'))),
       h('span', { className: online ? 'sync-status' : 'sync-status offline' }, online ? t('online') : t('offline')), h('button', { className: 'secondary', onClick: refresh }, t('refresh')), h(LangToggle, { tick: bumpLang }))), dataWarning && h('div', { className: 'notice danger', style: { margin: '12px 20px 0' } }, dataWarning), storageNotice && h('div', { className: 'notice warning', style: { margin: '12px 20px 0' } }, storageNotice),     activePage === 'dashboard' ? h(Dashboard, { data, go: setPage, client }) : activePage === 'pos' ? h(POS, { client, data, refresh, online, setOnline, go: setPage }) : activePage === 'users' ? h(UsersAdmin, { client }) : activePage === 'returns' ? h(ReturnsPage, { data, client, refresh }) : activePage === 'reports' ? h(Reports, { data, client }) : activePage === 'purchases' ? h(Purchases, { data, client, refresh }) : activePage === 'settings' ? h(Settings, { data, client }) : activePage === 'warehouse' ? h(WarehousePage, { data, client, refresh }) : h(DataPage, { page: activePage, data, client, refresh })));
