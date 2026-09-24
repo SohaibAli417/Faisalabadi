@@ -564,6 +564,13 @@ td {
 }
 
 .search-item:hover, .search-item.active { background: #eefaf1; }
+.search-item-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
 .search-item-name {
   font-weight: 700;
   font-size: 13px;
@@ -575,6 +582,28 @@ td {
 }
 .search-item-meta { font-size: 12px; color: var(--muted); white-space: nowrap; }
 .search-item-price { font-size: 12px; font-weight: 800; color: var(--green); white-space: nowrap; }
+.search-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  width: 100%;
+  flex-wrap: wrap;
+}
+.qty-preset-label { font-size: 11px; color: var(--muted); font-weight: 700; }
+.qty-preset {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 6px;
+  padding: 3px 9px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  color: var(--ink);
+  font-family: inherit;
+}
+.qty-preset:hover { border-color: var(--green); color: var(--green); }
+.qty-preset.add-one { background: #eefaf1; border-color: #b9e3c9; color: var(--green); }
 .search-empty { padding: 16px; text-align: center; color: var(--muted); font-size: 13px; }
 .walkin-item .search-item-name { color: var(--muted); font-weight: 600; }
 
@@ -792,6 +821,82 @@ td {
   font-size: 13px;
 }
 .customer-balance span { color: var(--muted); font-size: 12px; }
+
+/* Customer udhaar profile in POS (right column) */
+.cust-profile {
+  background: #fff;
+  border: 1px solid #e6eef0;
+  border-radius: 10px;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+.cust-profile-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: linear-gradient(135deg, #f0faf5, #e9f4f0);
+  border-bottom: 1px solid #e6eef0;
+}
+.cust-profile-head .avatar { width: 40px; height: 40px; font-size: 13px; flex: none; }
+.cust-profile-id { min-width: 0; flex: 1; }
+.cust-profile-id strong { display: block; font-size: 14px; }
+.cust-profile-id small { color: #64748b; font-size: 11px; word-break: break-all; }
+.cust-months { max-height: 300px; overflow-y: auto; }
+.cust-month { border-bottom: 1px solid #eef2f5; }
+.cust-month:last-child { border-bottom: 0; }
+.cust-month-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: #f8fafc;
+  font-size: 12px;
+}
+.cust-month-head span { color: #64748b; font-size: 11px; }
+.cust-sale { padding: 8px 14px; border-top: 1px dashed #edf1f4; }
+.cust-sale:first-of-type { border-top: 0; }
+.cust-sale-meta { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
+.cust-sale-meta strong { color: var(--green); }
+.cust-sale-meta span { color: #64748b; }
+.cust-item-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  padding: 2px 0;
+}
+.cust-item-name { min-width: 0; overflow-wrap: anywhere; color: #334155; }
+.cust-item-amt { flex: none; color: #334155; font-weight: 600; }
+.cust-sale-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px dotted #e5eaee;
+  font-size: 12px;
+}
+.wa-btn {
+  display: inline-block;
+  background: #25d366;
+  color: #fff !important;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 7px 12px;
+  border-radius: 8px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.wa-btn:hover { background: #1eb656; }
+.wa-na { color: #94a3b8; font-size: 11px; }
+.profile-empty { padding: 12px 14px; color: #64748b; font-size: 12px; }
+.ledger-entry .entry-wa { padding: 5px 10px; font-size: 11px; margin-left: 8px; flex: none; }
+.profile-head { flex-wrap: wrap; }
+.profile-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cust-uid { color: #64748b; font-size: 11px; word-break: break-all; }
 
 .pay-options {
   display: grid;
@@ -1541,6 +1646,7 @@ html[dir='rtl'] .metric-card p, html[dir='rtl'] .metric-card h3, html[dir='rtl']
 
 /* EDITABLE TABLES + EDIT MODALS */
 .muted { color: var(--muted); }
+.row-id { font-size: 11px; color: var(--muted); font-weight: 600; margin-top: 2px; }
 .small { padding: 5px 10px !important; font-size: 12px; }
 .payment-form input[type='date'], .payment-form input[type='time'] { flex: 0 0 auto; width: 138px; }
 

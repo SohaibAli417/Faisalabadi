@@ -127,7 +127,7 @@ const STRINGS = {
     walkIn: 'Walk-in Customer', voided: 'Voided', posted: 'Posted', noSalesYet: 'No sales recorded yet.',
     counterOnline: 'COUNTER ONLINE', counterOffline: 'COUNTER OFFLINE', synced: 'Synced', queued: 'queued', revertBill: 'Revert / Return bill',
     searchPlaceholder: 'Scan barcode or search product name', looseItem: 'Loose item (کھلا مال)', productName: 'Product name',
-    ratePer: 'Rate per', weightQty: 'Weight/Qty', add: 'Add', available: 'available', currentInvoice: 'CURRENT INVOICE', cart: 'Cart',
+    ratePer: 'Rate per', weightQty: 'Weight/Qty', add: 'Add', qtyAdd: 'Qty', available: 'available', currentInvoice: 'CURRENT INVOICE', cart: 'Cart',
     cash: 'Cash', card: 'Card', credit: 'Credit', cartEmpty: 'Cart is empty', scanOrSelect: 'Scan or select a product.',
     discount: 'Discount', taxWord: 'Tax', subtotal: 'Subtotal', customerPaysNow: 'Customer pays now', udharRemaining: 'Udhar (remaining)',
     fullyPaid: 'Fully paid', total: 'Total', paidNowFull: 'Paid now', full: 'Full', none: 'None',
@@ -194,6 +194,7 @@ const STRINGS = {
     preparedBy: 'Prepared By', checkedBy: 'Checked By', locationLabel: 'Location', removeLabel: 'Remove',
     amountWord: 'Amount', quantityWord: 'Quantity', qtyShort: 'Qty', unitLabelWord: 'UOM', rateLabel: 'Rate',
     totalWord: 'Total', draftSavedMsg: 'Draft saved.', draftDeletedMsg: 'Draft deleted.', draftLoadedMsg: 'Draft loaded.',
+    billWord: 'bills', whatsappBill: 'WhatsApp Bill', noWhatsapp: 'No WhatsApp number',
     unavailable: 'Unavailable', notSavedPreview: 'PREVIEW - NOT SAVED', loadingDrafts: 'Load', openDrafts: 'Open draft',
     saveDraftFirst: 'Save a draft first', noDrafts: 'No drafts saved yet.', createdBy2: 'By', itemsShort: 'items',
     newSaleConfirm: 'Start a new sale? Current bill will be cleared.', cancelSaleConfirm: 'Cancel current bill? Items will be cleared.',
@@ -223,7 +224,7 @@ const STRINGS = {
     walkIn: 'عمومی گاہک', voided: 'منسوخ', posted: 'درج', noSalesYet: 'ابھی کوئی فروخت نہیں ہوئی۔',
     counterOnline: 'کاؤنٹر آن لائن', counterOffline: 'کاؤنٹر آف لائن', synced: 'سنک', queued: 'زیرِ انتظار', revertBill: 'بل واپسی / ریٹرن',
     searchPlaceholder: 'بارکوڈ اسکین کریں یا پروڈکٹ کا نام لکھیں', looseItem: 'کھلا مال', productName: 'پروڈکٹ کا نام',
-    ratePer: 'ریٹ فی', weightQty: 'وزن/تعداد', add: 'شامل کریں', available: 'موجود', currentInvoice: 'موجودہ بل', cart: 'کارٹ',
+    ratePer: 'ریٹ فی', weightQty: 'وزن/تعداد', add: 'شامل کریں', qtyAdd: 'تعداد', available: 'موجود', currentInvoice: 'موجودہ بل', cart: 'کارٹ',
     cash: 'نقد', card: 'کارڈ', credit: 'اُدھار', cartEmpty: 'کارٹ خالی ہے', scanOrSelect: 'پروڈکٹ اسکین کریں یا منتخب کریں۔',
     discount: 'رعایت', taxWord: 'ٹیکس', subtotal: 'ذیلی کل', customerPaysNow: 'گاہک اب دے رہا ہے', udharRemaining: 'اُدھار (باقی)',
     fullyPaid: 'مکمل ادائیگی', total: 'ٹوٹل', paidNowFull: 'ابھی ادائیگی', full: 'پورا', none: 'کچھ نہیں',
@@ -290,6 +291,7 @@ const STRINGS = {
     preparedBy: 'تیار کرنے والا', checkedBy: 'چیک کرنے والا', locationLabel: 'لوکیشن', removeLabel: 'ہٹائیں',
     amountWord: 'رقم', quantityWord: 'تعداد', qtyShort: 'تعداد', unitLabelWord: 'اکائی', rateLabel: 'ریٹ',
     totalWord: 'کل', draftSavedMsg: 'ڈرافٹ محفوظ ہو گیا۔', draftDeletedMsg: 'ڈرافٹ ڈیلیٹ ہو گیا۔', draftLoadedMsg: 'ڈرافٹ لوڈ ہو گیا۔',
+    billWord: 'بل', whatsappBill: 'واٹس ایپ بل', noWhatsapp: 'واٹس ایپ نمبر نہیں',
     unavailable: 'دستیاب نہیں', notSavedPreview: 'پری ویو - محفوظ نہیں', loadingDrafts: 'کھولیں', openDrafts: 'ڈرافٹ کھولیں',
     saveDraftFirst: 'پہلے ڈرافٹ محفوظ کریں', noDrafts: 'ابھی کوئی ڈرافٹ محفوظ نہیں۔', createdBy2: 'بذریعہ', itemsShort: 'آئٹمز',
     newSaleConfirm: 'نئی سیل شروع کریں؟ موجودہ بل صاف ہو جائے گا۔', cancelSaleConfirm: 'موجودہ بل منسوخ کریں؟ آئٹمز صاف ہو جائیں گے۔',
@@ -539,6 +541,69 @@ const DELIVERY_FIELDS = [
 const DELIVERY_LABELS = { deliverTo: 'deliverTo', deliverAddress: 'deliverAddress', transport: 'transport', trNo: 'trNo', cases: 'noCases', freight: 'freightCharges', deliveryDate: 'deliveryDate', orderTaker: 'orderTaker', salesPerson: 'salesPerson', packedBy: 'packedBy', preparedBy: 'preparedBy', checkedBy: 'checkedBy' };
 const paymentMethodLabel = type => ({ Cash: 'cash', Card: 'card', Credit: 'udhaarPayment', Partial: 'partialPayment' }[type] ? t({ Cash: 'cash', Card: 'card', Credit: 'udhaarPayment', Partial: 'partialPayment' }[type]) : type);
 
+const waNumber = phone => {
+  if (!phone) return '';
+  const digits = String(phone).replace(/[^0-9]/g, '');
+  if (!digits) return '';
+  if (digits.startsWith('92') && digits.length === 12 && !digits.startsWith('920')) return digits;
+  if (digits.startsWith('0') && digits.length === 11) return '92' + digits.slice(1);
+  return digits;
+};
+const waLink = (phone, text) => {
+  const number = waNumber(phone);
+  return number ? `https://wa.me/${number}?text=${encodeURIComponent(text || '')}` : null;
+};
+function saleBillText(sale, settings) {
+  const lines = [];
+  const storeName = (settings && settings.storeName) || 'Faislabadi General Store';
+  const storePhone = (settings && settings.phone) || '';
+  const storeAddress = (settings && settings.address) || '';
+  lines.push('*' + storeName + '*');
+  if (storeAddress) lines.push(storeAddress);
+  if (storePhone) lines.push(storePhone);
+  lines.push('--------------------------------');
+  lines.push((LANG === 'ur' ? 'انوائس' : 'Invoice') + ': ' + (sale.invoiceNo || '-'));
+  lines.push((LANG === 'ur' ? 'تاریخ / وقت' : 'Date / Time') + ': ' + new Date(sale.at || sale.createdAt).toLocaleString('en-PK'));
+  lines.push('--------------------------------');
+  (sale.items || []).forEach(item => {
+    const qty = Number(item.qty) || 0;
+    const price = Number(item.price) || 0;
+    lines.push(item.name || '');
+    lines.push(`   ${qty} ${unitLabel(item.unit)}  x  ${money(price)}  =  ${money(qty * price)}`);
+  });
+  lines.push('--------------------------------');
+  lines.push((LANG === 'ur' ? 'کل رقم' : 'Total') + ': ' + money(sale.amount || sale.total || 0));
+  if (sale.paidAtBilling || (sale.paidAmount && Number(sale.paidAmount) > 0)) {
+    lines.push((LANG === 'ur' ? 'ادا شدہ' : 'Paid') + ': ' + money(sale.paidAtBilling || sale.paidAmount || 0));
+  }
+  const due = Math.max(0, Number(sale.amount || sale.total || 0) - Number(sale.paidAmount || 0));
+  if (due > 0) lines.push((LANG === 'ur' ? 'باقی اُدھار' : 'Udhar Due') + ': ' + money(due));
+  lines.push('--------------------------------');
+  lines.push(LANG === 'ur' ? 'شکریہ! دوبارہ تشریف لائیں۔' : 'Thank you! Visit again.');
+  return lines.join('\n');
+}
+function khataStatementText(customer, entries, balance, settings) {
+  const lines = [];
+  const storeName = (settings && settings.storeName) || 'Faislabadi General Store';
+  const storeAddress = (settings && settings.address) || '';
+  const storePhone = (settings && settings.phone) || '';
+  lines.push('*' + storeName + '*' + (storeAddress ? '\n' + storeAddress : '') + (storePhone ? '\n' + storePhone : ''));
+  lines.push('--------------------------------');
+  lines.push((LANG === 'ur' ? 'کھاتہ' : 'Khata') + ': ' + (customer.name || '-'));
+  lines.push((LANG === 'ur' ? 'عددی شناخت' : 'ID') + ': #' + (customer.id || '-'));
+  lines.push('--------------------------------');
+  (entries || []).slice(0, 30).forEach(entry => {
+    lines.push((entry.type === 'sale' ? '+' : '-') + ' ' + money(entry.amount) + '  ' + new Date(entry.at).toLocaleDateString('en-PK') + (entry.invoiceNo ? '  ' + entry.invoiceNo : ''));
+    (entry.items || []).forEach(item => {
+      lines.push(`     ${item.name} ×${item.qty}${item.unit ? ' ' + unitLabel(item.unit) : ''}`);
+    });
+  });
+  lines.push('--------------------------------');
+  lines.push((LANG === 'ur' ? 'باقی اُدھار' : 'Balance Due') + ': ' + money(balance));
+  lines.push(LANG === 'ur' ? 'شکریہ!' : 'Thank you!');
+  return lines.join('\n');
+}
+
 function ScanCamera({ onCode, onClose }) {
   const videoRef = React.useRef(null);
   const [error, setError] = useState('');
@@ -651,6 +716,7 @@ function POS({ client, data, refresh, online, setOnline, go }) {
   const [cameraOpen, setCameraOpen] = useState(false);
   const [draftsModal, setDraftsModal] = useState(false);
   const [message, setMessage] = useState('');
+  const [profile, setProfile] = useState(null);
   const searchRef = React.useRef(null);
   const customerInputRef = React.useRef(null);
   const billRef = React.useRef(null);
@@ -708,6 +774,17 @@ function POS({ client, data, refresh, online, setOnline, go }) {
     setQuery('');
     setSearchOpen(false);
     setSearchIndex(-1);
+    if (searchRef.current) searchRef.current.focus();
+  }
+
+  function addProductQty(product, qty) {
+    const addQty = isWeightUnit(product.unit) ? round3(Number(qty)) : Math.max(1, Math.round(Number(qty) || 1));
+    setCart(items => {
+      const old = items.find(item => item.productId === product.id);
+      if (old) return items.map(item => item.productId === product.id ? { ...item, qty: round3(Number(item.qty) + addQty) } : item);
+      return [...items, { productId: product.id, name: product.name, sku: product.sku || '', price: Number(product.price), qty: addQty, unit: product.unit, manual: false, mode: 'qty' }];
+    });
+    flash(LANG === 'ur' ? `${product.name} ${addQty} ${unitLabel(product.unit)} شامل ہوئی۔` : `${addQty} ${unitLabel(product.unit)} of ${product.name} added.`);
     if (searchRef.current) searchRef.current.focus();
   }
 
@@ -770,6 +847,19 @@ function POS({ client, data, refresh, online, setOnline, go }) {
     setCustomerOpen(false);
     setCustomerIdx(-1);
   }
+
+  useEffect(() => {
+    let stopped = false;
+    if (!customerId || customerId === 'cus_walkin') {
+      setProfile(null);
+      return undefined;
+    }
+    setProfile(null);
+    client.get(`/api/customers/${customerId}/ledger`)
+      .then(payload => { if (!stopped) setProfile(payload); })
+      .catch(() => { if (!stopped) setProfile(null); });
+    return () => { stopped = true; };
+  }, [customerId, client, data.user && data.user.role]);
 
   function resetSale() {
     setCart([]);
@@ -1144,6 +1234,57 @@ function POS({ client, data, refresh, online, setOnline, go }) {
         h('strong', { style: Number(selectedCustomer.balance) > 0 ? { color: '#c0392b' } : { color: '#267152' } }, money(selectedCustomer.balance))));
   }
 
+  function renderCustomerProfile() {
+    if (!customerId || customerId === 'cus_walkin' || !selectedCustomer) return null;
+    const entries = (profile && profile.entries) || [];
+    const sales = entries.filter(entry => entry.type === 'sale');
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    const recent = sales.filter(entry => new Date(entry.at) >= sixMonthsAgo);
+    const byMonth = {};
+    recent.forEach(sale => {
+      const key = sale.at.slice(0, 7);
+      (byMonth[key] = byMonth[key] || []).push(sale);
+    });
+    const monthKeys = Object.keys(byMonth).sort().reverse();
+
+    function profileSaleRow(sale) {
+      const waBtn = waLink(selectedCustomer.phone, saleBillText(sale, data.settings))
+        ? h('a', { className: 'wa-btn', href: waLink(selectedCustomer.phone, saleBillText(sale, data.settings)), target: '_blank', rel: 'noreferrer' }, t('whatsappBill'))
+        : h('span', { className: 'wa-na' }, t('noWhatsapp'));
+      return h('div', { className: 'cust-sale', key: sale.id },
+        h('div', { className: 'cust-sale-meta' },
+          h('strong', null, sale.invoiceNo),
+          h('span', null, new Date(sale.at).toLocaleString('en-PK', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }))),
+        (sale.items || []).map((item, idx) => h('div', { className: 'cust-item-row', key: idx },
+          h('span', { className: 'cust-item-name' }, `${item.name} ×${item.qty}${item.unit ? ' ' + unitLabel(item.unit) : ''}`),
+          h('span', { className: 'cust-item-amt' }, money(item.amount || item.price * item.qty)))),
+        h('div', { className: 'cust-sale-foot' },
+          h('strong', null, `${t('totalWord')}: ${money(sale.amount)}`),
+          waBtn));
+    }
+
+    function profileMonth(monthKey) {
+      return h('div', { className: 'cust-month', key: monthKey },
+        h('div', { className: 'cust-month-head' },
+          h('strong', null, new Date(monthKey + '-01').toLocaleDateString('en-PK', { month: 'long', year: 'numeric' })),
+          h('span', null, `${byMonth[monthKey].length} ${t('billWord')}`)),
+        byMonth[monthKey].map(profileSaleRow));
+    }
+
+    return h('div', { className: 'cust-profile' },
+      h('div', { className: 'cust-profile-head' },
+        h('span', { className: 'avatar' }, initialsOf(selectedCustomer.name)),
+        h('div', { className: 'cust-profile-id' },
+          h('strong', null, selectedCustomer.name),
+          h('small', null, `#${selectedCustomer.id}`)),
+        h('span', { className: `badge ${Number(selectedCustomer.balance) > 0 ? 'warning' : 'success'}` },
+          Number(selectedCustomer.balance) > 0 ? `${t('udharBadge')} ${money(selectedCustomer.balance)}` : t('clearBadge'))),
+      monthKeys.length === 0
+        ? h('p', { className: 'profile-empty' }, LANG === 'ur' ? 'پچھلے 6 ماہ میں اُدھار نہیں۔' : 'No udhaar in the last 6 months.')
+        : h('div', { className: 'cust-months' }, monthKeys.map(profileMonth)));
+  }
+
   function renderPaymentPanel() {
     return h('div', null,
       h('div', { className: 'checkout-title' }, h('h3', null, t('paymentLabel'))),
@@ -1217,12 +1358,18 @@ function POS({ client, data, refresh, online, setOnline, go }) {
       h('button', { className: 'secondary' + (manualOpen ? ' active' : ''), onClick: () => setManualOpen(v => !v) }, t('looseItem')),
       h('button', { className: 'secondary', onClick: () => setDraftsModal(true) }, `${t('draftsLabel')} (${(data.drafts || []).length})`)),
     searchOpen && shown.length ? h('div', { className: 'search-dropdown' },
-      shown.map((product, index) => h('button', { key: product.id, className: 'search-item' + (index === searchIndex ? ' active' : ''), onMouseEnter: () => setSearchIndex(index), onClick: () => addFromSearch(product) },
-        h('span', { className: 'search-item-name' }, product.name),
-        h('span', { className: 'search-item-meta' }, `${product.sku ? product.sku + ' · ' : ''}${product.stock} ${unitLabel(product.unit)}`),
-        isWeightUnit(product.unit)
-          ? h('span', { className: 'search-item-price' }, `${money(product.price)}/${unitLabel(product.unit)}`)
-          : h('span', { className: 'search-item-price' }, money(product.price)))))
+      shown.map((product, index) => h('div', { key: product.id, className: 'search-item' + (index === searchIndex ? ' active' : ''), onMouseEnter: () => setSearchIndex(index), onClick: () => addFromSearch(product) },
+        h('div', { className: 'search-item-top' },
+          h('span', { className: 'search-item-name' }, product.name),
+          h('span', { className: 'search-item-meta' }, `${product.sku ? product.sku + ' · ' : ''}${product.stock} ${unitLabel(product.unit)}`),
+          isWeightUnit(product.unit)
+            ? h('span', { className: 'search-item-price' }, `${money(product.price)}/${unitLabel(product.unit)}`)
+            : h('span', { className: 'search-item-price' }, money(product.price))),
+        h('div', { className: 'search-item-actions' },
+          h('span', { className: 'qty-preset-label' }, t('qtyAdd')),
+          [isWeightUnit(product.unit) ? 0.5 : 1, isWeightUnit(product.unit) ? 1 : 2, isWeightUnit(product.unit) ? 2 : 5].map(qty =>
+            h('button', { key: qty, className: 'qty-preset', onClick: e => { e.stopPropagation(); addProductQty(product, qty); } }, `${qty}${isWeightUnit(product.unit) ? unitLabel(product.unit) : ''}`)),
+          h('button', { className: 'qty-preset add-one', onClick: e => { e.stopPropagation(); addFromSearch(product); } }, t('add'))))))
       : searchOpen && h('div', { className: 'search-dropdown' }, h('div', { className: 'search-empty' }, t('noMatchingProducts'))),
     manualOpen && h('form', { className: 'manual-form', onSubmit: addManualItem },
       h('input', { value: manual.name, onChange: e => setManual({ ...manual, name: e.target.value }), placeholder: t('productName'), required: true }),
@@ -1251,6 +1398,7 @@ function POS({ client, data, refresh, online, setOnline, go }) {
           : h('input', { value: delivery[key] || '', onChange: e => setDeliveryField(key, e.target.value) })))));
 
   const checkoutSection = h('section', { className: 'checkout-section pos-panel' },
+    renderCustomerProfile(),
     h('div', { className: 'checkout-grid' },
       h('article', { className: 'checkout-panel customer-panel' }, renderCustomerPanel()),
       h('article', { className: 'checkout-panel payment-panel' }, renderPaymentPanel()),
@@ -1418,7 +1566,7 @@ function DataPage({ page, data, client, refresh }) {
   function customerRow(row) {
     const canManageUdhar = data.user.role === 'Admin' || data.user.role === 'Manager';
     return h('tr', { key: row.id },
-      h('td', null, h('strong', null, row.name)),
+      h('td', null, h('strong', null, row.name), h('div', { className: 'row-id' }, `#${row.id}`)),
       h('td', null, row.phone || ''),
       h('td', null, row.cnicMasked || ''),
       h('td', null, money(row.creditPurchases || 0)),
@@ -1540,7 +1688,7 @@ function DataPage({ page, data, client, refresh }) {
         : (LANG === 'ur' ? 'پروڈکٹ کا نام تلاش کریں...' : 'Search products by name...') })),
       rows.length < allRows.length && h('small', { className: 'muted' }, `${rows.length} / ${allRows.length}`)),
     h('article', { className: 'panel data-panel' }, h('div', { className: 'table-wrap' }, h('table', null, thead, tbody))),
-    khata && h(KhataModal, { customer: khata, client, onClose: () => setKhata(null), refresh }),
+    khata && h(KhataModal, { customer: khata, client, settings: data.settings, onClose: () => setKhata(null), refresh }),
     editCustomer && h(CustomerEditModal, { customer: editCustomer, client, refresh, products: data.products || [], canEditUdhar: data.user.role === 'Admin' || data.user.role === 'Manager', onClose: () => setEditCustomer(null) }),
     editProduct && h(ProductEditModal, { product: editProduct, client, refresh, onClose: () => setEditProduct(null) }));
 }
@@ -1686,7 +1834,7 @@ function WarehousePage({ data, client, refresh }) {
     editWh && h(WarehouseEditModal, { item: editWh, client, refresh, onClose: () => setEditWh(null) }));
 }
 
-function KhataModal({ customer, client, onClose, refresh }) {
+function KhataModal({ customer, client, settings, onClose, refresh }) {
   const [entries, setEntries] = useState(null);
   const [summary, setSummary] = useState({ creditPurchases: customer.creditPurchases || 0, totalPaid: customer.totalPaid || 0 });
   const [balance, setBalance] = useState(customer.balance);
@@ -1772,8 +1920,11 @@ function KhataModal({ customer, client, onClose, refresh }) {
           h('div', { className: 'profile-title' },
             h('p', { className: 'eyebrow' }, t('udharKhataEyebrow')),
             h('h2', null, customer.name),
+            h('small', { className: 'cust-uid' }, `#${customer.id}`),
             customer.phone && h('p', { className: 'subtitle' }, customer.phone))),
-        h('span', { className: `badge ${Number(balance) > 0 ? 'warning' : 'success'}` }, Number(balance) > 0 ? `${t('udharBadge')} ${money(balance)}` : t('clearBadge'))),
+        h('div', { className: 'profile-actions' },
+          customer.phone && h('a', { className: 'wa-btn', href: customer.phone ? waLink(customer.phone, khataStatementText(customer, entries, balance, settings)) : null, target: '_blank', rel: 'noreferrer' }, t('whatsappBill')),
+          h('span', { className: `badge ${Number(balance) > 0 ? 'warning' : 'success'}` }, Number(balance) > 0 ? `${t('udharBadge')} ${money(balance)}` : t('clearBadge')))),
       h('div', { className: 'profile-details' },
         h('div', null, h('span', null, t('hPhone')), h('b', null, customer.phone || '-')),
         h('div', null, h('span', null, t('hCnic')), h('b', null, customer.cnicMasked || '-')),
@@ -1806,7 +1957,10 @@ function KhataModal({ customer, client, onClose, refresh }) {
               : `${t('paymentReceived')}${entry.invoiceNo ? ' (' + entry.invoiceNo + ')' : ''}${entry.note && !entry.invoiceNo ? ' - ' + entry.note : ''}`),
             entry.products && h('small', null, entry.products),
             h('small', null, `${when(entry.at)}${entry.createdBy ? ' - ' + entry.createdBy : ''}${entry.note && entry.invoiceNo ? ' - ' + entry.note : ''}`)),
-          h('b', { className: entry.type === 'sale' ? 'amount-due' : 'amount-paid' }, entry.type === 'sale' ? `+${money(entry.amount)}` : `-${money(entry.amount)}`)))),
+          h('b', { className: entry.type === 'sale' ? 'amount-due' : 'amount-paid' }, entry.type === 'sale' ? `+${money(entry.amount)}` : `-${money(entry.amount)}`),
+          entry.type === 'sale' && waLink(customer.phone, saleBillText(entry, settings))
+            ? h('a', { className: 'wa-btn entry-wa', href: waLink(customer.phone, saleBillText(entry, settings)), target: '_blank', rel: 'noreferrer' }, t('whatsappBill'))
+            : null))),
       h('div', { className: 'success-actions no-print' }, h('button', { className: 'primary', onClick: onClose }, t('close'))))),
     document.body);
 }

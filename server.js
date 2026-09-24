@@ -1301,6 +1301,14 @@ async function handleApi(request, response) {
           amount: sale.total,
           paidAtBilling: money(sale.paidAmount),
           products: sale.items.map(item => `${item.name} x${item.qty}`).join(', '),
+          items: (sale.items || []).map(item => ({
+            name: item.name,
+            sku: item.sku || '',
+            qty: Number(item.qty) || 0,
+            unit: item.unit || 'pcs',
+            price: Number(item.price) || 0,
+            amount: Math.round((Number(item.price) || 0) * (Number(item.qty) || 0))
+          })),
           createdBy: sale.createdByName || ''
         }));
       const payments = (db.payments || [])
