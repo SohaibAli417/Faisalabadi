@@ -341,11 +341,42 @@ td {
   gap: 8px;
 }
 
-.ledger-entry {
+.ledger-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.ledger-filter select {
+  padding: 7px 10px;
+  border: 1.5px solid var(--line);
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  background: #fff;
+}
+.ledger-balance-tip {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.ledger-month { display: flex; flex-direction: column; gap: 8px; }
+.ledger-month-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 10px;
+  padding: 2px 0 0;
+  margin-top: 8px;
+  border-bottom: 1px solid var(--line);
+}
+.ledger-month-head strong { font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--ink); }
+.ledger-month-head span { font-size: 12px; color: var(--muted); }
+
+.ledger-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   padding: 10px 12px;
   border-radius: 8px;
   background: #f6f7fb;
@@ -356,6 +387,10 @@ td {
 
 .entry-info { display: flex; flex-direction: column; }
 .entry-info small { color: #64748b; }
+.entry-amounts { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.entry-balance { font-size: 11px; color: var(--muted); font-weight: 600; }
+.entry-actions { display: flex; align-items: center; gap: 6px; justify-content: flex-end; }
+.entry-reverse { padding: 5px 10px !important; font-size: 11px !important; flex: none; }
 
 .amount-due { color: var(--red); }
 .amount-paid { color: var(--green); }
@@ -651,9 +686,10 @@ td {
 
 .bill-grid {
   display: grid;
-  grid-template-columns: 30px minmax(0, 1fr) 140px 58px 86px 66px 88px 34px;
-  grid-template-areas: "billNo billProduct billQty billUom billRate billLoc billTotal billRemove";
+  grid-template-columns: minmax(0, 1fr) 150px 58px 88px 96px 36px;
+  grid-template-areas: "billProduct billQty billUom billRate billTotal billRemove";
   gap: 0 8px;
+  align-items: center;
 }
 
 .bill-grid-head { display: contents; }
@@ -666,19 +702,15 @@ td {
   padding: 8px 4px;
   border-bottom: 2px solid var(--line);
 }
-.bill-grid-head span:nth-child(1) { grid-area: billNo; text-align: center; }
-.bill-grid-head span:nth-child(2) { grid-area: billProduct; }
-.bill-grid-head span:nth-child(3) { grid-area: billQty; text-align: center; }
-.bill-grid-head span:nth-child(4) { grid-area: billUom; text-align: center; }
-.bill-grid-head span:nth-child(5) { grid-area: billRate; text-align: right; }
-.bill-grid-head span:nth-child(6) { grid-area: billLoc; text-align: center; }
-.bill-grid-head span:nth-child(7) { grid-area: billTotal; text-align: right; }
-.bill-grid-head span:nth-child(8) { grid-area: billRemove; text-align: center; }
+.bill-grid-head span:nth-child(1) { grid-area: billProduct; }
+.bill-grid-head span:nth-child(2) { grid-area: billQty; text-align: center; }
+.bill-grid-head span:nth-child(3) { grid-area: billUom; text-align: center; }
+.bill-grid-head span:nth-child(4) { grid-area: billRate; text-align: right; }
+.bill-grid-head span:nth-child(5) { grid-area: billTotal; text-align: right; }
+.bill-grid-head span:nth-child(6) { grid-area: billRemove; text-align: center; }
 
 .bill-row { display: contents; }
 .bill-row.low-stock .bill-product strong { color: var(--red); }
-
-.bill-no { grid-area: billNo; text-align: center; color: var(--muted); }
 .bill-product {
   grid-area: billProduct;
   display: flex;
@@ -717,7 +749,6 @@ td {
 }
 .bill-uom { grid-area: billUom; text-align: center; color: var(--muted); font-size: 12px; }
 .bill-rate { grid-area: billRate; text-align: right; }
-.bill-loc { grid-area: billLoc; text-align: center; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
 .bill-total { grid-area: billTotal; text-align: right; font-weight: 800; }
 .bill-remove {
   grid-area: billRemove;
@@ -1267,7 +1298,7 @@ td {
   .dashboard-grid { grid-template-columns: 1fr; }
 
   .pos-layout { grid-template-columns: minmax(0, 1fr) 320px; gap: 12px; }
-  .bill-grid { grid-template-columns: 28px minmax(0, 1fr) 120px 52px 76px 56px 78px 30px; }
+  .bill-grid { grid-template-columns: minmax(0, 1fr) 130px 52px 78px 86px 32px; }
   .invoice-header { gap: 12px 16px; }
 }
 
@@ -1284,7 +1315,7 @@ td {
       "checkout";
   }
   .pos-page { padding: 16px 14px 0; }
-  .bill-grid { grid-template-columns: 28px minmax(0, 1fr) 110px 52px 70px 52px 70px 30px; }
+  .bill-grid { grid-template-columns: minmax(0, 1fr) 120px 52px 72px 80px 32px; }
 }
 
 /* MOBILE: up to 760px */
@@ -1440,7 +1471,7 @@ td {
       "billProduct billRemove"
       "billQty billQty"
       "billUom billRate"
-      "billLoc billTotal" !important;
+      "billTotal billTotal" !important;
     gap: 6px 10px !important;
     align-items: center !important;
     padding: 10px !important;
@@ -1449,7 +1480,6 @@ td {
     margin-bottom: 8px !important;
     background: #fff !important;
   }
-  .bill-row .bill-no { display: none !important; }
 
   .customer-balance { margin-top: 8px !important; }
   .summary-row.grand strong { font-size: 18px !important; }
@@ -1608,6 +1638,10 @@ td {
 @media (max-width: 760px) {
   .khata-summary { grid-template-columns: 1fr; }
   .partial-pay-row { flex-wrap: wrap; }
+  .ledger-filter { flex-wrap: wrap; }
+  .ledger-filter select { flex: 1; min-width: 0; }
+  .ledger-balance-tip { margin-left: auto; }
+  .entry-actions { justify-content: flex-start; flex-wrap: wrap; }
 }
 
 /* ===== Urdu RTL mode (v12) ===== */

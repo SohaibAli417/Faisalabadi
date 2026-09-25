@@ -590,7 +590,7 @@ function customerTotals(db) {
     entry(sale.customerId).creditPurchases += money(sale.total);
   }
   for (const payment of db.payments || []) {
-    if (!payment.customerId || payment.customerId === 'cus_walkin') continue;
+    if (!payment.customerId || payment.customerId === 'cus_walkin' || payment.voided) continue;
     const totals = entry(payment.customerId);
     totals.totalPaid += money(payment.amount);
     const atMs = new Date(payment.at || 0).getTime();
@@ -861,6 +861,64 @@ function clearUdhar(db, customerId, actor) {
   result.cleared = true;
   result.previousBalance = balance;
   return result;
+}
+
+function voidSale(db, sale, actor) {
+  if (sale.voided) throw new Error('Sale already voided');
+  sale.voided = true;
+  sale.voidedAt = now();
+  sale.voidedBy = actor.id;
+  const changedAt = now();
+  for (const item of sale.items || []) {
+    if (!item.productId) continue;
+    const product = db.products.find(row => row.id === item.productId);
+    if (product) {
+      product.stock = Number(product.stock) + Number(item.qty);
+      product._updatedAt = changedAt;
+      db.stockMovements.unshift({ id: uid('stm'), at: changedAt, productId: product.id, type: 'void', qty: Number(item.qty), note: `Void ${sale.invoiceNo}` });
+    }
+  }
+  const due = money(sale.dueAmount);
+  if (due > 0 && sale.customerId && sale.customerId !== 'cus_walkin') {
+    const customer = db.customers.find(row => row.id === sale.customerId);
+    if (customer) {
+      customer.balance = Math.max(0, money(Number(customer.balance) - due));
+      if (customer.recordedTotal !== undefined && customer.recordedTotal !== null && customer.recordedTotal !== '') {
+        customer.recordedTotal = Math.max(0, money(Number(customer.recordedTotal) - due));
+      }
+      customer._updatedAt = changedAt;
+    }
+  }
+  for (const payment of db.payments || []) {
+    if (payment.saleId === sale.id && !payment.voided) {
+      payment.voided = true;
+      payment.voidedAt = changedAt;
+      payment.voidedBy = actor.id;
+      payment._updatedAt = changedAt;
+    }
+  }
+  audit(db, actor, 'void', 'sale', sale.id, { invoiceNo: sale.invoiceNo, balanceReversed: due, paymentsVoided: (db.payments || []).filter(p => p.saleId === sale.id && p.voided && p.voidedAt === changedAt).length });
+  return sale;
+}
+
+function reversePayment(db, paymentId, actor) {
+  const payment = (db.payments || []).find(item => item.id === paymentId);
+  if (!payment) throw new Error('Payment not found');
+  if (payment.voided) throw new Error('Payment already reversed');
+  const customer = db.customers.find(row => row.id === payment.customerId);
+  payment.voided = true;
+  payment.voidedAt = now();
+  payment.voidedBy = actor.id;
+  payment._updatedAt = now();
+  if (customer && customer.id !== 'cus_walkin') {
+    customer.balance = money(Number(customer.balance) + Number(payment.amount));
+    if (customer.recordedPaid !== undefined && customer.recordedPaid !== null && customer.recordedPaid !== '') {
+      customer.recordedPaid = money(Number(customer.recordedPaid) - Number(payment.amount));
+    }
+    customer._updatedAt = payment.voidedAt;
+  }
+  audit(db, actor, 'reverse', 'payment', payment.id, { customerId: payment.customerId, amount: money(payment.amount), newBalance: customer ? customer.balance : null });
+  return payment;
 }
 
 function csv(rows) {
@@ -1338,7 +1396,7 @@ async function handleApi(request, response) {
           createdBy: sale.createdByName || ''
         }));
       const payments = (db.payments || [])
-        .filter(payment => payment.customerId === id)
+        .filter(payment => payment.customerId === id && !payment.voided)
         .map(payment => ({
           type: 'payment',
           id: payment.id,
@@ -1348,8 +1406,16 @@ async function handleApi(request, response) {
           note: payment.note || '',
           createdBy: payment.createdBy || ''
         }));
-      const entries = [...creditSales, ...payments].sort((a, b) => new Date(b.at) - new Date(a.at));
-      return json(response, 200, { customer: { ...customer, cnicMasked: maskCnic(customer.cnic), cnic: undefined }, entries });
+      const allEntries = [...creditSales, ...payments].sort((a, b) => new Date(a.at) - new Date(b.at));
+      let running = 0;
+      const balanceAfter = {};
+      for (const entry of allEntries) {
+        if (entry.type === 'sale') running += money(entry.amount) - money(entry.paidAtBilling);
+        else running -= money(entry.amount);
+        balanceAfter[entry.id] = money(running);
+      }
+      const entries = allEntries.reverse();
+      return json(response, 200, { customer: { ...customer, cnicMasked: maskCnic(customer.cnic), cnic: undefined }, entries, balanceAfter });
     }
 
     if (method === 'POST' && /^\/api\/customers\/[^/]+\/payments$/.test(url.pathname)) {
@@ -1487,21 +1553,25 @@ async function handleApi(request, response) {
       const id = url.pathname.split('/')[3];
       const sale = db.sales.find(item => item.id === id || item.invoiceNo === id);
       if (!sale) return json(response, 404, { error: 'Sale not found' });
-      if (sale.voided) return json(response, 409, { error: 'Sale already voided' });
-      sale.voided = true;
-      sale.voidedAt = now();
-      sale.voidedBy = actor.id;
-      for (const item of sale.items) {
-        if (!item.productId) continue;
-        const product = db.products.find(row => row.id === item.productId);
-        if (product) {
-          product.stock = Number(product.stock) + Number(item.qty);
-          product._updatedAt = now();
-        }
+      try {
+        const result = voidSale(db, sale, actor);
+        await saveDb(db);
+        return json(response, 200, result);
+      } catch (err) {
+        return json(response, 409, { error: err.message });
       }
-      audit(db, actor, 'void', 'sale', sale.id, { invoiceNo: sale.invoiceNo });
-      await saveDb(db);
-      return json(response, 200, sale);
+    }
+
+    if (method === 'POST' && /^\/api\/payments\/[^/]+\/reverse$/.test(url.pathname)) {
+      if (!can(actor, 'udhar')) return json(response, 403, { error: 'Only Admin or Manager can reverse udhar payments' });
+      const id = url.pathname.split('/')[3];
+      try {
+        const payment = reversePayment(db, id, actor);
+        await saveDb(db);
+        return json(response, 200, { ok: true, payment });
+      } catch (err) {
+        return json(response, err.message === 'Payment not found' ? 404 : 400, { error: err.message });
+      }
     }
 
     if (method === 'GET' && url.pathname === '/api/sales/lookup') {
@@ -1810,5 +1880,7 @@ module.exports.createSupplier = createSupplier;
 module.exports.updateSupplier = updateSupplier;
 module.exports.deleteSupplier = deleteSupplier;
 module.exports.deleteCustomer = deleteCustomer;
+module.exports.voidSale = voidSale;
+module.exports.reversePayment = reversePayment;
 module.exports.can = can;
 module.exports.permissions = permissions;

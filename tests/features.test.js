@@ -3,7 +3,8 @@ const assert = require('node:assert/strict');
 const {
   seedData, ensureSchema, createSale, processReturn, receiveUdharPayment,
   clearUdhar, returnedQtyByItem, customerTotals, decorateCustomer,
-  createSupplier, updateSupplier, deleteSupplier, deleteCustomer, can
+  createSupplier, updateSupplier, deleteSupplier, deleteCustomer, can,
+  voidSale, reversePayment
 } = require('../server');
 const { mergeDbs } = require('../sync');
 
@@ -418,4 +419,76 @@ test('ensureSchema creates the drafts collection and product location field', ()
   ensureSchema(db);
   const product = db.products.find(item => !('location' in item));
   if (product) assert.equal(product.location, '');
+});
+
+test('voidSale restocks items, reverses the udhar balance, and voids linked billing payments', () => {
+  const { db, admin } = fixture();
+  const product = db.products.find(item => item.id === 'prd_1');
+  const stockBefore = Number(product.stock);
+  const customer = db.customers.find(item => item.id === 'cus_1');
+  const balanceBefore = Number(customer.balance);
+  const sale = createSale(db, { customerId: 'cus_1', paymentType: 'Credit', paidAmount: 2000, items: [{ productId: 'prd_1', qty: 3 }] }, admin);
+  const payment = db.payments.find(item => item.saleId === sale.id && !item.voided);
+  assert.ok(payment);
+  assert.equal(Number(product.stock), stockBefore - 3);
+  assert.equal(Number(customer.balance), balanceBefore + sale.dueAmount);
+  const voided = voidSale(db, sale, admin);
+  assert.equal(voided.voided, true);
+  assert.equal(Number(product.stock), stockBefore);
+  assert.equal(Number(customer.balance), balanceBefore);
+  assert.equal(db.payments.find(item => item.id === payment.id).voided, true);
+  const movement = db.stockMovements.find(item => item.productId === 'prd_1' && item.type === 'void');
+  assert.ok(movement);
+  assert.equal(movement.qty, 3);
+  assert.throws(() => voidSale(db, sale, admin), /already voided/);
+});
+
+test('voidSale never drops balance below zero and leaves cash sales untouched', () => {
+  const { db, admin } = fixture();
+  const customer = db.customers.find(item => item.id === 'cus_2');
+  createSale(db, { customerId: 'cus_2', paymentType: 'Credit', items: [{ productId: 'prd_3', qty: 1 }] }, admin);
+  const cashSale = createSale(db, { customerId: 'cus_walkin', paymentType: 'Cash', items: [{ productId: 'prd_1', qty: 1 }] }, admin);
+  const balanceBeforeCash = Number(customer.balance);
+  voidSale(db, cashSale, admin);
+  assert.equal(Number(customer.balance), balanceBeforeCash, 'cash sale must not touch the customer balance');
+});
+
+test('reversePayment adds the amount back to the balance and decrements recordedPaid', () => {
+  const { db, admin } = fixture();
+  const customer = db.customers.find(item => item.id === 'cus_2');
+  createSale(db, { customerId: 'cus_2', paymentType: 'Credit', items: [{ productId: 'prd_3', qty: 2 }] }, admin);
+  const balanceBefore = Number(customer.balance);
+  const pay = Math.min(500, Math.floor(balanceBefore / 2));
+  const payment = receiveUdharPayment(db, 'cus_2', pay, admin).payment;
+  assert.equal(Number(customer.balance), balanceBefore - pay);
+  const paidBefore = Number(customer.recordedPaid ?? db.payments.filter(item => item.customerId === 'cus_2' && !item.voided).reduce((sum, item) => sum + Number(item.amount), 0));
+  const reversed = reversePayment(db, payment.id, admin);
+  assert.equal(reversed.voided, true);
+  assert.equal(Number(customer.balance), balanceBefore);
+  const visible = db.payments.filter(item => item.customerId === 'cus_2' && !item.voided);
+  const visiblePaid = visible.reduce((sum, item) => sum + Number(item.amount), 0);
+  if (paidBefore > 0) assert.equal(Number(customer.recordedPaid ?? visiblePaid).toFixed(2), Number(paidBefore - pay).toFixed(2));
+  assert.throws(() => reversePayment(db, payment.id, admin), /already reversed/);
+  assert.throws(() => reversePayment(db, 'nope', admin), /not found/);
+});
+
+test('customerTotals and the ledger both exclude voided payments and sales', () => {
+  const { db, admin } = fixture();
+  const customer = db.customers.find(item => item.id === 'cus_1');
+  const creditBefore = (customerTotals(db).cus_1 || {}).creditPurchases || 0;
+  const sale = createSale(db, { customerId: 'cus_1', paymentType: 'Credit', paidAmount: 1000, items: [{ productId: 'prd_1', qty: 2 }] }, admin);
+  const payment = receiveUdharPayment(db, 'cus_1', 500, admin).payment;
+  const totalsBefore = customerTotals(db);
+  const creditAfterSale = totalsBefore.cus_1.creditPurchases;
+  assert.ok(creditAfterSale > creditBefore);
+  voidSale(db, sale, admin);
+  reversePayment(db, payment.id, admin);
+  const totals = customerTotals(db);
+  const soldById = db.sales.find(item => item.id === sale.id);
+  assert.equal(soldById.voided, true);
+  assert.equal(db.payments.find(item => item.id === payment.id).voided, true);
+  assert.equal(Number((totals.cus_1 || {}).creditPurchases || 0).toFixed(2), Number(creditBefore).toFixed(2));
+  const paymentsForCustomer = db.payments.filter(item => item.customerId === 'cus_1');
+  const visiblePayments = paymentsForCustomer.filter(item => !item.voided);
+  assert.ok(visiblePayments.length < paymentsForCustomer.length);
 });

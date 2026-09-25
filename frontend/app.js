@@ -144,6 +144,7 @@ const STRINGS = {
     udharKhataEyebrow: 'UDHAR KHATA', cnicLabel: 'CNIC:', totalCreditPurchases: 'Total credit purchases', totalPaidLabel: 'Total paid',
     remaining: 'Remaining', payUdharMax: 'Pay udhar - max', clearUdharBtn: 'Clear Udhar', loading: 'Loading...', noUdharHistory: 'No udhar history yet.',
     creditSaleEntry: 'Credit sale', paymentReceived: 'Payment received', close: 'Close',
+    allMonths: 'All months', reverseBill: 'Reverse bill', reversePayment: 'Reverse payment', balanceForCustomer: 'Balance:',
     saleReturnsEyebrow: 'SALE RETURNS', returnsSubtitle: 'Search a bill by invoice number, then return selected products or the complete bill. Stock and udhar update automatically.',
     enterBillId: 'Enter Bill ID / Invoice No (e.g. FS-1049)', findInvoice: 'Find invoice', noInvoiceLoaded: 'No invoice loaded yet.',
     voidedBlocked: 'This invoice was cancelled/voided - returns are not allowed.', invoiceWord: 'Invoice', cashierLabel: 'Cashier:',
@@ -241,6 +242,7 @@ const STRINGS = {
     udharKhataEyebrow: 'اُدھار کھاتہ', cnicLabel: 'شناختی کارڈ:', totalCreditPurchases: 'کل اُدھار خریداری', totalPaidLabel: 'کل ادا شدہ',
     remaining: 'باقی', payUdharMax: 'اُدھار وصول کریں - زیادہ سے زیادہ', clearUdharBtn: 'پورا اُدھار کلیر کریں', loading: 'لوڈ ہو رہا ہے...', noUdharHistory: 'ابھی اُدھار کی تاریخ نہیں۔',
     creditSaleEntry: 'اُدھار سیل', paymentReceived: 'ادائیگی موصول', close: 'بند کریں',
+    allMonths: 'تمام مہینے', reverseBill: 'بل واپس لوٹائیں', reversePayment: 'ادائیگی واپس', balanceForCustomer: 'بقیہ:',
     saleReturnsEyebrow: 'فروخت واپسی', returnsSubtitle: 'بل نمبر سے بل تلاش کریں، پھر منتخب اشیاء یا پورا بل واپس کریں۔ اسٹاک اور اُدھار خود بخود اپڈیٹ ہو جائیں گے۔',
     enterBillId: 'بل آئی ڈی / انوائس نمبر لکھیں (مثلاً FS-1049)', findInvoice: 'بل تلاش کریں', noInvoiceLoaded: 'ابھی کوئی بل کھولا نہیں گیا۔',
     voidedBlocked: 'یہ بل منسوخ ہو چکا ہے - واپسی ممکن نہیں۔', invoiceWord: 'بل', cashierLabel: 'کیشئر:',
@@ -730,15 +732,10 @@ function POS({ client, data, refresh, online, setOnline, go }) {
     });
     return map;
   }, [data.products]);
-  const whLocByProduct = React.useMemo(() => {
-    const map = {};
-    (data.warehouses || []).forEach(wh => { if (wh.linkedProductId && wh.location) map[wh.linkedProductId] = wh.location; });
-    return map;
-  }, [data.warehouses]);
   const q = query.trim().toLowerCase();
   const shown = q
     ? activeProducts.filter(product => `${product.name} ${product.sku} ${product.barcode || ''} ${product.category || ''} ${product.nameUrdu || ''} ${product.urduName || ''}`.toLowerCase().includes(q))
-    : activeProducts.slice(0, 8);
+    : [];
   const subtotal = cart.reduce((sum, item) => sum + Number(item.price) * Number(item.qty), 0);
   const discountNum = Math.max(0, Number(discount) || 0);
   const addDiscNum = Math.max(0, Number(additionalDiscount) || 0);
@@ -836,8 +833,8 @@ function POS({ client, data, refresh, online, setOnline, go }) {
   }
 
   const customers = (data.customers || []).filter(customer => {
-    if (!customerSearch.trim()) return true;
     const customerQ = customerSearch.trim().toLowerCase();
+    if (!customerQ) return false;
     return `${customer.name || ''} ${customer.phone || ''}`.toLowerCase().includes(customerQ);
   });
 
@@ -1194,10 +1191,8 @@ function POS({ client, data, refresh, online, setOnline, go }) {
     const priceNum = Number(item.price) || 0;
     const amt = item.mode === 'amt' ? (Number(item.amount) || 0) : round3(priceNum * (Number(item.qty) || 0));
     const low = product && Number(item.qty) > Number(product.stock || 0);
-    const location = product ? (product.location || whLocByProduct[product.id] || '—') : '—';
     const step = isWeightUnit(item.unit) ? 0.25 : 1;
     return h('div', { className: 'bill-row' + (low ? ' low-stock' : ''), key: `${item.productId || item.name}-${index}` },
-      h('span', { className: 'bill-no' }, index + 1),
       h('div', { className: 'bill-product' },
         h('strong', null, item.name),
         item.sku ? h('small', null, item.sku) : null,
@@ -1211,7 +1206,6 @@ function POS({ client, data, refresh, online, setOnline, go }) {
         h('button', { className: 'mode-btn', title: item.mode === 'qty' ? t('amountWord') : t('quantityWord') + ' mode', onClick: () => toggleLineMode(index) }, item.mode === 'qty' ? 'Qty' : 'Rs')),
       h('span', { className: 'bill-uom' }, unitLabel(item.unit)),
       h('span', { className: 'bill-rate' }, money(priceNum)),
-      h('span', { className: 'bill-loc' }, location),
       h('span', { className: 'bill-total' }, money(amt)),
       h('button', { className: 'bill-remove', title: t('removeLabel'), onClick: () => removeLine(index) }, '×'));
   }
@@ -1220,7 +1214,7 @@ function POS({ client, data, refresh, online, setOnline, go }) {
     return h('div', null,
       h('div', { className: 'checkout-title' }, h('h3', null, t('customerLabelShort'))),
       h('div', { className: 'customer-combobox' },
-        h('input', { ref: customerInputRef, value: customerSearch, onFocus: () => setCustomerOpen(true), onChange: e => { setCustomerSearch(e.target.value); setCustomerOpen(true); setCustomerIdx(-1); }, onKeyDown: handleCustomerKey, placeholder: t('selectCustomerPh'), autoComplete: 'off' }),
+        h('input', { ref: customerInputRef, value: customerSearch, onFocus: () => setCustomerOpen(Boolean(customerSearch.trim())), onChange: e => { setCustomerSearch(e.target.value); setCustomerOpen(true); setCustomerIdx(-1); }, onKeyDown: handleCustomerKey, placeholder: t('selectCustomerPh'), autoComplete: 'off' }),
         customerOpen && h('div', { className: 'search-dropdown customer-dropdown' },
           h('button', { className: 'search-item walkin-item', onClick: () => selectCustomer({ id: 'cus_walkin', name: t('walkInCustomer') }) },
             h('span', { className: 'search-item-name' }, t('walkInCustomer'))),
@@ -1369,7 +1363,7 @@ function POS({ client, data, refresh, online, setOnline, go }) {
           [isWeightUnit(product.unit) ? 0.5 : 1, isWeightUnit(product.unit) ? 1 : 2, isWeightUnit(product.unit) ? 2 : 5].map(qty =>
             h('button', { key: qty, className: 'qty-preset', onClick: e => { e.stopPropagation(); addProductQty(product, qty); } }, `${qty}${isWeightUnit(product.unit) ? unitLabel(product.unit) : ''}`)),
           h('button', { className: 'qty-preset add-one', onClick: e => { e.stopPropagation(); addFromSearch(product); } }, t('add'))))))
-      : searchOpen && h('div', { className: 'search-dropdown' }, h('div', { className: 'search-empty' }, t('noMatchingProducts'))),
+      : searchOpen && q && h('div', { className: 'search-dropdown' }, h('div', { className: 'search-empty' }, t('noMatchingProducts'))),
     manualOpen && h('form', { className: 'manual-form', onSubmit: addManualItem },
       h('input', { value: manual.name, onChange: e => setManual({ ...manual, name: e.target.value }), placeholder: t('productName'), required: true }),
       h('input', { type: 'number', min: '0', step: 'any', value: manual.price, onChange: e => setManual({ ...manual, price: e.target.value }), placeholder: `${t('ratePer')} ${unitLabel(manual.unit)}`, required: true }),
@@ -1383,7 +1377,7 @@ function POS({ client, data, refresh, online, setOnline, go }) {
       h(Badge, { tone: online ? 'success' : 'warning' }, online ? t('synced') : `${loadJson(queueKey, []).length} ${t('queued')}`)),
     cart.length ? h('div', { className: 'bill-scroller' }, h('div', { className: 'bill-grid' },
       h('div', { className: 'bill-grid-head' },
-        ...[h('span', { key: 'n' }, '#'), h('span', { key: 'p' }, t('hProduct')), h('span', { key: 'q' }, t('qtyShort')), h('span', { key: 'u' }, t('unitLabelWord')), h('span', { key: 'r' }, t('rateLabel')), h('span', { key: 'l' }, t('locationLabel')), h('span', { key: 't' }, t('totalWord')), h('span', { key: 'x' }, '')]),
+        ...[h('span', { key: 'p' }, t('hProduct')), h('span', { key: 'q' }, t('qtyShort')), h('span', { key: 'u' }, t('unitLabelWord')), h('span', { key: 'r' }, t('rateLabel')), h('span', { key: 't' }, t('totalWord')), h('span', { key: 'x' }, '')]),
       ...cart.map((item, index) => renderBillRow(item, index))))
       : h('div', { className: 'empty bill-empty' }, h('h3', null, t('cartEmpty')), h('p', null, t('scanOrSelect'))));
 
@@ -1511,6 +1505,9 @@ function ReceiptModal({ sale, customers, settings, onClose }) {
         h('p', { className: 'credit-name' }, 'Sohaib Ali'),
         h('p', { className: 'credit-phone' }, 'Mobile No: 03074224449')),
       h('div', { className: 'success-actions no-print' },
+        isCredit && customer && customer.phone && waLink(customer.phone, saleBillText(sale, settings))
+          ? h('a', { className: 'wa-btn', href: waLink(customer.phone, saleBillText(sale, settings)), target: '_blank', rel: 'noreferrer' }, t('whatsappBill'))
+          : null,
         h('button', { className: 'secondary', onClick: function() { window.print(); } }, 'Print (F4)'),
         h('button', { className: 'primary', onClick: onClose }, t('close'))))),
     document.body);
@@ -1711,7 +1708,7 @@ function DataPage({ page, data, client, refresh }) {
         : (LANG === 'ur' ? 'پروڈکٹ کا نام تلاش کریں...' : 'Search products by name...') })),
       rows.length < allRows.length && h('small', { className: 'muted' }, `${rows.length} / ${allRows.length}`)),
     h('article', { className: 'panel data-panel' }, h('div', { className: 'table-wrap' }, h('table', null, thead, tbody))),
-    khata && h(KhataModal, { customer: khata, client, settings: data.settings, onClose: () => setKhata(null), refresh }),
+    khata && h(KhataModal, { customer: khata, client, settings: data.settings, user: data.user, onClose: () => setKhata(null), refresh }),
     editCustomer && h(CustomerEditModal, { customer: editCustomer, client, refresh, products: data.products || [], canEditUdhar: data.user.role === 'Admin' || data.user.role === 'Manager', onClose: () => setEditCustomer(null) }),
     editProduct && h(ProductEditModal, { product: editProduct, client, refresh, onClose: () => setEditProduct(null) }));
 }
@@ -1857,8 +1854,10 @@ function WarehousePage({ data, client, refresh }) {
     editWh && h(WarehouseEditModal, { item: editWh, client, refresh, onClose: () => setEditWh(null) }));
 }
 
-function KhataModal({ customer, client, settings, onClose, refresh }) {
+function KhataModal({ customer, client, settings, user, onClose, refresh }) {
   const [entries, setEntries] = useState(null);
+  const [balanceAfter, setBalanceAfter] = useState({});
+  const [monthFilter, setMonthFilter] = useState('all');
   const [summary, setSummary] = useState({ creditPurchases: customer.creditPurchases || 0, totalPaid: customer.totalPaid || 0 });
   const [balance, setBalance] = useState(customer.balance);
   const [amount, setAmount] = useState('');
@@ -1870,6 +1869,7 @@ function KhataModal({ customer, client, settings, onClose, refresh }) {
     try {
       const payload = await client.get(`/api/customers/${customer.id}/ledger`);
       setEntries(payload.entries);
+      setBalanceAfter(payload.balanceAfter || {});
       setBalance(payload.customer.balance);
     } catch (err) {
       setMessage(friendlyError(err));
@@ -1934,6 +1934,42 @@ function KhataModal({ customer, client, settings, onClose, refresh }) {
       setBusy(false);
     }
   }
+  const monthKeys = list => {
+    const keys = {};
+    (list || []).forEach(entry => { const k = (entry.at || '').slice(0, 7); if (k) keys[k] = true; });
+    const all = Object.keys(keys).sort();
+    const nowK = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+    const bound = new Date();
+    bound.setMonth(bound.getMonth() - 12);
+    const boundK = `${bound.getFullYear()}-${String(bound.getMonth() + 1).padStart(2, '0')}`;
+    const recent = all.filter(k => k <= nowK && k > boundK);
+    return (recent.length ? recent : all).slice(-12).reverse();
+  };
+  async function reverseEntry(entry) {
+    const isSale = entry.type === 'sale';
+    const verb = isSale ? t('reverseBill') : t('reversePayment');
+    const detail = isSale
+      ? LANG === 'ur' ? 'یہ گاڑی/بل واپس لوٹائی جائے گی، اسٹاک میں شامل ہوگا اور اُدھار بیلنس کم ہو جائے گا۔' : 'This bill will be voided, stock restored and the udhaar balance reduced.'
+      : LANG === 'ur' ? 'یہ وصولی کالعدم ہو گی اور رقم اُدھار بیلنس میں دوبارہ شامل ہو جائے گی۔' : 'This payment will be cancelled and the amount added back to the udhaar balance.';
+    if (!await askConfirm(`${verb}?`, `${detail}\n\n${LANG === 'ur' ? 'یہ واپس نہیں ہو سکتا۔' : 'This cannot be undone.'}`)) return;
+    setBusy(true);
+    setMessage('');
+    try {
+      if (isSale) {
+        await client.post(`/api/sales/${entry.id}/void`, {});
+      } else {
+        await client.post(`/api/payments/${entry.id}/reverse`, {});
+      }
+      setMessage(LANG === 'ur' ? `${verb} مکمل۔ بیلنس دوبارہ حساب ہو گیا۔` : `${verb} done. Balance recalculated.`);
+      await loadLedger();
+      await loadSummary();
+      refresh();
+    } catch (err) {
+      setMessage(friendlyError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
   const when = at => new Date(at).toLocaleString('en-PK', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   return ReactDOM.createPortal(h('div', { className: 'modal', onClick: onClose },
     h('section', { className: 'khata', onClick: e => e.stopPropagation() },
@@ -1973,17 +2009,39 @@ function KhataModal({ customer, client, settings, onClose, refresh }) {
       h('div', { className: 'ledger-list' },
         entries === null ? h('p', { className: 'empty-copy' }, t('loading')) :
         entries.length === 0 ? h('p', { className: 'empty-copy' }, t('noUdharHistory')) :
-        entries.map(entry => h('div', { className: `ledger-entry ${entry.type}`, key: entry.id },
-          h('div', { className: 'entry-info' },
-            h('strong', null, entry.type === 'sale'
-              ? `${t('creditSaleEntry')} ${entry.invoiceNo}`
-              : `${t('paymentReceived')}${entry.invoiceNo ? ' (' + entry.invoiceNo + ')' : ''}${entry.note && !entry.invoiceNo ? ' - ' + entry.note : ''}`),
-            entry.products && h('small', null, entry.products),
-            h('small', null, `${when(entry.at)}${entry.createdBy ? ' - ' + entry.createdBy : ''}${entry.note && entry.invoiceNo ? ' - ' + entry.note : ''}`)),
-          h('b', { className: entry.type === 'sale' ? 'amount-due' : 'amount-paid' }, entry.type === 'sale' ? `+${money(entry.amount)}` : `-${money(entry.amount)}`),
-          entry.type === 'sale' && waLink(customer.phone, saleBillText(entry, settings))
-            ? h('a', { className: 'wa-btn entry-wa', href: waLink(customer.phone, saleBillText(entry, settings)), target: '_blank', rel: 'noreferrer' }, t('whatsappBill'))
-            : null))),
+        h('div', null,
+          h('div', { className: 'ledger-filter' },
+            h('select', { value: monthFilter, onChange: e => setMonthFilter(e.target.value) },
+              h('option', { value: 'all' }, t('allMonths')),
+              monthKeys(entries).map(monthKey => h('option', { key: monthKey, value: monthKey },
+                new Date(monthKey + '-01').toLocaleDateString('en-PK', { month: 'long', year: 'numeric' })))),
+            h('span', { className: 'ledger-balance-tip' }, `${t('remaining')}: ${money(balance)}`)),
+          monthKeys(entries).filter(monthKey => monthFilter === 'all' || monthKey === monthFilter).map(monthKey =>
+            h('div', { className: 'ledger-month', key: monthKey },
+              h('div', { className: 'ledger-month-head' },
+                h('strong', null, new Date(monthKey + '-01').toLocaleDateString('en-PK', { month: 'long', year: 'numeric' })),
+                h('span', null, `${entries.filter(e => (e.at || '').slice(0, 7) === monthKey).length} ${t('billWord')}`)),
+              entries.filter(e => (e.at || '').slice(0, 7) === monthKey).map(entry => {
+                const canReverse = user && (user.role === 'Admin' || user.role === 'Manager');
+                return h('div', { className: `ledger-entry ${entry.type}`, key: entry.id },
+                  h('div', { className: 'entry-info' },
+                    h('strong', null, entry.type === 'sale'
+                      ? `${t('creditSaleEntry')} ${entry.invoiceNo}`
+                      : `${t('paymentReceived')}${entry.invoiceNo ? ' (' + entry.invoiceNo + ')' : ''}${entry.note && !entry.invoiceNo ? ' - ' + entry.note : ''}`),
+                    entry.products && h('small', null, entry.products),
+                    h('small', null, `${when(entry.at)}${entry.createdBy ? ' - ' + entry.createdBy : ''}${entry.note && entry.invoiceNo ? ' - ' + entry.note : ''}`)),
+                  h('div', { className: 'entry-amounts' },
+                    h('b', { className: entry.type === 'sale' ? 'amount-due' : 'amount-paid' }, entry.type === 'sale' ? `+${money(entry.amount)}` : `-${money(entry.amount)}`),
+                    h('span', { className: 'entry-balance' }, `${t('balanceForCustomer')} ${money(balanceAfter[entry.id] ?? balance)}`)),
+                  h('div', { className: 'entry-actions' },
+                    entry.type === 'sale' && waLink(customer.phone, saleBillText(entry, settings))
+                      ? h('a', { className: 'wa-btn entry-wa', href: waLink(customer.phone, saleBillText(entry, settings)), target: '_blank', rel: 'noreferrer' }, t('whatsappBill'))
+                      : null,
+                    canReverse
+                      ? h('button', { className: 'danger-btn small entry-reverse', disabled: busy, onClick: () => reverseEntry(entry) },
+                        entry.type === 'sale' ? t('reverseBill') : t('reversePayment'))
+                      : null));
+                }))))),
       h('div', { className: 'success-actions no-print' }, h('button', { className: 'primary', onClick: onClose }, t('close'))))),
     document.body);
 }
