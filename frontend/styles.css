@@ -687,7 +687,6 @@ td {
 .bill-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 150px 58px 88px 96px 36px;
-  grid-template-areas: "billProduct billQty billUom billRate billTotal billRemove";
   gap: 0 8px;
   align-items: center;
 }
@@ -702,17 +701,15 @@ td {
   padding: 8px 4px;
   border-bottom: 2px solid var(--line);
 }
-.bill-grid-head span:nth-child(1) { grid-area: billProduct; }
-.bill-grid-head span:nth-child(2) { grid-area: billQty; text-align: center; }
-.bill-grid-head span:nth-child(3) { grid-area: billUom; text-align: center; }
-.bill-grid-head span:nth-child(4) { grid-area: billRate; text-align: right; }
-.bill-grid-head span:nth-child(5) { grid-area: billTotal; text-align: right; }
-.bill-grid-head span:nth-child(6) { grid-area: billRemove; text-align: center; }
+.bill-grid-head span:nth-child(2),
+.bill-grid-head span:nth-child(3),
+.bill-grid-head span:nth-child(6) { text-align: center; }
+.bill-grid-head span:nth-child(4),
+.bill-grid-head span:nth-child(5) { text-align: right; }
 
 .bill-row { display: contents; }
 .bill-row.low-stock .bill-product strong { color: var(--red); }
 .bill-product {
-  grid-area: billProduct;
   display: flex;
   flex-direction: column;
   gap: 1px;
@@ -731,7 +728,6 @@ td {
   padding: 1px 8px;
 }
 .bill-qty {
-  grid-area: billQty;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -747,11 +743,10 @@ td {
   font-weight: 700;
   font-size: 13px;
 }
-.bill-uom { grid-area: billUom; text-align: center; color: var(--muted); font-size: 12px; }
-.bill-rate { grid-area: billRate; text-align: right; }
-.bill-total { grid-area: billTotal; text-align: right; font-weight: 800; }
+.bill-uom { text-align: center; color: var(--muted); font-size: 12px; }
+.bill-rate { text-align: right; }
+.bill-total { text-align: right; font-weight: 800; }
 .bill-remove {
-  grid-area: billRemove;
   border: 0;
   background: transparent;
   color: var(--muted);
@@ -1480,6 +1475,12 @@ td {
     margin-bottom: 8px !important;
     background: #fff !important;
   }
+  .bill-row .bill-product { grid-area: billProduct; }
+  .bill-row .bill-qty { grid-area: billQty; }
+  .bill-row .bill-uom { grid-area: billUom; }
+  .bill-row .bill-rate { grid-area: billRate; }
+  .bill-row .bill-total { grid-area: billTotal; }
+  .bill-row .bill-remove { grid-area: billRemove; }
 
   .customer-balance { margin-top: 8px !important; }
   .summary-row.grand strong { font-size: 18px !important; }
