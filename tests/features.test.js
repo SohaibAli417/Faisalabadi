@@ -28,6 +28,20 @@ test('partial payment sale: Rs 5000 bill paid Rs 2000 adds only Rs 3000 udhar an
   assert.equal(totals.cus_1.totalPaid >= 2000, true);
 });
 
+test('partial payment sale sent as paymentType Partial still leaves the unpaid part on udhar', () => {
+  const { db, admin } = fixture();
+  const before = Number(db.customers.find(item => item.id === 'cus_1').balance);
+  // A 'Partial' bill used to be treated as fully paid, silently wiping the udhar.
+  const sale = createSale(db, { customerId: 'cus_1', paymentType: 'Partial', paidAmount: 2000, items: [{ productId: 'prd_1', qty: 5 }] }, admin);
+  assert.equal(sale.paidAmount, 2000);
+  assert.equal(sale.dueAmount, sale.total - 2000);
+  const customer = db.customers.find(item => item.id === 'cus_1');
+  assert.equal(customer.balance, before + (sale.total - 2000));
+  // And it must show up in the customer's khata, not just on the balance.
+  const credit = customerTotals(db).cus_1.creditPurchases;
+  assert.equal(credit >= sale.total, true);
+});
+
 test('full udhar sale: paid Rs 0 puts the whole bill on the customer balance', () => {
   const { db, admin } = fixture();
   const before = Number(db.customers.find(item => item.id === 'cus_2').balance);

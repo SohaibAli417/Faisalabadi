@@ -1,5 +1,5 @@
 /* global React, ReactDOM */
-const APP_VERSION = 'v36';
+const APP_VERSION = 'v37';
 const APP_CHECKSUM = 'customer-product-qty-unit-logo-v28';
 (function() {
   var stored = null;
@@ -143,6 +143,7 @@ const STRINGS = {
     phOwnerProfit: 'Owner profit', phSalePriceAuto: 'Sale price (auto)', phLowAlertAt: 'Low stock alert at', barcodeLabel: 'Barcode:',
     udharKhataEyebrow: 'UDHAR KHATA', cnicLabel: 'CNIC:', totalCreditPurchases: 'Total credit purchases', totalPaidLabel: 'Total paid',
     remaining: 'Remaining', payUdharMax: 'Pay udhar - max', clearUdharBtn: 'Clear Udhar', loading: 'Loading...', noUdharHistory: 'No udhar history yet.',
+    payFullAmount: 'Pay full amount', udharNeedsManager: 'Only Admin or Manager can receive or clear udhar. Ask them to record this payment.',
     creditSaleEntry: 'Credit sale', paymentReceived: 'Payment received', close: 'Close',
     allMonths: 'All months', reverseBill: 'Reverse bill', reversePayment: 'Reverse payment', balanceForCustomer: 'Balance:',
     saleReturnsEyebrow: 'SALE RETURNS', returnsSubtitle: 'Search a bill by invoice number, then return selected products or the complete bill. Stock and udhar update automatically.',
@@ -175,6 +176,7 @@ const STRINGS = {
     whEyebrow: 'WAREHOUSE MANAGEMENT', whAddItem: 'Add warehouse item', whTransfer: 'Transfer Stock', whTransferToProduct: 'To Product', whTransferToWarehouse: 'To Warehouse',
     whLocation: 'Location', whSupplier: 'Supplier', phWhName: 'Item name', phWhLocation: 'Bin / Location', phWhSupplier: 'Supplier (optional)',
     phTransferQty: 'Quantity', transferDone: 'Stock transferred successfully.', linkedProduct: 'Linked Product', linkProduct: 'Link product', unlinkProduct: 'Unlink',
+    searchProductsToLink: 'Search product by name, SKU or category...', noProductFound: 'No product found.',
     productLabel: 'Product', addProductManually: '+ Add Product Manually', searchProducts: 'Search products...',
     noMatchingProducts: 'No matching products.', clearProduct: 'Remove product',
     productPickHint: 'Only saved on this customer - it does not create a new product in the Products tab.',
@@ -259,6 +261,7 @@ const STRINGS = {
     phOwnerProfit: 'مالکانہ منافع', phSalePriceAuto: 'فروخت قیمت (خود بخود)', phLowAlertAt: 'کم اسٹاک الرٹ پر', barcodeLabel: 'بارکوڈ:',
     udharKhataEyebrow: 'اُدھار کھاتہ', cnicLabel: 'شناختی کارڈ:', totalCreditPurchases: 'کل اُدھار خریداری', totalPaidLabel: 'کل ادا شدہ',
     remaining: 'باقی', payUdharMax: 'اُدھار وصول کریں - زیادہ سے زیادہ', clearUdharBtn: 'پورا اُدھار کلیر کریں', loading: 'لوڈ ہو رہا ہے...', noUdharHistory: 'ابھی اُدھار کی تاریخ نہیں۔',
+    payFullAmount: 'پوری رقم دیں', udharNeedsManager: 'اُدھار وصول یا کلیر صرف ایڈمن یا منیجر کر سکتا ہے۔ ان سے کہیں کہ ادائیگی درج کریں۔',
     creditSaleEntry: 'اُدھار سیل', paymentReceived: 'ادائیگی موصول', close: 'بند کریں',
     allMonths: 'تمام مہینے', reverseBill: 'بل واپس لوٹائیں', reversePayment: 'ادائیگی واپس', balanceForCustomer: 'بقیہ:',
     saleReturnsEyebrow: 'فروخت واپسی', returnsSubtitle: 'بل نمبر سے بل تلاش کریں، پھر منتخب اشیاء یا پورا بل واپس کریں۔ اسٹاک اور اُدھار خود بخود اپڈیٹ ہو جائیں گے۔',
@@ -291,6 +294,7 @@ const STRINGS = {
     whEyebrow: 'گودام انتظام', whAddItem: 'گودام میں شامل کریں', whTransfer: 'اسٹاک منتقل کریں', whTransferToProduct: 'پروڈکٹ کو', whTransferToWarehouse: 'گودام کو',
     whLocation: 'لوکیشن', whSupplier: 'سپلائر', phWhName: 'چیز کا نام', phWhLocation: 'بن / لوکیشن', phWhSupplier: 'سپلائر (اختیاری)',
     phTransferQty: 'تعداد', transferDone: 'اسٹاک منتقل ہو گیا۔', linkedProduct: 'لنکڈ پروڈکٹ', linkProduct: 'لنک کریں', unlinkProduct: 'لنک ہٹائیں',
+    searchProductsToLink: 'پروڈکٹ نام، SKU یا کیٹیگری سے تلاش کریں...', noProductFound: 'کوئی پروڈکٹ نہیں ملی۔',
     productLabel: 'پروڈکٹ', addProductManually: '+ پروڈکٹ خود لکھیں', searchProducts: 'پروڈکٹ تلاش کریں...',
     noMatchingProducts: 'کوئی پروڈکٹ نہیں ملی۔', clearProduct: 'پروڈکٹ ہٹائیں',
     productPickHint: 'صرف اس گاہک پر محفوظ ہوتا ہے - پروڈکٹس ٹیب میں کوئی نئی پروڈکٹ نہیں بنتی۔',
@@ -1135,6 +1139,10 @@ function POS({ client, data, refresh, online, setOnline, go }) {
     setCustomerSearch(customer.id === 'cus_walkin' ? '' : customer.name);
     setCustomerOpen(false);
     setCustomerIdx(-1);
+    // Naming a customer means the goods go on their khata, so default the bill to udhar.
+    // Tapping Cash/Card (or Full) switches it back to a paid sale.
+    setPaymentType(customer.id === 'cus_walkin' ? 'Cash' : 'Credit');
+    setReceivedInput(customer.id === 'cus_walkin' ? '' : '0');
   }
 
   useEffect(() => {
@@ -1158,8 +1166,9 @@ function POS({ client, data, refresh, online, setOnline, go }) {
     if (keepCustomerId === 'cus_walkin') setCustomerSearch('');
     setCustomerOpen(false);
     setCustomerIdx(-1);
-    setPaymentType('Cash');
-    setReceivedInput('');
+    // Keep the same udhar-by-default rule for a customer who is still selected.
+    setPaymentType(keepCustomerId === 'cus_walkin' ? 'Cash' : 'Credit');
+    setReceivedInput(keepCustomerId === 'cus_walkin' ? '' : '0');
     setDiscount('');
     setAdditionalDiscount('');
     setReference('');
@@ -2054,6 +2063,8 @@ function WarehousePage({ data, client, refresh }) {
   const [form, setForm] = useState({});
   const [search, setSearch] = useState('');
   const [transferModal, setTransferModal] = useState(null);
+  const [linkModal, setLinkModal] = useState(null);
+  const [linkQuery, setLinkQuery] = useState('');
   const [editWh, setEditWh] = useState(null);
   const items = (data.warehouses || []).filter(item => {
     if (!search) return true;
@@ -2117,15 +2128,19 @@ function WarehousePage({ data, client, refresh }) {
     } catch (err) { setMessage(friendlyError(err)); }
   }
 
-  async function linkProduct(whItem) {
-    const pid = window.prompt(LANG === 'ur' ? `پروڈکٹ کوڈ (SKU) یا نام لکھیں:` : `Enter product SKU or name:`, '');
-    if (!pid) return;
-    const match = products.find(p => p.sku === pid || p.id === pid || p.name.toLowerCase() === pid.toLowerCase());
-    if (!match) { setMessage(LANG === 'ur' ? 'پروڈکٹ نہیں ملا۔' : 'Product not found.'); return; }
+  function linkProduct(whItem) {
+    setLinkQuery('');
+    setLinkModal(whItem);
+  }
+
+  async function doLinkProduct(product) {
+    const whItem = linkModal;
+    if (!whItem || !product) return;
+    setLinkModal(null);
     try {
-      await client.put(`/api/warehouses/${whItem.id}`, { linkedProductId: match.id });
+      await client.put(`/api/warehouses/${whItem.id}`, { linkedProductId: product.id });
       await refresh();
-      setMessage(LANG === 'ur' ? `لنک ہو گیا: ${match.name}` : `Linked: ${match.name}`);
+      setMessage(LANG === 'ur' ? `لنک ہو گیا: ${product.name}` : `Linked: ${product.name}`);
     } catch (err) { setMessage(friendlyError(err)); }
   }
 
@@ -2190,6 +2205,44 @@ function WarehousePage({ data, client, refresh }) {
           h('button', { className: 'secondary', onClick: function() { setTransferModal(null); } }, t('close')))));
   }
 
+  function renderLinkModal() {
+    if (!linkModal) return null;
+    const q = linkQuery.trim().toLowerCase();
+    const matches = products
+      .filter(function(p) { return p.active !== false; })
+      .filter(function(p) {
+        if (!q) return true;
+        return `${p.name || ''} ${p.sku || ''} ${p.barcode || ''} ${p.category || ''}`.toLowerCase().includes(q);
+      })
+      .slice(0, 60);
+    return h('div', {
+      style: { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' },
+      onClick: function(e) { if (e.target.style.background) setLinkModal(null); }
+    },
+      h('div', { style: { background: '#fff', borderRadius: '14px', padding: '24px', maxWidth: '460px', width: '92%', maxHeight: '86vh', display: 'flex', flexDirection: 'column', boxShadow: '0 8px 32px rgba(0,0,0,0.25)' }, onClick: function(e) { e.stopPropagation(); } },
+        h('h3', { style: { margin: '0 0 4px' } }, t('linkProduct')),
+        h('small', { style: { display: 'block', marginBottom: '12px', color: '#66736f' } }, linkModal.name),
+        h('input', {
+          autoFocus: true, value: linkQuery, placeholder: t('searchProductsToLink'),
+          onChange: function(e) { setLinkQuery(e.target.value); },
+          style: { width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #ddd', marginBottom: '12px' }
+        }),
+        h('div', { style: { overflowY: 'auto', flex: '1 1 auto', minHeight: '120px' } },
+          matches.length === 0
+            ? h('p', { className: 'empty-copy' }, t('noProductFound'))
+            : h('div', null, matches.map(function(p) {
+                return h('button', {
+                  key: p.id, className: 'search-item', style: { width: '100%', textAlign: 'left' },
+                  onClick: function() { doLinkProduct(p); }
+                },
+                  h('span', { className: 'search-item-name' }, p.name),
+                  h('span', { className: 'search-item-meta' }, p.sku || p.category || ''),
+                  h('span', { className: 'search-item-price' }, money(p.price || 0)));
+              }))),
+        h('div', { style: { display: 'flex', gap: '10px', marginTop: '16px' } },
+          h('button', { className: 'secondary', onClick: function() { setLinkModal(null); } }, t('close')))));
+  }
+
   return h('div', { className: 'page' },
     h('div', { className: 'page-title' },
       h('div', null, h('p', { className: 'eyebrow' }, t('whEyebrow')), h('h1', null, t('nav_warehouse')))),
@@ -2212,6 +2265,7 @@ function WarehousePage({ data, client, refresh }) {
       h('input', { type: 'search', placeholder: t('searchPlaceholder'), value: search, onChange: e => setSearch(e.target.value), style: { width: '100%', maxWidth: '400px', padding: '8px 12px', border: '1px solid #ddd', borderRadius: '8px' } })),
     renderTable(),
     renderTransferModal(),
+    renderLinkModal(),
     editWh && h(WarehouseEditModal, { item: editWh, client, refresh, onClose: () => setEditWh(null) }));
 }
 
@@ -2226,6 +2280,8 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
   const [payTime, setPayTime] = useState(toTimeInputValue(new Date().toISOString()));
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  // The server only lets Admin/Manager record or clear udhar, so do not show controls that will 403.
+  const canManageUdhar = !user || user.role === 'Admin' || user.role === 'Manager';
   async function loadLedger() {
     try {
       const payload = await client.get(`/api/customers/${customer.id}/ledger`);
@@ -2238,9 +2294,12 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
   }
   useEffect(() => { loadLedger(); }, [client, customer.id]);
   async function receivePayment(event) {
-    event.preventDefault();
+    if (event) event.preventDefault();
     setMessage('');
-    if (!(Number(amount) > 0)) return;
+    if (!(Number(amount) > 0)) {
+      setMessage(LANG === 'ur' ? 'پہلے رقم لکھیں، یا "پورا اُدھار" دبائیں۔' : 'Enter an amount first, or tap "Pay full amount".');
+      return;
+    }
     if (Number(amount) > Number(balance)) {
       setMessage(LANG === 'ur' ? `رقم اُدھار کے بقایا (${money(balance)}) سے زیادہ ہے۔` : `Amount is more than the udhar balance (${money(balance)}).`);
       return;
@@ -2361,12 +2420,15 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
         h('div', null, h('span', null, t('totalPaidLabel')), h('strong', null, money(summary.totalPaid))),
         h('div', null, h('span', null, t('remaining')), h('strong', { style: Number(balance) > 0 ? { color: '#c0392b' } : { color: '#267152' } }, money(balance)))),
       message && h('div', { className: 'notice' }, message),
-      h('form', { className: 'payment-form khata-pay-form', onSubmit: receivePayment },
-        h('input', { type: 'number', min: '1', step: 'any', placeholder: `${t('payUdharMax')} ${money(balance)}`, value: amount, onChange: e => setAmount(e.target.value), required: true }),
-        h('input', { type: 'date', value: payDate, onChange: e => setPayDate(e.target.value), title: t('hPaymentDate') }),
-        h('input', { type: 'time', value: payTime, onChange: e => setPayTime(e.target.value), title: t('hPaymentTime') }),
-        h('button', { className: 'primary', disabled: !(Number(balance) > 0) || busy }, t('payUdhar')),
-        h('button', { type: 'button', className: 'danger-btn', disabled: !(Number(balance) > 0) || busy, onClick: clearUdhar }, t('clearUdharBtn'))),
+      canManageUdhar
+        ? h('form', { className: 'payment-form khata-pay-form', onSubmit: receivePayment },
+            h('input', { type: 'number', min: '1', step: 'any', placeholder: `${t('payUdharMax')} ${money(balance)}`, value: amount, onChange: e => setAmount(e.target.value) }),
+            h('input', { type: 'date', value: payDate, onChange: e => setPayDate(e.target.value), title: t('hPaymentDate') }),
+            h('input', { type: 'time', value: payTime, onChange: e => setPayTime(e.target.value), title: t('hPaymentTime') }),
+            h('button', { type: 'button', className: 'primary', disabled: !(Number(balance) > 0) || busy, onClick: function() { setAmount(String(Math.round(Number(balance) || 0))); } }, t('payFullAmount')),
+            h('button', { type: 'submit', className: 'primary', disabled: !(Number(balance) > 0) || busy }, t('payUdhar')),
+            h('button', { type: 'button', className: 'danger-btn', disabled: !(Number(balance) > 0) || busy, onClick: clearUdhar }, t('clearUdharBtn')))
+        : h('div', { className: 'notice' }, t('udharNeedsManager')),
       h('div', { className: 'ledger-list' },
         entries === null ? h('p', { className: 'empty-copy' }, t('loading')) :
         entries.length === 0 ? h('p', { className: 'empty-copy' }, t('noUdharHistory')) :
