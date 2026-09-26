@@ -197,6 +197,8 @@ function ensureSchema(db) {
     if (!('location' in product)) { product.location = ''; changed = true; }
     if (!('active' in product)) { product.active = true; changed = true; }
     if (!('status' in product)) { product.status = product.active === false ? 'inactive' : 'active'; changed = true; }
+    if (!('kgPerBoree' in product)) { product.kgPerBoree = 0; changed = true; }
+    if (!('pcsPerCarton' in product)) { product.pcsPerCarton = 0; changed = true; }
   }
   for (const sale of db.sales) {
     if (!('paidAmount' in sale)) { sale.paidAmount = sale.paymentType === 'Credit' ? 0 : money(sale.total); changed = true; }
@@ -208,6 +210,8 @@ function ensureSchema(db) {
     if (!('active' in wh)) { wh.active = true; changed = true; }
     if (!('status' in wh)) { wh.status = 'active'; changed = true; }
     if (!('supplier' in wh)) { wh.supplier = ''; changed = true; }
+    if (!('kgPerBoree' in wh)) { wh.kgPerBoree = 0; changed = true; }
+    if (!('pcsPerCarton' in wh)) { wh.pcsPerCarton = 0; changed = true; }
   }
   return changed;
 }
@@ -425,9 +429,20 @@ function periodStart(period) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
+function isCreditSale(sale) {
+   if (!sale) return false;
+   if (sale.paymentType === 'Credit') return true;
+   // A partial payment leaves the rest on udhar, so it is not a cash/card sale either.
+   if (sale.paymentType === 'Partial') return Number(sale.dueAmount || 0) > 0;
+   return false;
+}
+
 function calculateReport(db, period = 'day') {
   const start = periodStart(period).getTime();
-  const sales = db.sales.filter(sale => !sale.voided && new Date(sale.createdAt).getTime() >= start);
+  const periodSales = db.sales.filter(sale => !sale.voided && new Date(sale.createdAt).getTime() >= start);
+  // Udhar (credit) bills are tracked separately - they are NOT part of the daily sale total.
+  const sales = periodSales.filter(sale => !isCreditSale(sale));
+  const creditBills = periodSales.filter(isCreditSale);
   const returns = db.returns.filter(item => new Date(item.createdAt).getTime() >= start);
   const totals = sales.reduce((acc, sale) => {
     acc.revenue += sale.subtotal;
@@ -435,9 +450,13 @@ function calculateReport(db, period = 'day') {
     acc.tax += sale.tax;
     acc.total += sale.total;
     acc.cost += sale.items.reduce((sum, item) => sum + money(item.cost) * Number(item.qty || 0), 0);
-    if (sale.paymentType === 'Credit') acc.credit += sale.total;
     return acc;
-  }, { revenue: 0, discount: 0, tax: 0, total: 0, cost: 0, credit: 0 });
+  }, { revenue: 0, discount: 0, tax: 0, total: 0, cost: 0 });
+  const credit = creditBills.reduce((acc, sale) => {
+    acc.total += sale.total;
+    acc.due += Math.max(0, money(sale.dueAmount));
+    return acc;
+  }, { total: 0, due: 0 });
   const refundTotal = returns.reduce((sum, item) => sum + item.total, 0);
   return {
     period,
@@ -446,14 +465,50 @@ function calculateReport(db, period = 'day') {
     discounts: money(totals.discount),
     tax: money(totals.tax),
     grossProfit: money(totals.revenue - totals.cost - totals.discount),
-    netSales: money(totals.total - refundTotal),
-    creditSales: money(totals.credit),
+    netSales: Math.max(0, money(totals.total - refundTotal)),
+    creditSales: money(credit.total),
+    creditCount: creditBills.length,
+    creditOutstanding: money(credit.due),
     refunds: money(refundTotal)
+  };
+}
+
+function dashboardStats(db) {
+  const customers = db.customers.filter(item => item.id !== 'cus_walkin');
+  const udharRows = customers.filter(item => money(item.balance) > 0);
+  const day = calculateReport(db, 'day');
+  return {
+    totalProducts: db.products.filter(item => item.active !== false && item.status !== 'inactive').length,
+    totalStockItems: db.products.length,
+    totalUnits: Math.round(db.products.reduce((sum, item) => sum + Number(item.stock || 0), 0)),
+    lowStockCount: lowStock(db).length,
+    warehouseItems: (db.warehouses || []).length,
+    totalCustomers: customers.length,
+    udharCustomers: udharRows.length,
+    totalUdhar: money(udharRows.reduce((sum, item) => sum + Math.max(0, money(item.balance)), 0)),
+    todayBills: day.salesCount,
+    todayCreditBills: day.creditCount
   };
 }
 
 function lowStock(db) {
   return db.products.filter(product => product.active && Number(product.stock) <= Number(product.reorderLevel || 0));
+}
+
+// Converts a warehouse pack count (boree / carton) into the product's sellable unit.
+function convertPackQty(qty, mode, source) {
+   const amount = Number(qty);
+   if (!Number.isFinite(amount) || amount <= 0) return { qty: 0, factor: 0, label: '' };
+   if (mode === 'boree') {
+   const factor = Number((source && source.kgPerBoree) || 0);
+   // A missing pack spec must not silently fall back to 1:1 - callers reject factor 0.
+   return factor > 0 ? { qty: round2(amount * factor), factor, label: 'boree' } : { qty: 0, factor: 0, label: 'boree' };
+   }
+   if (mode === 'carton') {
+   const factor = Number((source && source.pcsPerCarton) || 0);
+   return factor > 0 ? { qty: round2(amount * factor), factor, label: 'carton' } : { qty: 0, factor: 0, label: 'carton' };
+   }
+   return { qty: round2(amount), factor: 1, label: '' };
 }
 
 function maskCnic(cnic) {
@@ -1037,6 +1092,7 @@ async function handleApi(request, response) {
         returns: db.returns.slice(0, 50),
         drafts: (db.drafts || []).slice(0, 50),
         lowStock: lowStock(db),
+        stats: dashboardStats(db),
         reports: { day: calculateReport(db, 'day'), month: calculateReport(db, 'month'), year: calculateReport(db, 'year') }
       });
     }
@@ -1069,6 +1125,7 @@ async function handleApi(request, response) {
         month: calculateReport(db, 'month'),
         year: calculateReport(db, 'year'),
         lowStock: lowStock(db),
+        stats: dashboardStats(db),
         recentSales: db.sales.slice(0, 10),
         totalUdharOutstanding: outstanding,
         creditCustomers: db.customers.filter(item => item.balance > 0).map(item => ({ ...item, cnicMasked: maskCnic(item.cnic), cnic: undefined }))
@@ -1102,6 +1159,8 @@ async function handleApi(request, response) {
       if (product.image === undefined) product.image = '';
       if (!product.category) product.category = 'General';
       if (product.reorderLevel === undefined) product.reorderLevel = 5;
+      product.kgPerBoree = Math.max(0, Number(product.kgPerBoree || 0));
+      product.pcsPerCarton = Math.max(0, Number(product.pcsPerCarton || 0));
       product.active = !(product.status === 'inactive' || product.active === false);
       product.status = product.active ? 'active' : 'inactive';
       product._updatedAt = now();
@@ -1121,12 +1180,47 @@ async function handleApi(request, response) {
       product.price = pricing.price;
       product.cost = pricing.cost;
       product.stock = Number(product.stock || 0);
+      product.kgPerBoree = Math.max(0, Number(product.kgPerBoree || 0));
+      product.pcsPerCarton = Math.max(0, Number(product.pcsPerCarton || 0));
       product.active = !(product.status === 'inactive' || product.active === false);
       product.status = product.active ? 'active' : 'inactive';
       product._updatedAt = now();
       audit(db, actor, 'update', 'product', product.id, { name: product.name });
       await saveDb(db);
       return json(response, 200, product);
+    }
+
+    if (method === 'POST' && /^\/api\/products\/[^/]+\/stock$/.test(url.pathname)) {
+      if (!can(actor, 'products') && !can(actor, 'inventory')) return json(response, 403, { error: 'Permission denied' });
+      const id = url.pathname.split('/')[3];
+      const product = db.products.find(item => item.id === id);
+      if (!product) return json(response, 404, { error: 'Product not found' });
+      const body = await parseBody(request);
+      const mode = body.mode === 'set' ? 'set' : 'add';
+      const convert = body.convert === 'boree' || body.convert === 'carton' ? body.convert : 'none';
+      const converted = convertPackQty(body.qty, convert, product);
+      const requested = Number(body.qty);
+      if (!Number.isFinite(requested) || requested <= 0) return json(response, 400, { error: 'Enter a quantity greater than 0' });
+      if (!converted.qty) return json(response, 400, { error: `Set kg per boree / pcs per carton on ${product.name} first` });
+      const before = Number(product.stock || 0);
+      const delta = mode === 'set' ? round2(converted.qty - before) : converted.qty;
+      const after = round2(mode === 'set' ? converted.qty : before + delta);
+      if (after < 0) return json(response, 400, { error: `Stock cannot go below 0. Current stock is ${before}` });
+      product.stock = after;
+      product._updatedAt = now();
+      db.stockMovements.unshift({
+        id: uid('stm'),
+        at: now(),
+        productId: product.id,
+        type: mode === 'set' ? 'stock-set' : 'stock-add',
+        qty: round2(delta),
+        requestedQty: requested,
+        convert,
+        note: String(body.note || (convert !== 'none' ? `Stock added (${requested} ${convert})` : 'Stock added'))
+      });
+      audit(db, actor, mode === 'set' ? 'stock-set' : 'stock-add', 'product', product.id, { name: product.name, before, after, qty: requested, convert });
+      await saveDb(db);
+      return json(response, 200, { product, before, after, added: round2(delta), convert, requestedQty: requested });
     }
 
     if (method === 'DELETE' && url.pathname.startsWith('/api/products/')) {
@@ -1156,9 +1250,11 @@ async function handleApi(request, response) {
     if (method === 'POST' && url.pathname === '/api/warehouses') {
       if (!can(actor, 'warehouse')) return json(response, 403, { error: 'Permission denied' });
       const body = await parseBody(request);
-      const item = { id: uid('wh'), active: true, stock: 0, reorderLevel: 5, unit: 'pcs', category: 'General', location: '', supplier: '', linkedProductId: '', _updatedAt: now(), ...body };
+      const item = { id: uid('wh'), active: true, stock: 0, reorderLevel: 5, unit: 'pcs', category: 'General', location: '', supplier: '', linkedProductId: '', kgPerBoree: 0, pcsPerCarton: 0, _updatedAt: now(), ...body };
       item.stock = Number(item.stock || 0);
       item.reorderLevel = Number(item.reorderLevel || 5);
+      item.kgPerBoree = Math.max(0, Number(item.kgPerBoree || 0));
+      item.pcsPerCarton = Math.max(0, Number(item.pcsPerCarton || 0));
       item.active = !(item.status === 'inactive' || item.active === false);
       item.status = item.active ? 'active' : 'inactive';
       item._updatedAt = now();
@@ -1178,6 +1274,8 @@ async function handleApi(request, response) {
       Object.assign(item, body);
       item.stock = Number(item.stock || 0);
       item.reorderLevel = Number(item.reorderLevel || 5);
+      item.kgPerBoree = Math.max(0, Number(item.kgPerBoree || 0));
+      item.pcsPerCarton = Math.max(0, Number(item.pcsPerCarton || 0));
       item.active = !(item.status === 'inactive' || item.active === false);
       item.status = item.active ? 'active' : 'inactive';
       item._updatedAt = now();
@@ -1207,21 +1305,35 @@ async function handleApi(request, response) {
       const prod = db.products.find(p => p.id === productId);
       if (!wh) return json(response, 404, { error: 'Warehouse item not found' });
       if (!prod) return json(response, 404, { error: 'Product not found' });
+      const convert = body.convert === 'boree' || body.convert === 'carton' ? body.convert : 'none';
+      // Warehousing counts packs (boree/carton); products count sellable units (kg/pcs).
+      const source = direction === 'toWarehouse' ? prod : wh;
+      const target = direction === 'toWarehouse' ? wh : prod;
+      const conversion = convertPackQty(qtyNum, convert, source);
+      if (convert !== 'none' && !conversion.factor) {
+        return json(response, 400, { error: `Set ${convert === 'boree' ? 'kg per boree' : 'pcs per carton'} on ${source.name} first` });
+      }
+      const moveQty = conversion.qty;
       if (direction === 'toProduct') {
         if (Number(wh.stock) < qtyNum) return json(response, 400, { error: `Not enough warehouse stock for ${wh.name}. Available: ${wh.stock}` });
-        wh.stock = Number(wh.stock) - qtyNum;
-        prod.stock = Number(prod.stock || 0) + qtyNum;
+        wh.stock = round2(Number(wh.stock) - qtyNum);
+        prod.stock = round2(Number(prod.stock || 0) + moveQty);
       } else {
         if (Number(prod.stock) < qtyNum) return json(response, 400, { error: `Not enough product stock for ${prod.name}. Available: ${prod.stock}` });
-        prod.stock = Number(prod.stock) - qtyNum;
-        wh.stock = Number(wh.stock || 0) + qtyNum;
+        prod.stock = round2(Number(prod.stock) - qtyNum);
+        wh.stock = round2(Number(wh.stock || 0) + moveQty);
       }
       wh._updatedAt = now();
       prod._updatedAt = now();
-      db.stockMovements.push({ id: uid('stm'), productId, warehouseId, direction: direction || 'toProduct', qty: qtyNum, at: now(), by: actor.name });
-      audit(db, actor, 'transfer', direction === 'toWarehouse' ? 'product-to-warehouse' : 'warehouse-to-product', null, { warehouse: wh.name, product: prod.name, qty: qtyNum });
+      const note = conversion.label
+        ? `${conversion.label} transfer: ${qtyNum} ${conversion.label}${conversion.factor > 1 ? ` = ${moveQty}` : ''}`
+        : 'Stock transfer';
+      if (direction === 'toProduct') {
+        db.stockMovements.unshift({ id: uid('stm'), at: now(), productId, warehouseId, direction, qty: moveQty, packs: qtyNum, convert, note, by: actor.name });
+      }
+      audit(db, actor, 'transfer', direction === 'toWarehouse' ? 'product-to-warehouse' : 'warehouse-to-product', null, { warehouse: wh.name, product: prod.name, qty: qtyNum, moved: moveQty, convert: conversion.label || 'none' });
       await saveDb(db);
-      return json(response, 200, { warehouse: wh, product: prod });
+      return json(response, 200, { warehouse: wh, product: prod, moved: moveQty, packs: qtyNum, convert: conversion.label || 'none' });
     }
 
     if (method === 'GET' && url.pathname === '/api/customers') {
@@ -1864,6 +1976,8 @@ module.exports.hashPassword = hashPassword;
 module.exports.verifyPassword = verifyPassword;
 module.exports.validatePassword = validatePassword;
 module.exports.calculateReport = calculateReport;
+module.exports.dashboardStats = dashboardStats;
+module.exports.convertPackQty = convertPackQty;
 module.exports.resolveProductPricing = resolveProductPricing;
 module.exports.maskCnic = maskCnic;
 module.exports.restoreBackup = restoreBackup;

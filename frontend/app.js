@@ -1,5 +1,5 @@
 /* global React, ReactDOM */
-const APP_VERSION = 'v28';
+const APP_VERSION = 'v35';
 const APP_CHECKSUM = 'customer-product-qty-unit-logo-v28';
 (function() {
   var stored = null;
@@ -190,6 +190,7 @@ const STRINGS = {
     typeBarcodeLabel: 'Type or scan barcode', closeScan: 'Close', startScanning: 'Start camera', stopScanning: 'Stop camera',
     partialPayment: 'Partial', udhaarPayment: 'Credit / Udhaar', deliveryInfo: 'Additional / Delivery Information',
     deliveryInfoNote: 'Optional - shown on the printed invoice', deliverTo: 'Deliver To', deliverAddress: 'Deliver Address',
+    clearDelivery: 'Clear Delivery',
     transport: 'Transport', trNo: 'TR #', noCases: 'No. of Cases', freightCharges: 'Freight Charges',
     deliveryDate: 'Delivery Date', orderTaker: 'Order Taker', salesPerson: 'Sales Person', packedBy: 'Packed By',
     preparedBy: 'Prepared By', checkedBy: 'Checked By', locationLabel: 'Location', removeLabel: 'Remove',
@@ -207,7 +208,24 @@ const STRINGS = {
     cashNeedsFull: 'Amount received is less than the total. Enter the full amount or switch to Partial/Credit.',
     partialNeedsCustomer: 'Select a registered customer before leaving a balance as udhar.',
     quantityTooHigh: 'Only {stock} {unit} of {name} available in stock',
-    todayLabel: 'Today', saleCompleteMessage: 'Sale completed successfully.'
+    todayLabel: 'Today', saleCompleteMessage: 'Sale completed successfully.',
+    reverseBillTitle: 'Reverse bill', reverseBillHelp: 'Return the whole bill, or reverse only some items from it. Stock and udhar update automatically.',
+    reverseWholeBill: 'Reverse whole bill', reverseSelectedItems: 'Reverse selected items', reverseItems: 'Reverse items',
+    canStillReturn: 'Can return', alreadyReversed: 'Already reversed', reverseNoItems: 'Select at least one item to reverse.',
+    reverseDone: 'Bill reversed and stock updated.', openKhata: 'Open Khata', openKhataHelp: 'Date, time, amount and products of this customer',
+    printBill: 'Print bill', printBillHelp: 'Print the designed bill', billReversedBadge: 'Reversed',
+    searchLowStock: 'Search low stock items...', loadMore: 'Load more', showingCount: 'Showing',
+    addStock: 'Add stock', addStockTitle: 'Add stock', addStockQty: 'Quantity to add', addStockDone: 'Stock added and inventory updated.',
+    setStockExact: 'Set exact stock', stockNow: 'Stock now', stockAfter: 'Stock after', inBoree: 'In boree', inCarton: 'In carton',
+    totalProductsLabel: 'Total products', totalUdharLabel: 'Total udhar', udharCustomersLabel: 'Udhar customers', todayBillsLabel: 'Bills today',
+    todayCreditNote: 'Udhar bills kept out of daily sale', netSalesNote: 'Cash and card sales only',
+    whKgPerBoree: 'Kg per boree', whPcsPerCarton: 'Pcs per carton', whBores: 'Bores', whAddToProduct: 'Add to product',
+    whConvertNote: 'Add bores from the warehouse - it comes off the warehouse and goes into product + inventory.',
+    whNoLink: 'Link a product first', kgPerBoreePh: 'Kg in 1 boree', pcsPerCartonPh: 'Pcs in 1 carton',
+    kgPerBoreeLabel: 'Kg per boree', pcsPerCartonLabel: 'Pcs per carton', packSpec: 'Pack size',
+    stockAddedMsg: 'Stock added to product and inventory.', noUdharYet: 'No udhar yet.',
+    showUdharFirst: 'Udhar customers', selectCustomerToBill: 'Select a customer to make a bill',
+    allBills: 'All bills', recentBillsOnly: 'Recent', searchBills: 'Search invoice or customer...'
   },
   ur: {
     nav_dashboard: 'ڈیش بورڈ', nav_pos: 'نئی فروخت', nav_products: 'پروڈکٹس', nav_warehouse: 'گودام', nav_inventory: 'اسٹاک',
@@ -288,6 +306,7 @@ const STRINGS = {
     typeBarcodeLabel: 'بارکوڈ لکھیں یا اسکین کریں', closeScan: 'بند کریں', startScanning: 'کیمرہ شروع کریں', stopScanning: 'کیمرہ بند کریں',
     partialPayment: 'جزوی ادائیگی', udhaarPayment: 'اُدھار', deliveryInfo: 'اضافی / ڈیلیوری معلومات',
     deliveryInfoNote: 'اختیاری - پرنٹ شدہ بل پر دکھائی جائے گی', deliverTo: 'ڈیلیور کس کو', deliverAddress: 'ڈیلیوری کا پتہ',
+    clearDelivery: 'ڈیلیوری صاف کریں',
     transport: 'ٹرانسپورٹ', trNo: 'ٹی آر نمبر', noCases: 'کیسز کی تعداد', freightCharges: 'فریٹ چارجز',
     deliveryDate: 'ڈیلیوری کی تاریخ', orderTaker: 'آرڈر لینے والا', salesPerson: 'سیلز پرسن', packedBy: 'پیک کرنے والا',
     preparedBy: 'تیار کرنے والا', checkedBy: 'چیک کرنے والا', locationLabel: 'لوکیشن', removeLabel: 'ہٹائیں',
@@ -305,7 +324,24 @@ const STRINGS = {
     cashNeedsFull: 'موصول شدہ رقم کل رقم سے کم ہے۔ پوری رقم درج کریں یا جزوی/اُدھار منتخب کریں۔',
     partialNeedsCustomer: 'اُدھار چھوڑنے سے پہلے رجسٹرڈ گاہک منتخب کریں۔',
     quantityTooHigh: 'صرف {stock} {unit} {name} اسٹاک میں موجود ہیں',
-    todayLabel: 'آج', saleCompleteMessage: 'سیل کامیابی سے مکمل ہوئی۔'
+    todayLabel: 'آج', saleCompleteMessage: 'سیل کامیابی سے مکمل ہوئی۔',
+    reverseBillTitle: 'بل واپس لوٹائیں', reverseBillHelp: 'پورا بل واپس کریں، یا صرف کچھ اشیاء واپس کریں۔ اسٹاک اور اُدھار خود بخود اپڈیٹ ہو جائیں گے۔',
+    reverseWholeBill: 'پورا بل واپس کریں', reverseSelectedItems: 'منتخب اشیاء واپس کریں', reverseItems: 'اشیاء واپس',
+    canStillReturn: 'ابھی واپس ہو سکتا', alreadyReversed: 'پہلے واپس شدہ', reverseNoItems: 'کم از کم ایک آئٹمن واپس کرنے کے لیے منتخب کریں۔',
+    reverseDone: 'بل واپس ہو گیا اور اسٹاک اپڈیٹ ہو گیا۔', openKhata: 'کھاتہ کھولیں', openKhataHelp: 'اس گاہک کی تاریخ، وقت، رقم اور اشیاء',
+    printBill: 'بل پرنٹ کریں', printBillHelp: 'ڈیزائن شدہ بل پرنٹ کریں', billReversedBadge: 'واپس شدہ',
+    searchLowStock: 'کم اسٹاک اشیاء تلاش کریں...', loadMore: 'مزید دکھائیں', showingCount: 'دکھایا جا رہا ہے',
+    addStock: 'اسٹاک شامل کریں', addStockTitle: 'اسٹاک شامل کریں', addStockQty: 'شامل کرنے کی تعداد', addStockDone: 'اسٹاک شامل ہو گیا اور انوینٹری اپڈیٹ ہو گئی۔',
+    setStockExact: 'اسٹاک مکمل طے کریں', stockNow: 'موجودہ اسٹاک', stockAfter: 'اس کے بعد', inBoree: 'بوریوں میں', inCarton: 'کارٹنوں میں',
+    totalProductsLabel: 'کل پروڈکٹس', totalUdharLabel: 'کل اُدھار', udharCustomersLabel: 'اُدھار گاہک', todayBillsLabel: 'آج کے بل',
+    todayCreditNote: 'اُدھار کے بل روزانہ فروخت میں شامل نہیں', netSalesNote: 'صرف نقد اور کارڈ فروخت',
+    whKgPerBoree: 'فی بوری کلو', whPcsPerCarton: 'فی کارٹن عدد', whBores: 'بوریاں', whAddToProduct: 'پروڈکٹ میں شامل کریں',
+    whConvertNote: 'گودام سے بوریاں شامل کریں - گودام سے کم ہوں گی اور پروڈکٹ اور اسٹاک میں شامل ہوں گی۔',
+    whNoLink: 'پہلے پروڈکٹ لنک کریں', kgPerBoreePh: 'ایک بوری میں کلو', pcsPerCartonPh: 'ایک کارٹن میں عدد',
+    kgPerBoreeLabel: 'فی بوری کلو', pcsPerCartonLabel: 'فی کارٹن عدد', packSpec: 'پیک سائز',
+    stockAddedMsg: 'اسٹاک پروڈکٹ اور انوینٹری میں شامل ہو گیا۔', noUdharYet: 'ابھی کوئی اُدھار نہیں۔',
+    showUdharFirst: 'اُدھار والے گاہک', selectCustomerToBill: 'بل بنانے کے لیے گاہک منتخب کریں',
+    allBills: 'تمام بل', recentBillsOnly: 'حالیہ', searchBills: 'انوائس یا گاہک تلاش کریں...'
   }
 };
 const t = key => (STRINGS[LANG] && STRINGS[LANG][key]) || STRINGS.en[key] || key;
@@ -505,31 +541,285 @@ function Login({ onLogin, langTick, bumpLang }) {
         h('p', { className: 'login-hint' }, LANG === 'ur' ? 'مینیجر: akmal@faislabadi.pk یا 03024503010' : 'Manager: akmal@faislabadi.pk or 03024503010'))));
 }
 
-function Metric({ title, value, note }) {
-  return h('article', { className: 'metric-card' }, h('p', null, title), h('h3', null, value), h('small', null, note));
+function Metric({ title, value, note, tone }) {
+  return h('article', { className: 'metric-card' + (tone ? ' ' + tone : '') }, h('p', null, title), h('h3', null, value), note ? h('small', null, note) : null);
 }
 
-function Dashboard({ data, go, client }) {
+const LOW_STOCK_PAGE = 15;
+const BILLS_PAGE = 10;
+
+function stockPackLabel(product) {
+  const bits = [];
+  if (Number(product.kgPerBoree) > 0) bits.push(`${product.kgPerBoree} ${LANG === 'ur' ? 'کلو' : 'kg'}/${LANG === 'ur' ? 'بوری' : 'boree'}`);
+  if (Number(product.pcsPerCarton) > 0) bits.push(`${product.pcsPerCarton} ${LANG === 'ur' ? 'عدد' : 'pcs'}/${LANG === 'ur' ? 'کارٹن' : 'carton'}`);
+  return bits;
+}
+
+function StockAddModal({ product, client, refresh, onClose }) {
+  const [qty, setQty] = useState('');
+  const [convert, setConvert] = useState('none');
+  const [mode, setMode] = useState('add');
+  const [note, setNote] = useState('');
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  const qtyNum = Number(qty) || 0;
+  const factor = convert === 'boree' ? Number(product.kgPerBoree || 0) : convert === 'carton' ? Number(product.pcsPerCarton || 0) : 1;
+  const willAdd = Math.round(qtyNum * factor * 1000) / 1000;
+  const after = mode === 'set' ? willAdd : Math.round((Number(product.stock || 0) + willAdd) * 1000) / 1000;
+  async function save() {
+    if (!(qtyNum > 0)) { setMessage(LANG === 'ur' ? 'ٹھیک تعداد لکھیں۔' : 'Enter a quantity greater than 0.'); return; }
+    if (convert !== 'none' && !(factor > 0)) { setMessage(LANG === 'ur' ? 'پہلے پروڈکٹ میں فی بوری کلو / فی کارٹن عدد لکھیں۔' : 'Set kg per boree / pcs per carton on this product first.'); return; }
+    setBusy(true);
+    setMessage('');
+    try {
+      await client.post(`/api/products/${product.id}/stock`, { qty: qtyNum, convert, mode, note: note.trim() });
+      await refresh();
+      onClose();
+    } catch (err) {
+      setMessage(friendlyError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return ReactDOM.createPortal(h('div', { className: 'modal', onClick: onClose },
+    h('section', { className: 'khata stock-modal', onClick: e => e.stopPropagation() },
+      h('header', { className: 'khata-head' },
+        h('div', null, h('p', { className: 'eyebrow' }, t('hStock')), h('h2', null, `${t('addStock')}: ${product.name}`))),
+      message && h('div', { className: 'notice danger' }, message),
+      h('div', { className: 'stock-now-line' },
+        h('span', null, `${t('stockNow')}: `), h('strong', null, `${product.stock} ${unitLabel(product.unit)}`)),
+      h('div', { className: 'edit-form' },
+        h('div', { className: 'edit-form-row' },
+          h('div', null,
+            h('label', null, t('addStockQty')),
+            h('input', { type: 'number', step: 'any', min: '0', value: qty, onChange: e => setQty(e.target.value), autoFocus: true })),
+          h('div', null,
+            h('label', null, LANG === 'ur' ? 'پیک کی قسم' : 'Pack unit'),
+            h('select', { value: convert, onChange: e => setConvert(e.target.value) },
+              h('option', { value: 'none' }, unitLabel(product.unit)),
+              Number(product.kgPerBoree) > 0 && h('option', { value: 'boree' }, `${t('inBoree')} (${product.kgPerBoree} ${LANG === 'ur' ? 'کلو' : 'kg'})`),
+              Number(product.pcsPerCarton) > 0 && h('option', { value: 'carton' }, `${t('inCarton')} (${product.pcsPerCarton})`))),
+          h('div', null,
+            h('label', null, LANG === 'ur' ? 'طریقہ' : 'Mode'),
+            h('select', { value: mode, onChange: e => setMode(e.target.value) },
+              h('option', { value: 'add' }, t('addStock')),
+              h('option', { value: 'set' }, t('setStockExact'))))),
+        h('div', { className: 'edit-form-row' },
+          h('div', null, h('label', null, t('reasonOptional')), h('input', { value: note, onChange: e => setNote(e.target.value) }))),
+        qtyNum > 0 && h('div', { className: 'stock-preview' },
+          h('span', null, `${qtyNum} ${convert === 'boree' ? t('whBores') : convert === 'carton' ? 'carton' : unitLabel(product.unit)} × ${factor} = `),
+          h('strong', null, `${willAdd} ${unitLabel(product.unit)}`),
+          h('span', { className: 'stock-preview-after' }, `${t('stockAfter')}: ${after} ${unitLabel(product.unit)}`)),
+        h('div', { className: 'form-actions' },
+          h('button', { className: 'primary', disabled: busy, onClick: save }, t('addStock')),
+          h('button', { className: 'secondary', onClick: onClose }, t('close')))))),
+    document.body);
+}
+
+function ReverseBillModal({ sale, customers, client, refresh, onClose }) {
+  const [lookup, setLookup] = useState(null);
+  const [quantities, setQuantities] = useState({});
+  const [reason, setReason] = useState('');
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  const customer = (customers || []).find(item => item.id === sale.customerId);
+  const canVoid = true;
+  useEffect(() => {
+    let stopped = false;
+    client.get(`/api/sales/lookup?saleId=${encodeURIComponent(sale.id)}`)
+      .then(payload => { if (!stopped) setLookup(payload); })
+      .catch(err => { if (!stopped) setMessage(friendlyError(err)); });
+    return () => { stopped = true; };
+  }, [sale.id, client]);
+  function setQty(item, value) {
+    const max = Number(item.eligibleQty);
+    let qty = Number(value || 0);
+    if (qty > max) qty = max;
+    if (qty < 0) qty = 0;
+    setQuantities(old => ({ ...old, [item.productId || item.name]: qty }));
+  }
+  async function reverse(complete) {
+    if (!lookup) return;
+    const items = lookup.items
+      .filter(item => Number(quantities[item.productId || item.name]) > 0)
+      .map(item => ({ productId: item.productId, name: item.name, qty: Number(quantities[item.productId || item.name]) }));
+    if (!complete && !items.length) { setMessage(t('reverseNoItems')); return; }
+    const label = complete ? t('reverseWholeBill') : t('reverseSelectedItems');
+    const detail = complete
+      ? (LANG === 'ur' ? 'تمام باقی مقدار دوبارہ اسٹاک میں شامل ہوگی اور اُدھار کم ہو جائے گا۔' : 'All remaining quantities will go back to stock and any udhar on this bill will be reduced.')
+      : `${LANG === 'ur' ? 'اشیاء' : 'Products'}: ${items.map(item => `${item.name} x${item.qty}`).join(', ')}\n${LANG === 'ur' ? 'واپس آیا مال اسٹاک میں شامل ہوگا۔' : 'Returned stock goes back to inventory and udhar.'}`;
+    if (!await askConfirm(label, `${detail}\n\n${LANG === 'ur' ? 'یہ واپس نہیں ہو سکتا۔' : 'This cannot be undone.'}`)) return;
+    setBusy(true);
+    setMessage('');
+    try {
+      const record = await client.post('/api/returns', { saleId: lookup.sale.id, items: complete ? undefined : items, complete, reason });
+      setMessage(LANG === 'ur'
+        ? `${record.invoiceNo} واپس ہو گیا۔ رقم روپے ${Number(record.total || 0).toLocaleString('en-PK')}۔ اسٹاک اپڈیٹ ہو گیا۔`
+        : `${record.invoiceNo} reversed. Refund ${money(record.total)}. Stock and udhar updated.`);
+      setQuantities({});
+      setLookup(await client.get(`/api/sales/lookup?saleId=${encodeURIComponent(lookup.sale.id)}`));
+      await refresh();
+    } catch (err) {
+      setMessage(friendlyError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function voidBill() {
+    if (!lookup) return;
+    if (!await askConfirm(t('voidBillConfirm'), t('voidBillDetail'))) return;
+    setBusy(true);
+    setMessage('');
+    try {
+      await client.post(`/api/sales/${lookup.sale.id}/void`, {});
+      setMessage(t('voidBillSuccess'));
+      setLookup(await client.get(`/api/sales/lookup?saleId=${encodeURIComponent(lookup.sale.id)}`));
+      await refresh();
+    } catch (err) {
+      setMessage(friendlyError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+  const selectedCount = lookup ? lookup.items.filter(item => Number(quantities[item.productId || item.name]) > 0).length : 0;
+  return ReactDOM.createPortal(h('div', { className: 'modal', onClick: onClose },
+    h('section', { className: 'khata reverse-modal', onClick: e => e.stopPropagation() },
+      h('header', { className: 'khata-head profile-head' },
+        h('div', { className: 'profile-top' },
+          h('div', { className: 'profile-title' },
+            h('p', { className: 'eyebrow' }, t('reverseBillTitle')),
+            h('h2', null, `${t('invoiceWord')} ${sale.invoiceNo}`),
+            h('p', { className: 'subtitle' }, `${new Date(sale.createdAt).toLocaleString('en-PK')} - ${customer ? customer.name : t('walkIn')} - ${money(sale.total)}`))),
+        h('span', { className: `badge ${sale.voided ? 'danger' : sale.paymentType === 'Credit' ? 'warning' : 'success'}` },
+          sale.voided ? t('voided') : paymentMethodLabel(sale.paymentType))),
+      h('p', { className: 'reverse-help' }, t('reverseBillHelp')),
+      message && h('div', { className: 'notice' }, message),
+      !lookup && !message && h('p', { className: 'empty-copy' }, t('loading')),
+      lookup && h('div', { className: 'table-wrap' }, h('table', null,
+        h('thead', null, h('tr', null, [t('hProduct'), t('hPurchased'), t('hAlreadyReturned'), t('hCanStillReturn'), t('hReturnNow')].map((label, index) => h('th', { key: index }, label)))),
+        h('tbody', null, lookup.items.map(item => h('tr', { key: item.productId || item.name },
+          h('td', null, h('strong', null, item.name)),
+          h('td', null, `${item.qty} ${unitLabel(item.unit)}`),
+          h('td', null, String(item.returnedQty)),
+          h('td', null, h('strong', null, String(item.eligibleQty))),
+          h('td', null, item.eligibleQty > 0
+            ? h('input', { className: 'qty-input', type: 'number', min: '0', max: item.eligibleQty, step: isWeightUnit(item.unit) ? '0.25' : '1', value: quantities[item.productId || item.name] ?? '', onChange: e => setQty(item, e.target.value) })
+            : h(Badge, { tone: 'neutral' }, t('fullyReturned'))))))),
+      lookup && h('div', { className: 'reverse-actions' },
+        h('input', { placeholder: t('reasonOptional'), value: reason, onChange: e => setReason(e.target.value), className: 'reverse-reason' }),
+        h('button', { className: 'secondary', disabled: busy || !selectedCount, onClick: () => reverse(false) },
+          `${t('reverseSelectedItems')} (${selectedCount})`),
+        h('button', { className: 'danger-btn', disabled: busy || lookup.items.every(item => item.eligibleQty <= 0), onClick: () => reverse(true) }, t('reverseWholeBill')),
+        canVoid && h('button', { className: 'danger-btn', disabled: busy, onClick: voidBill }, t('voidBill')),
+        h('button', { className: 'secondary', onClick: onClose }, t('close')))))),
+    document.body);
+}
+
+function Dashboard({ data, go, client, refresh }) {
   const report = data.reports?.day || {};
+  const stats = data.stats || {};
+  const [lowQuery, setLowQuery] = useState('');
+  const [lowLimit, setLowLimit] = useState(LOW_STOCK_PAGE);
+  const [billQuery, setBillQuery] = useState('');
+  const [billLimit, setBillLimit] = useState(BILLS_PAGE);
+  const [reverseSale, setReverseSale] = useState(null);
+  const [stockProduct, setStockProduct] = useState(null);
+  const [stockMessage, setStockMessage] = useState('');
+
+  const allSales = data.sales || [];
+  const billQ = billQuery.trim().toLowerCase();
+  const filteredSales = billQ
+    ? allSales.filter(sale => {
+      const name = ((data.customers || []).find(item => item.id === sale.customerId) || {}).name || '';
+      return `${sale.invoiceNo || ''} ${name} ${sale.paymentType || ''}`.toLowerCase().includes(billQ);
+    })
+    : allSales;
+  const recentSales = filteredSales.slice(0, billLimit);
+
+  const lowQ = lowQuery.trim().toLowerCase();
+  const allLow = data.lowStock || [];
+  const filteredLow = lowQ
+    ? allLow.filter(product => `${product.name} ${product.sku || ''} ${product.category || ''}`.toLowerCase().includes(lowQ))
+    : allLow;
+  const lowItems = filteredLow.slice(0, lowLimit);
+
+  const lowStockTotal = allLow.reduce((sum, product) => sum + Number(product.stock || 0), 0);
+  const totalProducts = stats.totalProducts !== undefined ? stats.totalProducts : (data.products || []).length;
+
   return h('div', { className: 'page dashboard' },
     h('div', { className: 'page-title' }, h('div', null, h('p', { className: 'eyebrow' }, t('liveStoreOverview')), h('h1', null, t('nav_dashboard')), h('p', { className: 'subtitle' }, t('dashSubtitle'))), h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } }, h('button', { className: 'primary', onClick: () => go('pos') }, t('newSale')), h('button', { className: 'secondary', onClick: () => client.exportCsv('/api/reports/export.csv', 'sales-report.csv') }, 'Export CSV'))),
     h('section', { className: 'metrics' },
-      h(Metric, { title: t('netSalesToday'), value: money(report.netSales), note: `${report.salesCount || 0} ${t('invoicesCount')}` }),
+      h(Metric, { title: t('netSalesToday'), value: money(report.netSales), note: `${report.salesCount || 0} ${t('invoicesCount')} · ${t('netSalesNote')}` }),
+      h(Metric, { title: t('totalProductsLabel'), value: totalProducts, note: `${stats.lowStockCount !== undefined ? stats.lowStockCount : allLow.length} ${t('lowBadge')} · ${stats.warehouseItems || 0} ${t('nav_warehouse')}` }),
+      h(Metric, { title: t('totalUdharLabel'), value: money(stats.totalUdhar || 0), note: `${stats.udharCustomers || 0} ${t('udharCustomersLabel')}`, tone: (stats.totalUdhar || 0) > 0 ? 'warn' : '' }),
+      h(Metric, { title: t('lowStockItems'), value: allLow.length, note: `${lowStockTotal} ${t('hStock').toLowerCase()} ${t('remainingReorder')}` })),
+    h('section', { className: 'metrics metrics-sub' },
       h(Metric, { title: t('grossProfit'), value: money(report.grossProfit), note: t('grossProfitNote') }),
-      h(Metric, { title: t('creditSales'), value: money(report.creditSales), note: t('creditSalesNote') }),
-      h(Metric, { title: t('lowStockItems'), value: data.lowStock.length, note: t('lowStockNote') })),
+      h(Metric, { title: t('creditSales'), value: money(report.creditSales), note: `${report.creditCount || 0} ${t('billWord')} · ${t('todayCreditNote')}` }),
+      h(Metric, { title: t('todayBillsLabel'), value: report.salesCount || 0, note: `${t('todayLabel')} · ${t('netSalesNote')}` }),
+      h(Metric, { title: t('udharRemaining'), value: money(stats.totalUdhar || 0), note: `${t('totalPaidLabel')} ${money((data.customers || []).reduce((sum, c) => sum + Number(c.totalPaid || 0), 0))}` })),
+    stockMessage && h('div', { className: 'notice' }, stockMessage),
     h('section', { className: 'dashboard-grid' },
-      h('article', { className: 'panel' }, h('div', { className: 'panel-head' }, h('div', null, h('h2', null, t('recentInvoices')), h('p', null, t('latestSales')))), h(SalesTable, { sales: data.sales.slice(0, 8), customers: data.customers })),
-      h('article', { className: 'panel' }, h('div', { className: 'panel-head' }, h('div', null, h('h2', null, t('lowStockAlert')), h('p', null, t('needsRestock')))), data.lowStock.length ? data.lowStock.map(product => h('div', { className: 'stock-row', key: product.id }, h('div', null, h('strong', null, product.name), h('small', null, `${product.stock} ${unitLabel(product.unit)} ${t('remainingReorder')} ${product.reorderLevel}`)), h(Badge, { tone: 'danger' }, t('lowBadge')))) : h('p', { className: 'empty-copy' }, t('noLowStock')))));
+      h('article', { className: 'panel dash-invoices' },
+        h('div', { className: 'panel-head' },
+          h('div', null, h('h2', null, t('recentInvoices')), h('p', null, t('latestSales'))),
+          h('label', { className: 'search dash-search' },
+            h('input', { type: 'search', value: billQuery, onChange: e => { setBillQuery(e.target.value); setBillLimit(BILLS_PAGE); }, placeholder: t('searchBills') }))),
+        h(SalesTable, { sales: recentSales, customers: data.customers, onReverse: setReverseSale }),
+        recentSales.length < filteredSales.length
+          ? h('button', { className: 'secondary load-more-btn', onClick: () => setBillLimit(n => n + BILLS_PAGE) }, `${t('loadMore')} (${filteredSales.length - recentSales.length})`)
+          : null),
+      h('article', { className: 'panel dash-lowstock' },
+        h('div', { className: 'panel-head' },
+          h('div', null, h('h2', null, t('lowStockAlert')), h('p', null, t('needsRestock'))),
+          h('label', { className: 'search dash-search' },
+            h('input', { type: 'search', value: lowQuery, onChange: e => { setLowQuery(e.target.value); setLowLimit(LOW_STOCK_PAGE); }, placeholder: t('searchLowStock') }))),
+        filteredLow.length
+          ? h('div', { className: 'low-stock-list' },
+            lowItems.map(product => {
+              const pack = stockPackLabel(product);
+              return h('div', { className: 'stock-row low-stock-row', key: product.id },
+                h('div', { className: 'low-stock-info' },
+                  h('strong', null, product.name),
+                  h('small', null, `${product.stock} ${unitLabel(product.unit)} ${t('remainingReorder')} ${product.reorderLevel}`),
+                  pack.length ? h('small', { className: 'low-stock-pack' }, pack.join(' · ')) : null),
+                h('div', { className: 'low-stock-actions' },
+                  h(Badge, { tone: 'danger' }, t('lowBadge')),
+                  h('button', { className: 'secondary small low-stock-add', title: t('addStock'), onClick: () => { setStockMessage(''); setStockProduct(product); } }, `+ ${t('addStock')}`)));
+            }))
+          : h('p', { className: 'empty-copy' }, lowQ ? t('noMatchingProducts') : t('noLowStock')),
+        filteredLow.length > lowItems.length
+          ? h('button', { className: 'secondary load-more-btn', onClick: () => setLowLimit(n => n + LOW_STOCK_PAGE) }, `${t('loadMore')} (${filteredLow.length - lowItems.length})`)
+          : null,
+        filteredLow.length > 0 && h('small', { className: 'muted low-stock-count' }, `${t('showingCount')} ${lowItems.length} / ${filteredLow.length}`))),
+    reverseSale && h(ReverseBillModal, { sale: reverseSale, customers: data.customers, client, refresh, onClose: () => setReverseSale(null) }),
+    stockProduct && h(StockAddModal, {
+      product: stockProduct,
+      client,
+      refresh,
+      onClose: () => { setStockMessage(t('addStockDone')); setStockProduct(null); }
+    }));
 }
 
-function SalesTable({ sales, customers }) {
+function SalesTable({ sales, customers, onReverse }) {
   return h('div', { className: 'table-wrap' }, h('table', null,
-    h('thead', null, h('tr', null, [t('thInvoice'), t('thCustomer'), t('thPayment'), t('thDate'), t('thTotal'), t('thStatus')].map(label => h('th', { key: label }, label)))),
+    h('thead', null, h('tr', null, [t('thInvoice'), t('thCustomer'), t('thPayment'), t('thDate'), t('thTotal'), t('thStatus'), ''].map((label, index) => h('th', { key: index }, label)))),
     h('tbody', null, sales.length ? sales.map(sale => {
       const customer = customers.find(item => item.id === sale.customerId);
-      return h('tr', { key: sale.id }, h('td', null, h('strong', null, sale.invoiceNo)), h('td', null, customer?.name || t('walkIn')), h('td', null, h(Badge, { tone: sale.paymentType === 'Credit' ? 'warning' : 'success' }, sale.paymentType)), h('td', null, new Date(sale.createdAt).toLocaleString()), h('td', null, h('strong', null, money(sale.total))), h('td', null, sale.voided ? h(Badge, { tone: 'danger' }, t('voided')) : h(Badge, { tone: 'success' }, t('posted'))));
-    }) : h('tr', null, h('td', { colSpan: 6 }, t('noSalesYet'))))));
+      return h('tr', { key: sale.id },
+        h('td', null, h('strong', null, sale.invoiceNo)),
+        h('td', null, customer?.name || t('walkIn')),
+        h('td', null, h(Badge, { tone: sale.paymentType === 'Credit' ? 'warning' : 'success' }, paymentMethodLabel(sale.paymentType))),
+        h('td', null, new Date(sale.createdAt).toLocaleString()),
+        h('td', null, h('strong', null, money(sale.total))),
+        h('td', null, sale.voided ? h(Badge, { tone: 'danger' }, t('voided'))
+          : sale.returnStatus === 'full' ? h(Badge, { tone: 'danger' }, t('billReversedBadge'))
+          : sale.returnStatus === 'partial' ? h(Badge, { tone: 'warning' }, t('hAlreadyReturned'))
+          : h(Badge, { tone: 'success' }, t('posted'))),
+        h('td', { className: 'row-actions' }, onReverse && !sale.voided
+          ? h('button', { className: 'secondary small reverse-btn', onClick: () => onReverse(sale) }, t('reverseItems'))
+          : null));
+    }) : h('tr', null, h('td', { colSpan: 7 }, t('noSalesYet'))))));
 }
 
 function round3(value) { return Math.round((Number(value) || 0) * 1000) / 1000; }
@@ -717,6 +1007,7 @@ function POS({ client, data, refresh, online, setOnline, go }) {
   const [receipt, setReceipt] = useState(null);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [draftsModal, setDraftsModal] = useState(false);
+  const [khataOpen, setKhataOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [profile, setProfile] = useState(null);
   const searchRef = React.useRef(null);
@@ -1101,6 +1392,22 @@ function POS({ client, data, refresh, online, setOnline, go }) {
     setDelivery(d => ({ ...d, [key]: value }));
   }
 
+  function clearDelivery() {
+    setDelivery(EMPTY_DELIVERY());
+    flash(LANG === 'ur' ? 'ڈیلیوری تفصیل صاف کر دی گئی۔' : 'Delivery details cleared.');
+  }
+
+  function currentBillPreview() {
+    return {
+      invoiceNo: draftId ? `${t('draftsLabel')} #${draftId}` : t('pendingInvoice'),
+      at: Date.now(),
+      items: cart.map(item => ({ name: item.name, qty: item.qty, unit: item.unit, price: item.price })),
+      amount: total,
+      paidAmount: paidNow,
+      paidAtBilling: paidNow
+    };
+  }
+
   useEffect(() => {
     syncQueuedSales();
     const timer = setInterval(syncQueuedSales, 15000);
@@ -1224,7 +1531,8 @@ function POS({ client, data, refresh, online, setOnline, go }) {
             Number(customer.balance) > 0 ? h('span', { className: 'search-item-price' }, `${t('udharBadge')} ${money(customer.balance)}`) : null)))),
       customerId !== 'cus_walkin' && selectedCustomer && h('div', { className: 'customer-balance' },
         h('span', null, t('balanceForCustomer')),
-        h('strong', { style: Number(selectedCustomer.balance) > 0 ? { color: '#c0392b' } : { color: '#267152' } }, money(selectedCustomer.balance))));
+        h('strong', { style: Number(selectedCustomer.balance) > 0 ? { color: '#c0392b' } : { color: '#267152' } }, money(selectedCustomer.balance)),
+        h('button', { className: 'secondary small khata-btn pos-khata-btn', title: t('openKhataHelp'), onClick: () => setKhataOpen(true) }, t('openKhata'))));
   }
 
   function renderCustomerProfile() {
@@ -1382,7 +1690,9 @@ function POS({ client, data, refresh, online, setOnline, go }) {
       : h('div', { className: 'empty bill-empty' }, h('h3', null, t('cartEmpty')), h('p', null, t('scanOrSelect'))));
 
   const deliverySection = h('section', { className: 'delivery-section pos-panel' },
-    h('div', { className: 'panel-head' }, h('div', null, h('h2', null, t('deliveryInfo')), h('p', null, t('deliveryInfoNote')))),
+    h('div', { className: 'panel-head' },
+      h('div', null, h('h2', null, t('deliveryInfo')), h('p', null, t('deliveryInfoNote'))),
+      hasDelivery && h('button', { className: 'secondary small delivery-clear', onClick: clearDelivery }, t('clearDelivery'))),
     h('div', { className: 'delivery-grid' },
       DELIVERY_FIELDS.map(([key, labelKey]) => h('div', { className: 'delivery-field', key },
         h('label', null, t(labelKey)),
@@ -1398,10 +1708,15 @@ function POS({ client, data, refresh, online, setOnline, go }) {
       h('article', { className: 'checkout-panel discount-panel' }, renderDiscountPanel()),
       h('article', { className: 'checkout-panel summary-panel' }, renderSummaryPanel())));
 
+  const currentWaLink = (customerId !== 'cus_walkin' && selectedCustomer && cart.length)
+    ? waLink(selectedCustomer.phone, saleBillText(currentBillPreview(), data.settings))
+    : null;
+
   const actionsSection = h('section', { className: 'actions-section' },
     h('div', { className: 'actions-left' },
       h('button', { className: 'primary', onClick: confirmNewSale }, t('newSale')),
       h('button', { className: 'secondary', onClick: () => saveDraft() }, t('saveDraft')),
+      currentWaLink && h('a', { className: 'secondary wa-btn pos-wa-btn', href: currentWaLink, target: '_blank', rel: 'noreferrer' }, t('whatsappBill')),
       h('button', { className: 'secondary danger-btn', onClick: confirmCancelSale }, t('cancelSale')),
       go && h('button', { className: 'secondary', onClick: () => go('returns') }, t('revertBill'))),
     h('div', { className: 'actions-right' },
@@ -1420,6 +1735,7 @@ function POS({ client, data, refresh, online, setOnline, go }) {
       actionsSection),
     receipt && h(ReceiptModal, { sale: receipt, customers: data.customers, settings: data.settings, onClose: () => setReceipt(null) }),
     cameraOpen && h(ScanCamera, { onCode: onScanCode, onClose: () => setCameraOpen(false) }),
+    khataOpen && selectedCustomer && h(KhataModal, { customer: selectedCustomer, client, settings: data.settings, user: data.user, refresh, onClose: () => setKhataOpen(false) }),
     draftsModal && h(DraftsModal, { drafts: data.drafts || [], customers: data.customers, onLoad: loadDraft, onDelete: deleteDraft, onClose: () => setDraftsModal(false) }));
 }
 
@@ -1750,13 +2066,31 @@ function WarehousePage({ data, client, refresh }) {
     } catch (err) { setMessage(friendlyError(err)); }
   }
 
+  function packOptions(item) {
+    const opts = [];
+    if (Number(item.kgPerBoree) > 0) opts.push({ value: 'boree', factor: Number(item.kgPerBoree), label: `${t('whBores')} (1 = ${item.kgPerBoree} kg)` });
+    if (Number(item.pcsPerCarton) > 0) opts.push({ value: 'carton', factor: Number(item.pcsPerCarton), label: `Carton (1 = ${item.pcsPerCarton} pcs)` });
+    return opts;
+  }
+
+  function packPreview() {
+    if (!transferModal) return '';
+    const opt = packOptions(transferModal.item).find(o => o.value === (transferModal.convert || 'none'));
+    if (!opt) return t('packSpec') + ': ' + t('whNoLink');
+    const qty = Number(transferModal.qty) || 0;
+    const converted = Math.round(qty * opt.factor * 1000) / 1000;
+    return `${qty} ${opt.value === 'boree' ? t('whBores') : 'carton'} x ${opt.factor} = ${converted}`;
+  }
+
   async function doTransfer(direction) {
     if (!transferModal) return;
     const qty = Number(transferModal.qty);
     if (!qty || qty <= 0) { setMessage(LANG === 'ur' ? 'درست تعداد لکھیں۔' : 'Enter a valid quantity.'); return; }
     setMessage('');
+    // Packs are counted on the warehouse side, so conversion only applies to toProduct.
+    const convert = direction === 'toProduct' ? (transferModal.convert || 'none') : 'none';
     try {
-      await client.post('/api/warehouses/transfer', { warehouseId: transferModal.item.id, productId: transferModal.productId, qty, direction });
+      await client.post('/api/warehouses/transfer', { warehouseId: transferModal.item.id, productId: transferModal.productId, qty, direction, convert });
       setTransferModal(null);
       await refresh();
       setMessage(t('transferDone'));
@@ -1793,7 +2127,8 @@ function WarehousePage({ data, client, refresh }) {
         h('td', null, h('strong', null, item.name), item.barcode ? h('small', { style: { display: 'block', color: '#64748b' } }, t('barcodeLabel') + ' ' + item.barcode) : null),
         h('td', null, item.sku || ''),
         h('td', null, item.category || ''),
-        h('td', null, item.stock + ' ' + unitLabel(item.unit), isLow ? h('span', null, ' ', h(Badge, { tone: 'danger' }, t('lowBadge'))) : null),
+        h('td', null, item.stock + ' ' + unitLabel(item.unit), isLow ? h('span', null, ' ', h(Badge, { tone: 'danger' }, t('lowBadge'))) : null,
+          stockPackLabel(item).length ? h('small', { style: { display: 'block', color: '#315f95' } }, stockPackLabel(item).join(' · ')) : null),
         h('td', null, item.location || ''),
         h('td', null, item.supplier || ''),
         h('td', null, linked
@@ -1822,9 +2157,13 @@ function WarehousePage({ data, client, refresh }) {
             products.filter(function(p) { return p.active !== false; }).map(function(p) {
               return h('option', { key: p.id, value: p.id }, p.name + ' (' + (p.stock || 0) + ' in stock)');
             }))),
-        h('div', { style: { marginBottom: '16px' } },
+        h('div', { style: { marginBottom: '12px' } },
           h('label', { style: { display: 'block', marginBottom: '4px', fontWeight: 600 } }, t('phTransferQty')),
-          h('input', { type: 'number', min: '1', step: 'any', style: { width: '100%', padding: '8px', borderRadius: '8px', border: '1px solid #ddd' }, value: transferModal.qty, onChange: function(e) { setTransferModal(Object.assign({}, transferModal, { qty: e.target.value })); }, placeholder: (LANG === 'ur' ? 'گودام میں موجود' : 'In warehouse') + ': ' + transferModal.item.stock })),
+          h('input', { type: 'number', min: '1', step: 'any', style: { width: '100%', padding: '8px', borderRadius: '8px', border: '1px solid #ddd' }, value: transferModal.qty, onChange: function(e) { setTransferModal(Object.assign({}, transferModal, { qty: e.target.value })); }, placeholder: (LANG === 'ur' ? 'گودام میں موجود' : 'In warehouse') + ': ' + transferModal.item.stock }),
+          h('select', { style: { width: '100%', marginTop: '8px', padding: '8px', borderRadius: '8px', border: '1px solid #ddd' }, value: transferModal.convert || 'none', onChange: function(e) { setTransferModal(Object.assign({}, transferModal, { convert: e.target.value })); } },
+            h('option', { value: 'none' }, unitLabel(transferModal.item.unit)),
+            packOptions(transferModal.item).map(function(opt) { return h('option', { key: opt.value, value: opt.value }, opt.label); })),
+          h('small', { style: { display: 'block', marginTop: '6px', color: '#66736f' } }, packPreview())),
         h('div', { style: { display: 'flex', gap: '10px' } },
           h('button', { className: 'primary', disabled: !transferModal.productId, onClick: function() { doTransfer('toProduct'); } }, t('whTransferToProduct')),
           h('button', { className: 'primary', disabled: !transferModal.productId, onClick: function() { doTransfer('toWarehouse'); } }, t('whTransferToWarehouse')),
@@ -1846,6 +2185,8 @@ function WarehousePage({ data, client, refresh }) {
         UNITS.map(unit => h('option', { key: unit.value, value: unit.value }, unit.urdu))),
       h('input', { key: 'location', placeholder: t('phWhLocation'), value: form.location || '', onChange: e => setForm({ ...form, location: e.target.value }) }),
       h('input', { key: 'supplier', placeholder: t('phWhSupplier'), value: form.supplier || '', onChange: e => setForm({ ...form, supplier: e.target.value }) }),
+      h('input', { key: 'kgPerBoree', type: 'number', min: '0', step: 'any', placeholder: t('kgPerBoreePh'), value: form.kgPerBoree || '', onChange: e => setForm({ ...form, kgPerBoree: e.target.value }) }),
+      h('input', { key: 'pcsPerCarton', type: 'number', min: '0', step: 'any', placeholder: t('pcsPerCartonPh'), value: form.pcsPerCarton || '', onChange: e => setForm({ ...form, pcsPerCarton: e.target.value }) }),
       h('button', { key: 'save', className: 'primary' }, t('whAddItem'))),
     h('div', { style: { margin: '12px 0' } },
       h('input', { type: 'search', placeholder: t('searchPlaceholder'), value: search, onChange: e => setSearch(e.target.value), style: { width: '100%', maxWidth: '400px', padding: '8px 12px', border: '1px solid #ddd', borderRadius: '8px' } })),
@@ -2215,6 +2556,8 @@ function ProductEditModal({ product, client, refresh, onClose }) {
     stock: product.stock ?? '',
     reorderLevel: product.reorderLevel ?? 0,
     unit: product.unit || 'pcs',
+    kgPerBoree: product.kgPerBoree ?? '',
+    pcsPerCarton: product.pcsPerCarton ?? '',
     active: product.active !== false && product.status !== 'inactive'
   };
   const [form, setForm] = useState(init);
@@ -2237,6 +2580,8 @@ function ProductEditModal({ product, client, refresh, onClose }) {
         stock: Number(form.stock) || 0,
         reorderLevel: Number(form.reorderLevel) || 0,
         unit: form.unit,
+        kgPerBoree: Number(form.kgPerBoree) || 0,
+        pcsPerCarton: Number(form.pcsPerCarton) || 0,
         active: form.active,
         status: form.active ? 'active' : 'inactive'
       });
@@ -2271,6 +2616,10 @@ function ProductEditModal({ product, client, refresh, onClose }) {
           h('div', null, h('label', null, `${t('hStock')} ${LANG === 'ur' ? 'اکائی' : 'Unit'}`), h('select', { value: form.unit, onChange: e => setForm({ ...form, unit: e.target.value }) }, UNITS.map(unit => h('option', { key: unit.value, value: unit.value }, unit.urdu))))),
         h('div', { className: 'edit-form-row' },
           h('div', null, h('label', null, t('locationLabel')), h('input', { value: form.location, onChange: e => setForm({ ...form, location: e.target.value }), placeholder: t('whLocation') }))),
+        h('div', { className: 'section-label' }, t('packSpec')),
+        h('div', { className: 'edit-form-row' },
+          h('div', null, h('label', null, t('kgPerBoreeLabel')), h('input', { type: 'number', min: '0', step: 'any', value: form.kgPerBoree, onChange: e => setForm({ ...form, kgPerBoree: e.target.value }), placeholder: t('kgPerBoreePh') })),
+          h('div', null, h('label', null, t('pcsPerCartonLabel')), h('input', { type: 'number', min: '0', step: 'any', value: form.pcsPerCarton, onChange: e => setForm({ ...form, pcsPerCarton: e.target.value }), placeholder: t('pcsPerCartonPh') }))),
         h('div', { className: 'edit-form-row' },
           h('label', { style: { display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700 } },
             h('input', { type: 'checkbox', checked: form.active, onChange: e => setForm({ ...form, active: e.target.checked }) }),
@@ -2292,6 +2641,8 @@ function WarehouseEditModal({ item, client, refresh, onClose }) {
     reorderLevel: item.reorderLevel ?? 0,
     location: item.location || '',
     supplier: item.supplier || '',
+    kgPerBoree: item.kgPerBoree ?? '',
+    pcsPerCarton: item.pcsPerCarton ?? '',
     active: item.active !== false && item.status !== 'inactive'
   };
   const [form, setForm] = useState(init);
@@ -2313,6 +2664,8 @@ function WarehouseEditModal({ item, client, refresh, onClose }) {
         reorderLevel: Number(form.reorderLevel) || 0,
         location: form.location,
         supplier: form.supplier,
+        kgPerBoree: Number(form.kgPerBoree) || 0,
+        pcsPerCarton: Number(form.pcsPerCarton) || 0,
         active: form.active,
         status: form.active ? 'active' : 'inactive'
       });
@@ -2345,6 +2698,10 @@ function WarehouseEditModal({ item, client, refresh, onClose }) {
           h('div', null, h('label', null, t('hStock')), h('input', { type: 'number', step: 'any', min: '0', value: form.stock, onChange: e => setForm({ ...form, stock: e.target.value }) })),
           h('div', null, h('label', null, t('phLowAlertAt')), h('input', { type: 'number', min: '0', value: form.reorderLevel, onChange: e => setForm({ ...form, reorderLevel: e.target.value }) })),
           h('div', null, h('label', null, `${t('hStock')} ${LANG === 'ur' ? 'اکائی' : 'Unit'}`), h('select', { value: form.unit, onChange: e => setForm({ ...form, unit: e.target.value }) }, UNITS.map(unit => h('option', { key: unit.value, value: unit.value }, unit.urdu))))),
+        h('div', { className: 'section-label' }, t('packSpec')),
+        h('div', { className: 'edit-form-row' },
+          h('div', null, h('label', null, t('kgPerBoreeLabel')), h('input', { type: 'number', min: '0', step: 'any', value: form.kgPerBoree, onChange: e => setForm({ ...form, kgPerBoree: e.target.value }), placeholder: t('kgPerBoreePh') })),
+          h('div', null, h('label', null, t('pcsPerCartonLabel')), h('input', { type: 'number', min: '0', step: 'any', value: form.pcsPerCarton, onChange: e => setForm({ ...form, pcsPerCarton: e.target.value }), placeholder: t('pcsPerCartonPh') }))),
         h('div', { className: 'edit-form-row' },
           h('label', { style: { display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700 } },
             h('input', { type: 'checkbox', checked: form.active, onChange: e => setForm({ ...form, active: e.target.checked }) }),
@@ -2895,7 +3252,7 @@ function App() {
     h('aside', { className: 'sidebar' + (navOpen ? ' open' : '') }, h('div', { className: 'brand' }, h('img', { className: 'brand-logo', src: 'logo.png?v=27', alt: '' }), h('div', null, h('strong', null, 'Faislabadi'), h('small', null, 'GENERAL STORE'))), h('nav', null, visiblePages.map(([id]) => h('button', { key: id, className: activePage === id ? 'nav-item active' : 'nav-item', onClick: () => { setPage(id); setNavOpen(false); } }, h('span', null, t('nav_' + id)))), h(LangToggle, { tick: bumpLang })), h('div', { className: 'sidebar-footer' }, h('div', { className: 'avatar' }, data.user.name.split(' ').map(part => part[0]).join('').slice(0, 2)), h('div', null, h('strong', null, data.user.name), h('small', null, role)), h('button', { className: 'more', onClick: () => { try { client.post('/api/auth/logout', {}).catch(() => {}); } catch (_) {} localStorage.removeItem(stateKey); setSession(null); } }, t('logout')))),
     h('section', { className: 'main-area' }, h('header', { className: 'topbar' }, activePage === 'pos' && h('button', { className: 'menu-btn', 'aria-label': LANG === 'ur' ? 'مینو کھولیں' : 'Open menu', onClick: () => setNavOpen(!navOpen) }, h('span', { className: 'menu-btn-icon' }, '☰')), h('div', { className: 'crumb' }, 'Faislabadi General Store / ', h('strong', null, t('nav_' + activePage))), h('div', { className: 'top-actions' },
       cloudSync && cloudSync.enabled && h('span', { className: cloudSync.lastError ? 'sync-status offline' : 'sync-status', title: cloudSync.lastSuccessAt ? `${t('cloudSyncedAt')} ${new Date(cloudSync.lastSuccessAt).toLocaleTimeString()}` : t('waitingFirstSync') }, cloudSync.lastError ? t('cloudPending') : (cloudSync.lastSuccessAt ? t('cloudSynced') : t('cloudConnecting'))),
-      h('span', { className: online ? 'sync-status' : 'sync-status offline' }, online ? t('online') : t('offline')), h('button', { className: 'secondary', onClick: refresh }, t('refresh')), h(LangToggle, { tick: bumpLang }))), dataWarning && h('div', { className: 'notice danger', style: { margin: '12px 20px 0' } }, dataWarning), storageNotice && h('div', { className: 'notice warning', style: { margin: '12px 20px 0' } }, storageNotice),     activePage === 'dashboard' ? h(Dashboard, { data, go: setPage, client }) : activePage === 'pos' ? h(POS, { client, data, refresh, online, setOnline, go: setPage }) : activePage === 'users' ? h(UsersAdmin, { client }) : activePage === 'returns' ? h(ReturnsPage, { data, client, refresh }) : activePage === 'reports' ? h(Reports, { data, client }) : activePage === 'purchases' ? h(Purchases, { data, client, refresh }) : activePage === 'settings' ? h(Settings, { data, client }) : activePage === 'warehouse' ? h(WarehousePage, { data, client, refresh }) : h(DataPage, { page: activePage, data, client, refresh })));
+      h('span', { className: online ? 'sync-status' : 'sync-status offline' }, online ? t('online') : t('offline')), h('button', { className: 'secondary', onClick: refresh }, t('refresh')), h(LangToggle, { tick: bumpLang }))), dataWarning && h('div', { className: 'notice danger', style: { margin: '12px 20px 0' } }, dataWarning), storageNotice && h('div', { className: 'notice warning', style: { margin: '12px 20px 0' } }, storageNotice),     activePage === 'dashboard' ? h(Dashboard, { data, go: setPage, client, refresh }) : activePage === 'pos' ? h(POS, { client, data, refresh, online, setOnline, go: setPage }) : activePage === 'users' ? h(UsersAdmin, { client }) : activePage === 'returns' ? h(ReturnsPage, { data, client, refresh }) : activePage === 'reports' ? h(Reports, { data, client }) : activePage === 'purchases' ? h(Purchases, { data, client, refresh }) : activePage === 'settings' ? h(Settings, { data, client }) : activePage === 'warehouse' ? h(WarehousePage, { data, client, refresh }) : h(DataPage, { page: activePage, data, client, refresh })));
     navOpen && h('div', { className: 'menu-backdrop', onClick: () => setNavOpen(false) });
 }
 

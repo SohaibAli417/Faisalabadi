@@ -484,6 +484,64 @@ td {
 .stock-row small { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
 
 /* ================================================================
+   DASHBOARD v2 - second metric row, invoice search, low stock tools
+   ================================================================ */
+.metrics-sub { margin-top: -8px; }
+.metrics-sub .metric-card { background: #fbfdfb; }
+
+.metric-card.warn { border-color: #f0c9a8; background: #fff8f2; }
+.metric-card.warn h3 { color: var(--orange); }
+
+.dash-invoices, .dash-lowstock { display: flex; flex-direction: column; min-width: 0; }
+.dash-search { flex: none; max-width: 210px; }
+
+.load-more-btn { align-self: flex-start; margin-top: 12px; }
+
+.low-stock-list { flex: 1; min-width: 0; }
+.low-stock-row { align-items: flex-start; gap: 10px; }
+.low-stock-info { min-width: 0; flex: 1; }
+.low-stock-info strong { display: block; word-break: break-word; }
+.low-stock-pack { color: var(--blue) !important; }
+.low-stock-actions { display: flex; align-items: center; gap: 8px; flex: none; }
+.low-stock-add { white-space: nowrap; }
+.low-stock-count { display: block; margin-top: 10px; text-align: right; }
+
+.row-actions { text-align: right; white-space: nowrap; }
+.reverse-btn { white-space: nowrap; }
+
+/* ADD STOCK MODAL */
+.stock-modal { max-width: 460px; }
+.stock-now-line { font-size: 13px; color: var(--muted); margin-bottom: 14px; }
+.stock-now-line strong { color: var(--ink); }
+.stock-preview {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.stock-preview strong { color: var(--green); font-size: 15px; }
+.stock-preview-after { margin-inline-start: auto; }
+
+/* REVERSE BILL MODAL */
+.reverse-modal { max-width: 720px; }
+.reverse-help { margin: 0 0 14px; font-size: 12px; color: var(--muted); }
+.qty-input { width: 84px; max-width: 100%; }
+.reverse-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+.reverse-reason { flex: 1 1 180px; min-width: 0; }
+
+/* ================================================================
    POS PAGE (v28 full-width redesign)
    Layout: invoice header + search + bill + delivery on the left,
    sticky checkout column on the right, actions full-width at bottom.
@@ -803,6 +861,8 @@ td {
 }
 .delivery-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .delivery-field label { font-size: 11px; color: var(--muted); font-weight: 700; }
+.delivery-section .panel-head { align-items: flex-start; }
+.delivery-clear { flex: none; margin-top: 2px; }
 .delivery-field input {
   padding: 8px 10px;
   border: 1px solid var(--line);
@@ -859,6 +919,7 @@ td {
   font-size: 13px;
 }
 .customer-balance span { color: var(--muted); font-size: 12px; }
+.customer-balance .pos-khata-btn { margin-inline-start: auto; flex: none; }
 
 /* Customer udhaar profile in POS (right column) */
 .cust-profile {
@@ -1538,6 +1599,48 @@ td {
   .receipt { padding: 16px 12px !important; }
 
   .actions-left button, .actions-right button { min-width: 100% !important; }
+}
+
+/* DASHBOARD v2 RESPONSIVE */
+@media (max-width: 1050px) {
+  .dash-invoices .panel-head, .dash-lowstock .panel-head { flex-wrap: wrap; gap: 10px; }
+  .dash-search { max-width: none; width: 100%; }
+}
+
+@media (max-width: 760px) {
+  .metrics-sub { margin-top: 0; }
+  .load-more-btn { align-self: stretch; }
+
+  .low-stock-row { flex-direction: column; align-items: stretch; }
+  .low-stock-actions { justify-content: space-between; }
+  .low-stock-count { text-align: left; }
+
+  .reverse-actions { flex-direction: column; align-items: stretch; }
+  .reverse-reason { flex: none; width: 100%; }
+  .reverse-actions button { width: 100%; }
+
+  .stock-preview-after { margin-inline-start: 0; width: 100%; }
+  .row-actions { text-align: left; }
+}
+
+@media (max-width: 400px) {
+  .low-stock-actions { flex-wrap: wrap; gap: 6px; }
+  .low-stock-add { flex: 1; }
+}
+
+/* POS v2 - clear delivery, khata + WhatsApp in POS, two-row mobile action bar */
+.pos-wa-btn { text-decoration: none; line-height: 1.4; align-self: center; }
+.actions-section .pos-wa-btn { padding: 10px 14px; font-size: 13px; }
+
+@media (max-width: 760px) {
+  .actions-section { flex-direction: column; align-items: stretch; }
+  .actions-left, .actions-right { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .actions-left button, .actions-right button { min-width: 0 !important; }
+  .actions-left > *:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .actions-right > *:last-child { grid-column: 1 / -1; }
+  .pos-wa-btn { width: 100%; text-align: center; }
+  .customer-balance { flex-wrap: wrap; }
+  .customer-balance .pos-khata-btn { margin-inline-start: 0; width: 100%; }
 }
 
 /* PRINT — the receipt modal is portalled to document.body, so only it prints */
