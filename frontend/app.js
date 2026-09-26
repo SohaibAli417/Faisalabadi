@@ -1,5 +1,5 @@
 /* global React, ReactDOM */
-const APP_VERSION = 'v35';
+const APP_VERSION = 'v36';
 const APP_CHECKSUM = 'customer-product-qty-unit-logo-v28';
 (function() {
   var stored = null;
@@ -212,13 +212,13 @@ const STRINGS = {
     reverseBillTitle: 'Reverse bill', reverseBillHelp: 'Return the whole bill, or reverse only some items from it. Stock and udhar update automatically.',
     reverseWholeBill: 'Reverse whole bill', reverseSelectedItems: 'Reverse selected items', reverseItems: 'Reverse items',
     canStillReturn: 'Can return', alreadyReversed: 'Already reversed', reverseNoItems: 'Select at least one item to reverse.',
-    reverseDone: 'Bill reversed and stock updated.', openKhata: 'Open Khata', openKhataHelp: 'Date, time, amount and products of this customer',
+    reverseDone: 'Bill reversed and stock updated.', openKhata: 'Open Khata', openKhataHelp: 'Date, time, amount and products of this customer', whatsappSendHelp: 'Send this bill on WhatsApp',
     printBill: 'Print bill', printBillHelp: 'Print the designed bill', billReversedBadge: 'Reversed',
     searchLowStock: 'Search low stock items...', loadMore: 'Load more', showingCount: 'Showing',
     addStock: 'Add stock', addStockTitle: 'Add stock', addStockQty: 'Quantity to add', addStockDone: 'Stock added and inventory updated.',
     setStockExact: 'Set exact stock', stockNow: 'Stock now', stockAfter: 'Stock after', inBoree: 'In boree', inCarton: 'In carton',
     totalProductsLabel: 'Total products', totalUdharLabel: 'Total udhar', udharCustomersLabel: 'Udhar customers', todayBillsLabel: 'Bills today',
-    todayCreditNote: 'Udhar bills kept out of daily sale', netSalesNote: 'Cash and card sales only',
+    todayCreditNote: 'Billed today, still to be collected', netSalesNote: 'Cash and card only', cashCollectedLabel: 'Cash/card collected',
     whKgPerBoree: 'Kg per boree', whPcsPerCarton: 'Pcs per carton', whBores: 'Bores', whAddToProduct: 'Add to product',
     whConvertNote: 'Add bores from the warehouse - it comes off the warehouse and goes into product + inventory.',
     whNoLink: 'Link a product first', kgPerBoreePh: 'Kg in 1 boree', pcsPerCartonPh: 'Pcs in 1 carton',
@@ -328,13 +328,13 @@ const STRINGS = {
     reverseBillTitle: 'بل واپس لوٹائیں', reverseBillHelp: 'پورا بل واپس کریں، یا صرف کچھ اشیاء واپس کریں۔ اسٹاک اور اُدھار خود بخود اپڈیٹ ہو جائیں گے۔',
     reverseWholeBill: 'پورا بل واپس کریں', reverseSelectedItems: 'منتخب اشیاء واپس کریں', reverseItems: 'اشیاء واپس',
     canStillReturn: 'ابھی واپس ہو سکتا', alreadyReversed: 'پہلے واپس شدہ', reverseNoItems: 'کم از کم ایک آئٹمن واپس کرنے کے لیے منتخب کریں۔',
-    reverseDone: 'بل واپس ہو گیا اور اسٹاک اپڈیٹ ہو گیا۔', openKhata: 'کھاتہ کھولیں', openKhataHelp: 'اس گاہک کی تاریخ، وقت، رقم اور اشیاء',
+    reverseDone: 'بل واپس ہو گیا اور اسٹاک اپڈیٹ ہو گیا۔', openKhata: 'کھاتہ کھولیں', openKhataHelp: 'اس گاہک کی تاریخ، وقت، رقم اور اشیاء', whatsappSendHelp: 'یہ بل واٹس ایپ پر بھیجیں',
     printBill: 'بل پرنٹ کریں', printBillHelp: 'ڈیزائن شدہ بل پرنٹ کریں', billReversedBadge: 'واپس شدہ',
     searchLowStock: 'کم اسٹاک اشیاء تلاش کریں...', loadMore: 'مزید دکھائیں', showingCount: 'دکھایا جا رہا ہے',
     addStock: 'اسٹاک شامل کریں', addStockTitle: 'اسٹاک شامل کریں', addStockQty: 'شامل کرنے کی تعداد', addStockDone: 'اسٹاک شامل ہو گیا اور انوینٹری اپڈیٹ ہو گئی۔',
     setStockExact: 'اسٹاک مکمل طے کریں', stockNow: 'موجودہ اسٹاک', stockAfter: 'اس کے بعد', inBoree: 'بوریوں میں', inCarton: 'کارٹنوں میں',
     totalProductsLabel: 'کل پروڈکٹس', totalUdharLabel: 'کل اُدھار', udharCustomersLabel: 'اُدھار گاہک', todayBillsLabel: 'آج کے بل',
-    todayCreditNote: 'اُدھار کے بل روزانہ فروخت میں شامل نہیں', netSalesNote: 'صرف نقد اور کارڈ فروخت',
+    todayCreditNote: 'آج کا بل، ابھی وصول ہونا باقی ہے', netSalesNote: 'صرف نقد اور کارڈ', cashCollectedLabel: 'نقد/کارڈ وصول شدہ',
     whKgPerBoree: 'فی بوری کلو', whPcsPerCarton: 'فی کارٹن عدد', whBores: 'بوریاں', whAddToProduct: 'پروڈکٹ میں شامل کریں',
     whConvertNote: 'گودام سے بوریاں شامل کریں - گودام سے کم ہوں گی اور پروڈکٹ اور اسٹاک میں شامل ہوں گی۔',
     whNoLink: 'پہلے پروڈکٹ لنک کریں', kgPerBoreePh: 'ایک بوری میں کلو', pcsPerCartonPh: 'ایک کارٹن میں عدد',
@@ -749,15 +749,15 @@ function Dashboard({ data, go, client, refresh }) {
   return h('div', { className: 'page dashboard' },
     h('div', { className: 'page-title' }, h('div', null, h('p', { className: 'eyebrow' }, t('liveStoreOverview')), h('h1', null, t('nav_dashboard')), h('p', { className: 'subtitle' }, t('dashSubtitle'))), h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } }, h('button', { className: 'primary', onClick: () => go('pos') }, t('newSale')), h('button', { className: 'secondary', onClick: () => client.exportCsv('/api/reports/export.csv', 'sales-report.csv') }, 'Export CSV'))),
     h('section', { className: 'metrics' },
-      h(Metric, { title: t('netSalesToday'), value: money(report.netSales), note: `${report.salesCount || 0} ${t('invoicesCount')} · ${t('netSalesNote')}` }),
+      h(Metric, { title: t('netSalesToday'), value: money(report.netSales), note: `${report.salesCount || 0} ${t('invoicesCount')}` }),
       h(Metric, { title: t('totalProductsLabel'), value: totalProducts, note: `${stats.lowStockCount !== undefined ? stats.lowStockCount : allLow.length} ${t('lowBadge')} · ${stats.warehouseItems || 0} ${t('nav_warehouse')}` }),
       h(Metric, { title: t('totalUdharLabel'), value: money(stats.totalUdhar || 0), note: `${stats.udharCustomers || 0} ${t('udharCustomersLabel')}`, tone: (stats.totalUdhar || 0) > 0 ? 'warn' : '' }),
       h(Metric, { title: t('lowStockItems'), value: allLow.length, note: `${lowStockTotal} ${t('hStock').toLowerCase()} ${t('remainingReorder')}` })),
     h('section', { className: 'metrics metrics-sub' },
       h(Metric, { title: t('grossProfit'), value: money(report.grossProfit), note: t('grossProfitNote') }),
+      h(Metric, { title: t('cashCollectedLabel'), value: money(report.cashSales || 0), note: `${report.cashCount || 0} ${t('billWord')} · ${t('netSalesNote')}` }),
       h(Metric, { title: t('creditSales'), value: money(report.creditSales), note: `${report.creditCount || 0} ${t('billWord')} · ${t('todayCreditNote')}` }),
-      h(Metric, { title: t('todayBillsLabel'), value: report.salesCount || 0, note: `${t('todayLabel')} · ${t('netSalesNote')}` }),
-      h(Metric, { title: t('udharRemaining'), value: money(stats.totalUdhar || 0), note: `${t('totalPaidLabel')} ${money((data.customers || []).reduce((sum, c) => sum + Number(c.totalPaid || 0), 0))}` })),
+      h(Metric, { title: t('todayBillsLabel'), value: report.salesCount || 0, note: `${t('todayLabel')} · ${t('invoicesCount')}` })),
     stockMessage && h('div', { className: 'notice' }, stockMessage),
     h('section', { className: 'dashboard-grid' },
       h('article', { className: 'panel dash-invoices' },
@@ -1010,6 +1010,7 @@ function POS({ client, data, refresh, online, setOnline, go }) {
   const [khataOpen, setKhataOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [profile, setProfile] = useState(null);
+  const [profileTick, setProfileTick] = useState(0);
   const searchRef = React.useRef(null);
   const customerInputRef = React.useRef(null);
   const billRef = React.useRef(null);
@@ -1147,13 +1148,14 @@ function POS({ client, data, refresh, online, setOnline, go }) {
       .then(payload => { if (!stopped) setProfile(payload); })
       .catch(() => { if (!stopped) setProfile(null); });
     return () => { stopped = true; };
-  }, [customerId, client, data.user && data.user.role]);
+  }, [customerId, client, data.user && data.user.role, profileTick]);
 
-  function resetSale() {
+  function resetSale(options) {
+    const keepCustomerId = (options && options.keepCustomerId) || 'cus_walkin';
     setCart([]);
     setDraftId(null);
-    setCustomerId('cus_walkin');
-    setCustomerSearch('');
+    setCustomerId(keepCustomerId);
+    if (keepCustomerId === 'cus_walkin') setCustomerSearch('');
     setCustomerOpen(false);
     setCustomerIdx(-1);
     setPaymentType('Cash');
@@ -1267,8 +1269,12 @@ function POS({ client, data, refresh, online, setOnline, go }) {
         try { await client.del(`/api/drafts/${draftId}`); } catch (_) {}
       }
       setReceipt(sale);
-      resetSale();
+      // Keep an udhar customer selected so their khata immediately refreshes with the new bill,
+      // instead of dropping back to walk-in and hiding it.
+      const keepCustomerId = sale.dueAmount > 0 && customerId !== 'cus_walkin' ? customerId : null;
+      resetSale({ keepCustomerId });
       await refresh();
+      if (keepCustomerId) setProfileTick(n => n + 1);
       setMessage(t('saleCompleteMessage'));
       if (printAfter || printerCfg.autoPrint) {
         setTimeout(() => window.print(), 500);
@@ -1532,7 +1538,13 @@ function POS({ client, data, refresh, online, setOnline, go }) {
       customerId !== 'cus_walkin' && selectedCustomer && h('div', { className: 'customer-balance' },
         h('span', null, t('balanceForCustomer')),
         h('strong', { style: Number(selectedCustomer.balance) > 0 ? { color: '#c0392b' } : { color: '#267152' } }, money(selectedCustomer.balance)),
-        h('button', { className: 'secondary small khata-btn pos-khata-btn', title: t('openKhataHelp'), onClick: () => setKhataOpen(true) }, t('openKhata'))));
+        h('button', { className: 'secondary small khata-btn pos-khata-btn', title: t('openKhataHelp'), onClick: () => setKhataOpen(true) }, t('openKhata')),
+        (() => {
+          const link = currentWaLink || lastBillWaLink;
+          return link
+            ? h('a', { className: 'secondary small wa-btn pos-khata-wa', title: t('whatsappSendHelp'), href: link, target: '_blank', rel: 'noreferrer' }, t('whatsappBill'))
+            : h('span', { className: 'wa-na small' }, t('noWhatsapp'));
+        })()));
   }
 
   function renderCustomerProfile() {
@@ -1700,6 +1712,18 @@ function POS({ client, data, refresh, online, setOnline, go }) {
           ? h('input', { type: 'date', value: delivery[key] || '', onChange: e => setDeliveryField(key, e.target.value) })
           : h('input', { value: delivery[key] || '', onChange: e => setDeliveryField(key, e.target.value) })))));
 
+  // Declared before checkoutSection because renderCustomerPanel() (used inside it) reads these.
+  const currentWaLink = (customerId !== 'cus_walkin' && selectedCustomer && cart.length)
+    ? waLink(selectedCustomer.phone, saleBillText(currentBillPreview(), data.settings))
+    : null;
+
+  // When the cart is empty, fall back to the customer's most recent udhar bill so the WhatsApp
+  // button stays useful right after selecting a customer from search.
+  const lastProfileSale = ((profile && profile.entries) || []).filter(entry => entry.type === 'sale').slice(-1)[0];
+  const lastBillWaLink = (customerId !== 'cus_walkin' && selectedCustomer && lastProfileSale)
+    ? waLink(selectedCustomer.phone, saleBillText(lastProfileSale, data.settings))
+    : null;
+
   const checkoutSection = h('section', { className: 'checkout-section pos-panel' },
     renderCustomerProfile(),
     h('div', { className: 'checkout-grid' },
@@ -1707,10 +1731,6 @@ function POS({ client, data, refresh, online, setOnline, go }) {
       h('article', { className: 'checkout-panel payment-panel' }, renderPaymentPanel()),
       h('article', { className: 'checkout-panel discount-panel' }, renderDiscountPanel()),
       h('article', { className: 'checkout-panel summary-panel' }, renderSummaryPanel())));
-
-  const currentWaLink = (customerId !== 'cus_walkin' && selectedCustomer && cart.length)
-    ? waLink(selectedCustomer.phone, saleBillText(currentBillPreview(), data.settings))
-    : null;
 
   const actionsSection = h('section', { className: 'actions-section' },
     h('div', { className: 'actions-left' },

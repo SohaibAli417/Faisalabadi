@@ -201,7 +201,7 @@ function ensureSchema(db) {
     if (!('pcsPerCarton' in product)) { product.pcsPerCarton = 0; changed = true; }
   }
   for (const sale of db.sales) {
-    if (!('paidAmount' in sale)) { sale.paidAmount = sale.paymentType === 'Credit' ? 0 : money(sale.total); changed = true; }
+    if (!('paidAmount' in sale)) { sale.paidAmount = (sale.paymentType === 'Credit' || sale.paymentType === 'Partial') ? 0 : money(sale.total); changed = true; }
     if (!('dueAmount' in sale)) { sale.dueAmount = Math.max(0, money(sale.total) - money(sale.paidAmount)); changed = true; }
     if (!('returnStatus' in sale)) { sale.returnStatus = 'none'; changed = true; }
   }
@@ -437,38 +437,47 @@ function isCreditSale(sale) {
    return false;
 }
 
+function salePaidAmount(sale) {
+  if (sale.paidAmount === undefined || sale.paidAmount === null || sale.paidAmount === '') {
+    // Older records may predate paidAmount - a credit bill paid nothing, anything else was settled in full.
+    return isCreditSale(sale) ? 0 : money(sale.total);
+  }
+  return money(sale.paidAmount);
+}
+
 function calculateReport(db, period = 'day') {
   const start = periodStart(period).getTime();
   const periodSales = db.sales.filter(sale => !sale.voided && new Date(sale.createdAt).getTime() >= start);
-  // Udhar (credit) bills are tracked separately - they are NOT part of the daily sale total.
-  const sales = periodSales.filter(sale => !isCreditSale(sale));
-  const creditBills = periodSales.filter(isCreditSale);
-  const returns = db.returns.filter(item => new Date(item.createdAt).getTime() >= start);
-  const totals = sales.reduce((acc, sale) => {
+  // Every completed bill counts as a sale for the period, including udhar bills - the goods left
+  // the shop, so the sale happened. Udhar is broken out separately into creditSales/cashSales so the
+  // cash-in-drawer figure is never inflated by money that has not actually been received yet.
+  const totals = periodSales.reduce((acc, sale) => {
     acc.revenue += sale.subtotal;
     acc.discount += sale.discount;
     acc.tax += sale.tax;
     acc.total += sale.total;
     acc.cost += sale.items.reduce((sum, item) => sum + money(item.cost) * Number(item.qty || 0), 0);
+    acc.collected += Math.max(0, salePaidAmount(sale) - money(sale.refunded || 0));
+    if (isCreditSale(sale)) acc.udharDue += Math.max(0, money(sale.dueAmount));
     return acc;
-  }, { revenue: 0, discount: 0, tax: 0, total: 0, cost: 0 });
-  const credit = creditBills.reduce((acc, sale) => {
-    acc.total += sale.total;
-    acc.due += Math.max(0, money(sale.dueAmount));
-    return acc;
-  }, { total: 0, due: 0 });
+  }, { revenue: 0, discount: 0, tax: 0, total: 0, cost: 0, collected: 0, udharDue: 0 });
+  const creditBills = periodSales.filter(isCreditSale);
+  const returns = db.returns.filter(item => new Date(item.createdAt).getTime() >= start);
   const refundTotal = returns.reduce((sum, item) => sum + item.total, 0);
   return {
     period,
-    salesCount: sales.length,
+    salesCount: periodSales.length,
     revenue: money(totals.revenue),
     discounts: money(totals.discount),
     tax: money(totals.tax),
     grossProfit: money(totals.revenue - totals.cost - totals.discount),
     netSales: Math.max(0, money(totals.total - refundTotal)),
-    creditSales: money(credit.total),
+    cashSales: money(totals.collected),
+    cashCount: periodSales.length - creditBills.length,
+    collected: money(totals.collected),
+    creditSales: money(creditBills.reduce((sum, sale) => sum + money(sale.total), 0)),
     creditCount: creditBills.length,
-    creditOutstanding: money(credit.due),
+    creditOutstanding: money(totals.udharDue),
     refunds: money(refundTotal)
   };
 }
@@ -553,7 +562,8 @@ function createSale(db, payload, actor, source = 'online') {
   const paymentType = payload.paymentType || 'Cash';
 
   let paidAmount;
-  if (paymentType === 'Credit') {
+  // 'Partial' also leaves a due behind, so it must be able to carry a part payment.
+  if (paymentType === 'Credit' || paymentType === 'Partial') {
     paidAmount = payload.paidAmount === undefined || payload.paidAmount === null || payload.paidAmount === ''
       ? 0 : money(payload.paidAmount);
   } else {
@@ -640,9 +650,10 @@ function customerTotals(db) {
   const totals = {};
   const entry = id => totals[id] || (totals[id] = { creditPurchases: 0, totalPaid: 0, lastPaymentAt: null });
   for (const sale of db.sales) {
-    if (sale.voided || sale.customerId === 'cus_walkin') continue;
-    if (sale.paymentType !== 'Credit') continue;
-    entry(sale.customerId).creditPurchases += money(sale.total);
+   if (sale.voided || sale.customerId === 'cus_walkin') continue;
+   // Any bill that leaves a due behind is an udhar purchase - not just paymentType === 'Credit'.
+   if (!isCreditSale(sale)) continue;
+   entry(sale.customerId).creditPurchases += money(sale.total);
   }
   for (const payment of db.payments || []) {
     if (!payment.customerId || payment.customerId === 'cus_walkin' || payment.voided) continue;
@@ -1488,7 +1499,7 @@ async function handleApi(request, response) {
       const customer = db.customers.find(item => item.id === id);
       if (!customer) return json(response, 404, { error: 'Customer not found' });
       const creditSales = db.sales
-        .filter(sale => sale.customerId === id && sale.paymentType === 'Credit' && !sale.voided)
+        .filter(sale => sale.customerId === id && isCreditSale(sale) && !sale.voided)
         .map(sale => ({
           type: 'sale',
           id: sale.id,

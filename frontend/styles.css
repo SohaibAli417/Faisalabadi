@@ -920,6 +920,11 @@ td {
 }
 .customer-balance span { color: var(--muted); font-size: 12px; }
 .customer-balance .pos-khata-btn { margin-inline-start: auto; flex: none; }
+.customer-balance .pos-khata-wa { margin-inline-start: 6px; flex: none; text-decoration: none; }
+.customer-balance .wa-na.small { margin-inline-start: 6px; }
+@media (max-width: 720px) {
+  .customer-balance .pos-khata-wa { margin-inline-start: 0; width: 100%; }
+}
 
 /* Customer udhaar profile in POS (right column) */
 .cust-profile {

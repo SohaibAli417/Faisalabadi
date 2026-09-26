@@ -54,16 +54,21 @@ test('profit and loss report calculates sales, tax, profit, credit and refunds',
     total: 200
   });
   const report = calculateReport(db, 'day');
-  assert.equal(report.salesCount, 1);
-  assert.equal(report.revenue, 1000);
+  // Both the cash bill and the udhar bill are sales for the day.
+  assert.equal(report.salesCount, 2);
+  assert.equal(report.revenue, 1500);
   assert.equal(report.discounts, 100);
   assert.equal(report.tax, 162);
-  assert.equal(report.grossProfit, 300);
+  assert.equal(report.grossProfit, 300 + 200);
   assert.equal(report.refunds, 200);
-  assert.equal(report.netSales, 862);
+  assert.equal(report.netSales, 1062 + 500 - 200);
+  // Only the cash bill counts as money actually in the drawer.
+  assert.equal(report.cashSales, 1062);
+  assert.equal(report.cashCount, 1);
+  assert.equal(report.creditOutstanding, 500);
 });
 
-test('udhar credit bills stay out of the daily sale total but are reported separately', () => {
+test('udhar bills count in the daily sale total and are also broken out separately', () => {
   const db = seedData();
   db.sales.push({
     id: 'sale_credit_only',
@@ -73,20 +78,26 @@ test('udhar credit bills stay out of the daily sale total but are reported separ
     discount: 0,
     tax: 0,
     total: 800,
+    paidAmount: 0,
     dueAmount: 800,
     voided: false,
     items: [{ name: 'Credit Item', qty: 1, price: 800, cost: 500 }]
   });
   const report = calculateReport(db, 'day');
-  assert.equal(report.salesCount, 0);
-  assert.equal(report.revenue, 0);
-  assert.equal(report.netSales, 0);
+  // The goods left the shop, so the bill is a sale and shows in the daily total.
+  assert.equal(report.salesCount, 1);
+  assert.equal(report.revenue, 800);
+  assert.equal(report.netSales, 800);
+  // ...but it must never be counted as cash in the drawer.
+  assert.equal(report.cashSales, 0);
+  assert.equal(report.cashCount, 0);
+  assert.equal(report.collected, 0);
   assert.equal(report.creditCount, 1);
   assert.equal(report.creditSales, 800);
   assert.equal(report.creditOutstanding, 800);
 });
 
-test('partial payment counts as a credit bill for the daily sale total', () => {
+test('partial payment counts as a sale, with only the unpaid part left on udhar', () => {
   const db = seedData();
   db.sales.push({
     id: 'sale_partial',
@@ -102,9 +113,34 @@ test('partial payment counts as a credit bill for the daily sale total', () => {
     items: [{ name: 'Item', qty: 1, price: 900, cost: 600 }]
   });
   const report = calculateReport(db, 'day');
-  assert.equal(report.salesCount, 0);
+  assert.equal(report.salesCount, 1);
+  assert.equal(report.netSales, 900);
+  // Cash/card collected only counts the part that was actually received.
+  assert.equal(report.cashSales, 400);
   assert.equal(report.creditCount, 1);
   assert.equal(report.creditOutstanding, 500);
+});
+
+test('a cash bill and an udhar bill both show in the daily sale, cash split correctly', () => {
+  const db = seedData();
+  const at = new Date().toISOString();
+  db.sales.push({
+    id: 'sale_cash', createdAt: at, paymentType: 'Cash', subtotal: 500, discount: 0, tax: 0,
+    total: 500, paidAmount: 500, dueAmount: 0, voided: false,
+    items: [{ name: 'Cash Item', qty: 1, price: 500, cost: 300 }]
+  });
+  db.sales.push({
+    id: 'sale_udhar', createdAt: at, paymentType: 'Credit', subtotal: 700, discount: 0, tax: 0,
+    total: 700, paidAmount: 0, dueAmount: 700, voided: false,
+    items: [{ name: 'Udhar Item', qty: 1, price: 700, cost: 400 }]
+  });
+  const report = calculateReport(db, 'day');
+  assert.equal(report.salesCount, 2);
+  assert.equal(report.netSales, 1200);
+  assert.equal(report.cashSales, 500);
+  assert.equal(report.cashCount, 1);
+  assert.equal(report.collected, 500);
+  assert.equal(report.creditOutstanding, 700);
 });
 
 test('refunds larger than the daily sale never push net sales below zero', () => {
@@ -157,7 +193,8 @@ test('dashboardStats reports products, low stock, udhar and today bills', () => 
   assert.equal(stats.totalCustomers, 3);
   assert.equal(stats.udharCustomers, 2);
   assert.equal(stats.totalUdhar, 4850 + 12600);
-  assert.equal(stats.todayBills, 0);
+  // A completed udhar bill is still a bill made today.
+  assert.equal(stats.todayBills, 1);
   assert.equal(stats.todayCreditBills, 1);
   assert.equal(stats.lowStockCount, db.products.filter(p => p.stock <= p.reorderLevel).length);
 });
