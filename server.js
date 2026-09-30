@@ -884,6 +884,13 @@ function processReturn(db, body, actor) {
   const sale = db.sales.find(item => item.id === lookup || String(item.invoiceNo).toLowerCase() === lookup.toLowerCase());
   if (!sale) throw new Error('Invoice not found');
   if (sale.voided) throw new Error('This invoice was cancelled and cannot be returned');
+  // Checked before anything is moved: a return queued while offline can be replayed on reconnect,
+  // and restocking the goods or refunding the cash a second time would be wrong.
+  const returnClientId = String(body.clientId || '').trim();
+  if (returnClientId) {
+    const seen = (db.returns || []).find(row => row.clientId === returnClientId);
+    if (seen) return { record: seen, duplicate: true };
+  }
 
   const soldByKey = {};
   for (const item of sale.items) soldByKey[itemKey(item)] = item;
@@ -956,6 +963,7 @@ function processReturn(db, body, actor) {
     createdAt: now(),
     createdBy: actor.id,
     createdByName: actor.name || '',
+    clientId: returnClientId || undefined,
     items: returnItems,
     reason: String(body.reason || '').trim() || 'Customer return',
     refundSubtotal,
@@ -978,6 +986,22 @@ function receiveUdharPayment(db, customerId, amountInput, actor, options = {}) {
   const customer = db.customers.find(item => item.id === customerId);
   if (!customer) throw new Error('Customer not found');
   if (customerId === 'cus_walkin') throw new Error('Walk-in customers cannot have udhar');
+  // A payment queued while offline can be sent more than once (retry, reconnect, double tap). The
+  // clientId identifies the same payment, so it is recorded once and never taken from the balance
+  // twice.
+  const clientId = String((options && options.clientId) || '').trim();
+  if (clientId) {
+    const seen = (db.payments || []).find(payment => payment.clientId === clientId);
+    if (seen) {
+      return {
+        payment: seen,
+        balance: money(customer.balance),
+        duplicate: true,
+        recordedPaid: customer.recordedPaid,
+        hasRecordedPaid: customer.recordedPaid !== undefined && customer.recordedPaid !== null && customer.recordedPaid !== ''
+      };
+    }
+  }
   const amount = money(amountInput);
   if (!(amount > 0)) throw new Error('Amount must be more than zero');
   const balance = money(customer.balance);
@@ -996,7 +1020,7 @@ function receiveUdharPayment(db, customerId, amountInput, actor, options = {}) {
   if (customer.recordedPaid !== undefined && customer.recordedPaid !== null && customer.recordedPaid !== '') {
     customer.recordedPaid = money(Number(customer.recordedPaid) + amount);
   }
-  const payment = { id: uid('pay'), customerId, amount, at, createdBy: actor.name || '', createdById: actor.id, saleId: options.saleId || null, note: options.note || '', _updatedAt: now() };
+  const payment = { id: uid('pay'), customerId, amount, at, createdBy: actor.name || '', createdById: actor.id, saleId: options.saleId || null, note: options.note || '', clientId: clientId || undefined, _updatedAt: now() };
   db.payments = [payment, ...(db.payments || [])];
   audit(db, actor, options.clear ? 'clear-udhar' : 'payment', 'customer', customerId, { amount, newBalance: customer.balance, note: options.note || '' });
   return { payment, balance: customer.balance };
@@ -1009,6 +1033,13 @@ function addUdharEntry(db, customerId, body, actor) {
   const customer = db.customers.find(item => item.id === customerId);
   if (!customer) throw new Error('Customer not found');
   if (customerId === 'cus_walkin') throw new Error('Walk-in customers cannot have udhar');
+  // Same idea as a queued payment: a clientId means this exact entry was already recorded, so a
+  // retry must not add the amount to the balance a second time.
+  const clientId = String(body.clientId || '').trim();
+  if (clientId) {
+    const seen = (db.udharEntries || []).find(entry => entry.clientId === clientId);
+    if (seen) return { entry: seen, balance: money(customer.balance), duplicate: true };
+  }
   const amount = money(body.amount);
   if (!(amount > 0)) throw new Error('Amount must be more than zero');
   const note = String(body.note || body.description || '').trim();
@@ -1039,6 +1070,7 @@ function addUdharEntry(db, customerId, body, actor) {
     createdByName: actor.name || '',
     previousBalance,
     balanceAfter: money(previousBalance + amount),
+    clientId: clientId || undefined,
     voided: false,
     _updatedAt: now()
   };
@@ -1052,6 +1084,78 @@ function addUdharEntry(db, customerId, body, actor) {
   customer._updatedAt = now();
   audit(db, actor, 'create', 'udhar', entry.id, { customerId, amount, note, reference, at, previousBalance, newBalance: entry.balanceAfter });
   return { entry, balance: customer.balance };
+}
+
+function updateCustomer(db, id, body, actor) {
+  const customer = db.customers.find(item => item.id === id);
+  if (!customer) throw new Error('Customer not found');
+  // Checked before anything is written: a refused udhar amount must not leave a half-applied edit
+  // (a new name or product list) behind on the customer.
+  const wantsUdharEdit = body.udhaarTotal !== undefined || body.udhaarPaid !== undefined || body.paymentDate !== undefined || body.paymentTime !== undefined;
+  if (wantsUdharEdit && !can(actor, 'udhar')) {
+    throw new Error('Only Admin or Manager can edit udhaar amounts and payment dates');
+  }
+  for (const field of ['name', 'phone', 'cnic', 'address', 'creditLimit']) {
+    if (body[field] !== undefined) customer[field] = field === 'creditLimit' ? money(body[field]) : String(body[field]).trim();
+  }
+  if (Array.isArray(body.products)) {
+    const productList = [];
+    for (const item of body.products) {
+      const rawId = String((item && item.id) || '').trim();
+      const rawName = String((item && (item.name || '')) || '').trim();
+      if (!rawName) continue;
+      if (rawId) {
+        const linked = db.products.find(product => product.id === rawId);
+        if (linked) productList.push({ id: linked.id, name: linked.name, manual: false, ...productQtyUnit(item) });
+        else productList.push({ id: null, name: rawName, manual: true, ...productQtyUnit(item) });
+      } else {
+        productList.push({ id: null, name: rawName, manual: true, ...productQtyUnit(item) });
+      }
+    }
+    customer.products = productList.slice(0, 50);
+    delete customer.productId;
+    delete customer.productName;
+  } else if (body.productId !== undefined || body.productName !== undefined) {
+    const pid = String(body.productId || '').trim();
+    const pname = String(body.productName || '').trim();
+    if (pid) {
+      customer.productId = pid;
+      delete customer.productName;
+    } else {
+      delete customer.productId;
+      if (pname) customer.productName = pname;
+      else delete customer.productName;
+    }
+  }
+  if (can(actor, 'udhar') && wantsUdharEdit) {
+    if (body.udhaarTotal !== undefined) customer.recordedTotal = money(body.udhaarTotal);
+    if (body.udhaarPaid !== undefined) customer.recordedPaid = money(body.udhaarPaid);
+    if (body.udhaarTotal !== undefined || body.udhaarPaid !== undefined) {
+      const totalsMap = customerTotals(db);
+      const totals = totalsMap[id] || { creditPurchases: 0, totalPaid: 0 };
+      const hasRecordedTotal = customer.recordedTotal !== undefined && customer.recordedTotal !== null && customer.recordedTotal !== '';
+      const hasRecordedPaid = customer.recordedPaid !== undefined && customer.recordedPaid !== null && customer.recordedPaid !== '';
+      const total = hasRecordedTotal ? money(customer.recordedTotal) : money(totals.creditPurchases);
+      const paid = hasRecordedPaid ? money(customer.recordedPaid) : money(totals.totalPaid);
+      customer.balance = Math.max(0, total - paid);
+    }
+    if (body.paymentDate !== undefined || body.paymentTime !== undefined) {
+      const related = (db.payments || []).filter(p => p.customerId === id);
+      const latest = related.length ? related.reduce((a, b) => new Date(b.at).getTime() > new Date(a.at).getTime() ? b : a) : null;
+      const base = latest ? new Date(latest.at) : (customer.lastPaymentAt ? new Date(customer.lastPaymentAt) : new Date());
+      const dateStr = body.paymentDate !== undefined && body.paymentDate !== '' ? String(body.paymentDate) : toLocalDateParts(base);
+      const timeStr = body.paymentTime !== undefined && body.paymentTime !== '' ? String(body.paymentTime) : toLocalTimeParts(base);
+      const combined = combineDateTime(dateStr, timeStr);
+      if (combined) {
+        const iso = combined.toISOString();
+        if (latest) latest.at = iso;
+        customer.lastPaymentAt = iso;
+      }
+    }
+  }
+  customer._updatedAt = now();
+  audit(db, actor, 'update', 'customer', customer.id, { name: customer.name, ...(body.udhaarTotal !== undefined ? { udhaarTotal: money(body.udhaarTotal) } : {}), ...(body.udhaarPaid !== undefined ? { udhaarPaid: money(body.udhaarPaid) } : {}) });
+  return customer;
 }
 
 function createSupplier(db, body, actor) {
@@ -1594,73 +1698,9 @@ async function handleApi(request, response) {
     if (method === 'PUT' && /^\/api\/customers\/[^/]+$/.test(url.pathname)) {
       if (!can(actor, 'customers')) return json(response, 403, { error: 'Permission denied' });
       const id = url.pathname.split('/')[3];
-      const customer = db.customers.find(item => item.id === id);
-      if (!customer) return json(response, 404, { error: 'Customer not found' });
+      if (!db.customers.some(item => item.id === id)) return json(response, 404, { error: 'Customer not found' });
       const body = await parseBody(request);
-      for (const field of ['name', 'phone', 'cnic', 'address', 'creditLimit']) {
-        if (body[field] !== undefined) customer[field] = field === 'creditLimit' ? money(body[field]) : String(body[field]).trim();
-      }
-      if (Array.isArray(body.products)) {
-        const productList = [];
-        for (const item of body.products) {
-          const rawId = String((item && item.id) || '').trim();
-          const rawName = String((item && (item.name || '')) || '').trim();
-          if (!rawName) continue;
-          if (rawId) {
-            const linked = db.products.find(product => product.id === rawId);
-            if (linked) productList.push({ id: linked.id, name: linked.name, manual: false, ...productQtyUnit(item) });
-            else productList.push({ id: null, name: rawName, manual: true, ...productQtyUnit(item) });
-          } else {
-            productList.push({ id: null, name: rawName, manual: true, ...productQtyUnit(item) });
-          }
-        }
-        customer.products = productList.slice(0, 50);
-        delete customer.productId;
-        delete customer.productName;
-      } else if (body.productId !== undefined || body.productName !== undefined) {
-        const pid = String(body.productId || '').trim();
-        const pname = String(body.productName || '').trim();
-        if (pid) {
-          customer.productId = pid;
-          delete customer.productName;
-        } else {
-          delete customer.productId;
-          if (pname) customer.productName = pname;
-          else delete customer.productName;
-        }
-      }
-      const wantsUdharEdit = body.udhaarTotal !== undefined || body.udhaarPaid !== undefined || body.paymentDate !== undefined || body.paymentTime !== undefined;
-      if (wantsUdharEdit && !can(actor, 'udhar')) {
-        return json(response, 403, { error: 'Only Admin or Manager can edit udhaar amounts and payment dates' });
-      }
-      if (can(actor, 'udhar') && wantsUdharEdit) {
-        if (body.udhaarTotal !== undefined) customer.recordedTotal = money(body.udhaarTotal);
-        if (body.udhaarPaid !== undefined) customer.recordedPaid = money(body.udhaarPaid);
-        if (body.udhaarTotal !== undefined || body.udhaarPaid !== undefined) {
-          const totalsMap = customerTotals(db);
-          const totals = totalsMap[id] || { creditPurchases: 0, totalPaid: 0 };
-          const hasRecordedTotal = customer.recordedTotal !== undefined && customer.recordedTotal !== null && customer.recordedTotal !== '';
-          const hasRecordedPaid = customer.recordedPaid !== undefined && customer.recordedPaid !== null && customer.recordedPaid !== '';
-          const total = hasRecordedTotal ? money(customer.recordedTotal) : money(totals.creditPurchases);
-          const paid = hasRecordedPaid ? money(customer.recordedPaid) : money(totals.totalPaid);
-          customer.balance = Math.max(0, total - paid);
-        }
-        if (body.paymentDate !== undefined || body.paymentTime !== undefined) {
-          const related = (db.payments || []).filter(p => p.customerId === id);
-          const latest = related.length ? related.reduce((a, b) => new Date(b.at).getTime() > new Date(a.at).getTime() ? b : a) : null;
-          const base = latest ? new Date(latest.at) : (customer.lastPaymentAt ? new Date(customer.lastPaymentAt) : new Date());
-          const dateStr = body.paymentDate !== undefined && body.paymentDate !== '' ? String(body.paymentDate) : toLocalDateParts(base);
-          const timeStr = body.paymentTime !== undefined && body.paymentTime !== '' ? String(body.paymentTime) : toLocalTimeParts(base);
-          const combined = combineDateTime(dateStr, timeStr);
-          if (combined) {
-            const iso = combined.toISOString();
-            if (latest) latest.at = iso;
-            customer.lastPaymentAt = iso;
-          }
-        }
-      }
-      customer._updatedAt = now();
-      audit(db, actor, 'update', 'customer', customer.id, { name: customer.name, ...(body.udhaarTotal !== undefined ? { udhaarTotal: money(body.udhaarTotal) } : {}), ...(body.udhaarPaid !== undefined ? { udhaarPaid: money(body.udhaarPaid) } : {}) });
+      const customer = updateCustomer(db, id, body, actor);
       await saveDb(db);
       return json(response, 200, decorateCustomer(db, customer, customerTotals(db)));
     }
@@ -1873,16 +1913,90 @@ async function handleApi(request, response) {
     if (method === 'POST' && url.pathname === '/api/sync') {
       if (!can(actor, 'pos')) return json(response, 403, { error: 'Permission denied' });
       const body = await parseBody(request);
-      const queuedSales = Array.isArray(body.sales) ? body.sales : [];
       const results = [];
-      for (const queued of queuedSales) {
-        const existing = db.sales.find(sale => sale.clientId && sale.clientId === queued.clientId);
-        if (existing) results.push({ clientId: queued.clientId, status: 'duplicate', sale: existing });
-        else results.push({ clientId: queued.clientId, status: 'created', sale: createSale(db, queued, actor, 'offline-sync') });
+
+      // Everything the shop recorded while offline arrives here. Each entry carries a clientId, so
+      // sending the same entry again (retry, reconnect, double tap) is recognised and skipped
+      // rather than billed or credited twice. A single refused entry is reported on its own and
+      // the rest of the batch still goes through, so one bad entry cannot block the queue.
+      for (const queued of (Array.isArray(body.sales) ? body.sales : [])) {
+        const clientId = String((queued && queued.clientId) || '').trim();
+        try {
+          const existing = db.sales.find(sale => clientId && sale.clientId === clientId);
+          if (existing) results.push({ type: 'sale', clientId, status: 'duplicate' });
+          else results.push({ type: 'sale', clientId, status: 'created', sale: createSale(db, queued, actor, 'offline-sync') });
+        } catch (err) {
+          results.push({ type: 'sale', clientId, status: 'failed', error: err.message });
+        }
       }
+
+      if (Array.isArray(body.udharEntries) && body.udharEntries.length) {
+        if (!can(actor, 'udhar')) return json(response, 403, { error: 'Only Admin or Manager can add udhar' });
+        for (const queued of body.udharEntries) {
+          const clientId = String((queued && queued.clientId) || '').trim();
+          try {
+            const added = addUdharEntry(db, String(queued.customerId || ''), { ...queued, clientId }, actor);
+            results.push({ type: 'udhar', clientId, status: added.duplicate ? 'duplicate' : 'created', entry: added.entry });
+          } catch (err) {
+            results.push({ type: 'udhar', clientId, status: 'failed', error: err.message });
+          }
+        }
+      }
+
+      if (Array.isArray(body.payments) && body.payments.length) {
+        if (!can(actor, 'udhar')) return json(response, 403, { error: 'Only Admin or Manager can record udhar payments' });
+        for (const queued of body.payments) {
+          const clientId = String((queued && queued.clientId) || '').trim();
+          try {
+            // The cashier can pick the date and time on the form, so the queued entry carries them
+            // exactly as typed and they are resolved here, at the moment the entry is recorded.
+            const paidAt = queued.at || (queued.atDate || queued.atTime ? combineDateTime(queued.atDate, queued.atTime) : null);
+            const paid = receiveUdharPayment(db, String(queued.customerId || ''), queued.amount, actor, {
+              note: queued.note || 'Offline payment',
+              saleId: queued.saleId || null,
+              clear: Boolean(queued.clear),
+              at: paidAt || undefined,
+              clientId
+            });
+            results.push({ type: 'payment', clientId, status: paid.duplicate ? 'duplicate' : 'created', payment: paid.payment });
+          } catch (err) {
+            results.push({ type: 'payment', clientId, status: 'failed', error: err.message });
+          }
+        }
+      }
+
+      if (Array.isArray(body.returns) && body.returns.length) {
+        if (!can(actor, 'returns')) return json(response, 403, { error: 'Permission denied' });
+        for (const queued of body.returns) {
+          const clientId = String((queued && queued.clientId) || '').trim();
+          try {
+            const done = processReturn(db, { ...queued, clientId }, actor);
+            results.push({ type: 'return', clientId, status: done.duplicate ? 'duplicate' : 'created', record: done.record });
+          } catch (err) {
+            results.push({ type: 'return', clientId, status: 'failed', error: err.message });
+          }
+        }
+      }
+
+      // A customer edited while offline. Setting the same fields again lands on the same result,
+      // so replaying this is safe and needs no dedupe of its own.
+      if (Array.isArray(body.customers) && body.customers.length) {
+        if (!can(actor, 'customers')) return json(response, 403, { error: 'Permission denied' });
+        for (const queued of body.customers) {
+          const customerId = String((queued && queued.customerId) || '').trim();
+          const clientId = String((queued && queued.clientId) || '').trim();
+          try {
+            const saved = updateCustomer(db, customerId, queued, actor);
+            results.push({ type: 'customer', clientId, status: 'created', customer: decorateCustomer(db, saved, customerTotals(db)) });
+          } catch (err) {
+            results.push({ type: 'customer', clientId, status: 'failed', error: err.message });
+          }
+        }
+      }
+
       await saveDb(db);
       return json(response, 200, { results });
-    }
+      }
 
     if (method === 'POST' && url.pathname.match(/^\/api\/sales\/[^/]+\/void$/)) {
       if (!can(actor, 'returns')) return json(response, 403, { error: 'Permission denied' });
@@ -2245,3 +2359,4 @@ module.exports.stockQtyFor = stockQtyFor;
 module.exports.UNIT_FACTORS = UNIT_FACTORS;
 module.exports.unitDimension = unitDimension;
 module.exports.unitsCompatible = unitsCompatible;
+module.exports.updateCustomer = updateCustomer;

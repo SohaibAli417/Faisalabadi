@@ -67,6 +67,10 @@ const permissionsList = {
 
 const stateKey = 'faislabadi-pos-session';
 const queueKey = 'faislabadi-pos-offline-sales';
+// Udhaar payments, new udhaar entries and returns recorded while offline. Same idea as the sales
+// queue: keep the entry on this device, hand it to /api/sync when the network is back. Every entry
+// carries a clientId so the server records it once even if it is sent twice.
+const actionQueueKey = 'faislabadi-pos-offline-actions';
 const usersCacheKey = 'faislabadi-pos-users-cache';
 const bootstrapCacheKey = 'faislabadi-pos-bootstrap-cache';
 const printerConfigKey = 'faislabadi-pos-printer';
@@ -418,6 +422,94 @@ const loadJson = (key, fallback) => {
   try { return JSON.parse(localStorage.getItem(key)) || fallback; } catch (_) { return fallback; }
 };
 const saveJson = (key, value) => localStorage.setItem(key, JSON.stringify(value));
+
+// --- Offline queue for udhaar payments, new udhaar entries and returns -----------------
+// These are recorded on the device while the internet is down, kept here, and handed to /api/sync
+// once the network returns. Every entry carries a clientId, and the server skips any clientId it
+// has already recorded, so a payment can never be taken twice and a return can never restock twice.
+// True when the request never reached the server (no internet, server asleep, request aborted).
+// A response with a status is a real answer from the server, even a failing one.
+const isNetworkFailure = err => !err || err.status === undefined;
+const actionQueueListeners = new Set();
+function readActionQueue() {
+  const list = loadJson(actionQueueKey, []);
+  return Array.isArray(list) ? list : [];
+}
+function writeActionQueue(list) {
+  saveJson(actionQueueKey, list);
+  for (const listener of actionQueueListeners) listener(list.length);
+}
+function queuedActionCount() {
+  return readActionQueue().length;
+}
+function useQueuedActionCount() {
+  const [count, setCount] = useState(queuedActionCount);
+  useEffect(() => {
+    actionQueueListeners.add(setCount);
+    setCount(queuedActionCount());
+    return () => { actionQueueListeners.delete(setCount); };
+  }, []);
+  return count;
+}
+// Returns true when the entry was stored, false when an identical one is already waiting, so a
+// repeated tap on the same open form cannot queue the same money twice.
+function queueAction(type, body) {
+  const list = readActionQueue();
+  const signatureBody = { ...body };
+  delete signatureBody.clientId;
+  const signature = `${type}|${JSON.stringify(signatureBody)}`;
+  if (list.some(item => item.signature === signature)) return false;
+  list.push({
+    type,
+    body: { ...body, clientId: `offline_${Date.now()}_${Math.floor(Math.random() * 1e6)}` },
+    signature,
+    at: new Date().toISOString()
+  });
+  writeActionQueue(list);
+  return true;
+}
+// Sends everything waiting. Entries the server applied (or recognised as already recorded) are
+// dropped. An entry the server refused for a real reason is reported and dropped too, otherwise it
+// would retry forever and hold up the entries behind it. A network failure keeps the whole queue.
+async function flushActionQueue(client) {
+  const list = readActionQueue();
+  if (!list.length) return { synced: 0, remaining: 0, errors: [] };
+  const body = { udharEntries: [], payments: [], returns: [], customers: [] };
+  for (const item of list) {
+    if (item.type === 'udhar') body.udharEntries.push(item.body);
+    else if (item.type === 'payment') body.payments.push(item.body);
+    else if (item.type === 'return') body.returns.push(item.body);
+    else if (item.type === 'customer') body.customers.push(item.body);
+  }
+  try {
+    const result = await client.post('/api/sync', body);
+    const statuses = new Map(((result && result.results) || []).map(row => [`${row.type}|${row.clientId}`, row]));
+    const errors = [];
+    const remaining = [];
+    for (const item of list) {
+      const row = statuses.get(`${item.type}|${item.body.clientId}`);
+      if (row && row.status === 'failed') errors.push(friendlyError(row.error || 'Rejected by server'));
+      else if (!row) remaining.push(item);
+    }
+    writeActionQueue(remaining);
+    return { synced: list.length - remaining.length, remaining: remaining.length, errors };
+  } catch (err) {
+    if (isNetworkFailure(err)) return { synced: 0, remaining: list.length, errors: [] };
+    return { synced: 0, remaining: list.length, errors: [friendlyError(err)] };
+  }
+}
+function friendlyErrorQueued(count, errors) {
+  const reason = errors.filter(Boolean).join(' ');
+  if (reason) return `${count} offline entr${count === 1 ? 'y' : 'ies'} could not be applied: ${reason}`;
+  return `${count} offline entr${count === 1 ? 'y is' : 'ies are'} waiting to sync.`;
+}
+// Shown after an action was stored on the device instead of the server, so the cashier knows the
+// entry is safe and will appear on its own.
+function offlineSavedMessage(amount, kind) {
+  const what = kind === 'payment' ? (LANG === 'ur' ? 'وصولی' : 'Payment') : kind === 'return' ? (LANG === 'ur' ? 'واپسی' : 'Return') : (LANG === 'ur' ? 'اُدھار' : 'Udhar');
+  const saved = LANG === 'ur' ? `${what} محفوظ ہو گئی۔ یہ انترنت آنے پر خودکار طور پر سنک ہو گئی۔` : `${what} saved on this device. It will sync automatically when the internet returns.`;
+  return Number(amount) > 0 ? `${money(amount)} — ${saved}` : saved;
+}
 const ERROR_UR = [
   [/billing history\. Mark it Inactive/i, 'اس پروڈکٹ کی بلنگ کی تاریخ ہے۔ ڈیلیٹ کے بجائے اسے "بند (Inactive)" کر دیں تاکہ پرانے بل درست رہیں۔'],
   [/Permission denied/i, 'آپ کو اجازت نہیں ہے۔'],
@@ -509,7 +601,13 @@ function apiClient(token, setOnline) {
     setOnline(true);
     const contentType = response.headers.get('content-type') || '';
     const payload = contentType.includes('application/json') ? await response.json() : await response.text();
-    if (!response.ok) throw new Error(payload.message || payload.error || 'Request failed');
+    if (!response.ok) {
+      // The status tells the offline queue apart from a real refusal: a failed fetch has no status
+      // (keep the entry queued), while a 4xx/5xx answer is the server saying no.
+      const error = new Error(payload.message || payload.error || 'Request failed');
+      error.status = response.status;
+      throw error;
+    }
     return payload;
   }
   async function exportCsv(path, filename) {
@@ -722,7 +820,15 @@ function ReverseBillModal({ sale, customers, client, refresh, onClose }) {
       setLookup(await client.get(`/api/sales/lookup?saleId=${encodeURIComponent(lookup.sale.id)}`));
       await refresh();
     } catch (err) {
-      setMessage(friendlyError(err));
+      if (isNetworkFailure(err)) {
+        // The return is kept on this device and sent when the network is back. Stock and udhar are
+        // only moved once the server applies it, so nothing is counted twice.
+        queueAction('return', { saleId: lookup.sale.id, items: complete ? undefined : items, complete, reason });
+        setQuantities({});
+        setMessage(offlineSavedMessage(0, 'return'));
+      } else {
+        setMessage(friendlyError(err));
+      }
     } finally {
       setBusy(false);
     }
@@ -1571,6 +1677,10 @@ function POS({ client, data, refresh, online, setOnline, go }) {
         });
         resetSale();
         setOnline(false);
+        // The offline receipt is built and shown on exactly the same path as an online one, so it
+        // must print the same way too. Without this the cashier got the bill on screen but the
+        // printer stayed silent whenever the request could not reach the server.
+        if (printAfter || printerCfg.autoPrint) schedulePrint();
         setMessage(LANG === 'ur'
           ? 'آف لائن محفوظ ہو گیا۔ رسید نیچے پرنٹ کریں - انٹرنیٹ آنے پر سیل خود بخود سنک ہو جائے گی۔'
           : 'Saved OFFLINE. Receipt printed below - sale will sync automatically when internet returns.');
@@ -2635,12 +2745,13 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
       return;
     }
     setBusy(true);
+    // Built before the request so the same body can be queued if there is no network.
+    const payload = { amount: Number(amount) };
+    if (payDate || payTime) {
+      payload.atDate = payDate;
+      payload.atTime = payTime;
+    }
     try {
-      const payload = { amount: Number(amount) };
-      if (payDate || payTime) {
-        payload.atDate = payDate;
-        payload.atTime = payTime;
-      }
       const result = await client.post(`/api/customers/${customer.id}/payments`, payload);
       setBalance(result.balance);
       setAmount('');
@@ -2649,7 +2760,17 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
       await loadSummary();
       refresh();
     } catch (err) {
-      setMessage(friendlyError(err));
+      if (isNetworkFailure(err)) {
+        // Received offline: take it off the balance on screen so the counter stays correct, and hold
+        // the entry until the server can be reached. The same clientId goes out on every retry, so
+        // the server cannot credit it twice.
+        queueAction('payment', { customerId: customer.id, ...payload });
+        setBalance(Math.max(0, round3((Number(balance) || 0) - Number(amount))));
+        setAmount('');
+        setMessage(offlineSavedMessage(Number(amount), 'payment'));
+      } else {
+        setMessage(friendlyError(err));
+      }
     } finally {
       setBusy(false);
     }
@@ -2688,7 +2809,17 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
       await loadSummary();
       refresh();
     } catch (err) {
-      setMessage(friendlyError(err));
+      if (isNetworkFailure(err)) {
+        // No internet: keep the entry on this device and show the new balance here, so the cashier
+        // can carry on. It is sent to the server on its own once the network is back.
+        queueAction('udhar', { customerId: customer.id, amount: Number(udharForm.amount), note: udharForm.note.trim(), reference: udharForm.reference.trim(), atDate: udharDate, atTime: udharTime });
+        setBalance(Math.max(0, round3((Number(balance) || 0) + Number(udharForm.amount))));
+        setUdharForm({ amount: '', note: '', reference: '' });
+        setUdharOpen(false);
+        setMessage(offlineSavedMessage(Number(udharForm.amount), 'udhar'));
+      } else {
+        setMessage(friendlyError(err));
+      }
     } finally {
       setBusy(false);
     }
@@ -2883,14 +3014,33 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
   const [extraUdhar, setExtraUdhar] = useState({ amount: '', note: '', reference: '' });
   const [extraUdharDate, setExtraUdharDate] = useState(toDateInputValue(new Date().toISOString()));
   const [extraUdharTime, setExtraUdharTime] = useState(toTimeInputValue(new Date().toISOString()));
+  // What one picked product adds to the udhar: its rate in the chosen unit times the quantity.
+  // A line with no price (a name typed by hand) adds nothing, so the total never moves on its own.
+  const productValue = product => {
+    if (!product) return 0;
+    const base = Number(product.price) || 0;
+    if (!(base > 0)) return 0;
+    const rate = rateForUnit(base, product.unit, product.baseUnit || product.unit);
+    return round3(rate * (Number(product.qty) || 0));
+  };
+  // Every change to the product list moves the udhar total by exactly the same amount, so what the
+  // cashier sees added up is what gets saved as the customer's balance.
+  const applyProductChange = (old, products, before) => {
+    const after = products.reduce((sum, product) => sum + productValue(product), 0);
+    const was = before.reduce((sum, product) => sum + productValue(product), 0);
+    const change = round3(after - was);
+    if (!change) return { ...old, products };
+    return {
+      ...old,
+      products,
+      udhaarTotal: canEditUdhar ? Math.max(0, round3((Number(old.udhaarTotal) || 0) + change)) : old.udhaarTotal
+    };
+  };
   const remaining = Math.max(0, (Number(form.udhaarTotal) || 0) - (Number(form.udhaarPaid) || 0));
   // What the picked products are worth. Each row re-prices from its own product rate whenever the
-  // unit changes, so picking a product in grams never charges the per-kilo rate.
-  const productsTotal = form.products.reduce((sum, product) => {
-    const base = Number(product.price) || 0;
-    const rate = rateForUnit(base, product.unit, product.baseUnit || product.unit);
-    return sum + rate * (Number(product.qty) || 0);
-  }, 0);
+  // unit changes, so picking a product in grams never charges the per-kilo rate. This is the same
+  // figure that is added into the udhar total when a product is added, changed or removed.
+  const productsTotal = round3(form.products.reduce((sum, product) => sum + productValue(product), 0));
   const addedProductIds = new Set(form.products.filter(p => p.id).map(p => p.id));
   const productHits = productSearch.trim()
     ? (products || []).filter(prod => !addedProductIds.has(prod.id) && `${prod.name || ''} ${prod.category || ''} ${prod.sku || ''}`.toLowerCase().includes(productSearch.trim().toLowerCase())).slice(0, 6)
@@ -2898,20 +3048,17 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
   const productSelected = form.products.length > 0;
   function addProduct(prod) {
       if (addedProductIds.has(prod.id)) return;
-      // Carry the product's price and its own unit across, so the picked product contributes a real
-      // amount to the udhar total instead of showing up as a nameless line.
-      setForm(old => ({
-        ...old,
-        products: [...old.products, {
-          id: prod.id,
-          name: prod.name,
-          manual: false,
-          qty: 1,
-          unit: prod.unit || '',
-          baseUnit: prod.unit || '',
-          price: Number(prod.price) || 0
-        }]
-      }));
+      // Carry the product's price and its own unit across, so the picked product adds its price to the
+      // udhar total instead of showing up as a nameless line.
+      setForm(old => applyProductChange(old, [...old.products, {
+        id: prod.id,
+        name: prod.name,
+        manual: false,
+        qty: 1,
+        unit: prod.unit || '',
+        baseUnit: prod.unit || '',
+        price: Number(prod.price) || 0
+      }], old.products));
       setProductSearch('');
       setManualDraft('');
     }
@@ -2935,30 +3082,34 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
     setForm(old => ({ ...old, manualMode: false }));
     setManualDraft('');
   }
-  function removeProduct(index) {
-    setForm(old => ({ ...old, products: old.products.filter((_, i) => i !== index) }));
-  }
-  function setProductQty(index, qty) {
-    setForm(old => ({ ...old, products: old.products.map((p, i) => i === index ? { ...p, qty } : p) }));
-  }
-  function setProductUnit(index, unit) {
-    // Keep the physical amount and re-price it from the product's own rate: 2 kg at Rs 100/kg
-    // becomes 2000 gram at Rs 0.05/g, so the udhar total does not jump.
-    setForm(old => ({
-      ...old,
-      products: old.products.map((p, i) => {
-        if (i !== index) return p;
-        const baseUnit = p.baseUnit || p.unit;
-        // Do not guess a conversion between different kinds of unit; the dropdown only offers
-        // compatible ones, so this only guards values loaded from an old record.
-        if (unitDimension(p.unit) && unitDimension(baseUnit) && unitDimension(unit)
-          && unitDimension(unit) !== unitDimension(baseUnit)) return p;
-        const factor = unitToBase(p.unit, baseUnit);
-        const nextFactor = unitToBase(unit, baseUnit);
-        return { ...p, unit, qty: round3((Number(p.qty) || 0) * (factor / (nextFactor || 1))) };
-      })
-    }));
-  }
+    function removeProduct(index) {
+      setForm(old => applyProductChange(old, old.products.filter((_, i) => i !== index), old.products));
+    }
+    function setProductQty(index, qty) {
+      setForm(old => applyProductChange(
+        old,
+        old.products.map((p, i) => i === index ? { ...p, qty } : p),
+        old.products
+      ));
+    }
+    function setProductUnit(index, unit) {
+      // Keep the physical amount and re-price it from the product's own rate: 2 kg at Rs 100/kg
+      // becomes 2000 gram at Rs 0.05/g, so the udhar total does not jump.
+      setForm(old => {
+        const next = old.products.map((p, i) => {
+          if (i !== index) return p;
+          const baseUnit = p.baseUnit || p.unit;
+          // Do not guess a conversion between different kinds of unit; the dropdown only offers
+          // compatible ones, so this only guards values loaded from an old record.
+          if (unitDimension(p.unit) && unitDimension(baseUnit) && unitDimension(unit)
+            && unitDimension(unit) !== unitDimension(baseUnit)) return p;
+          const factor = unitToBase(p.unit, baseUnit);
+          const nextFactor = unitToBase(unit, baseUnit);
+          return { ...p, unit, qty: round3((Number(p.qty) || 0) * (factor / (nextFactor || 1))) };
+        });
+        return applyProductChange(old, next, old.products);
+      });
+    }
 
   // Same append-only endpoint the Khata uses, so a udhar typed here shows up in the ledger and in
   // sync exactly like one typed there - the two screens can never disagree.
@@ -2970,16 +3121,17 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
       return;
     }
     setBusy(true);
+    // Built before the request so the same body can be queued if there is no network.
+    const payload = {
+      amount: Number(extraUdhar.amount),
+      note: extraUdhar.note.trim(),
+      reference: extraUdhar.reference.trim()
+    };
+    if (extraUdharDate || extraUdharTime) {
+      payload.atDate = extraUdharDate;
+      payload.atTime = extraUdharTime;
+    }
     try {
-      const payload = {
-        amount: Number(extraUdhar.amount),
-        note: extraUdhar.note.trim(),
-        reference: extraUdhar.reference.trim()
-      };
-      if (extraUdharDate || extraUdharTime) {
-        payload.atDate = extraUdharDate;
-        payload.atTime = extraUdharTime;
-      }
       const result = await client.post(`/api/customers/${customer.id}/udhar`, payload);
       setExtraUdhar({ amount: '', note: '', reference: '' });
       setExtraUdharDate(toDateInputValue(new Date().toISOString()));
@@ -2990,7 +3142,15 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
         : `New udhar of ${money(result.entry.amount)} recorded. New balance: ${money(result.balance)}.`);
       await refresh();
     } catch (err) {
-      setMessage(friendlyError(err));
+      if (isNetworkFailure(err)) {
+        queueAction('udhar', { customerId: customer.id, ...payload });
+        setExtraUdhar({ amount: '', note: '', reference: '' });
+        setExtraUdharOpen(false);
+        setForm(form => ({ ...form, udhaarTotal: round3((Number(form.udhaarTotal) || 0) + Number(payload.amount)) }));
+        setMessage(offlineSavedMessage(Number(payload.amount), 'udhar'));
+      } else {
+        setMessage(friendlyError(err));
+      }
     } finally {
       setBusy(false);
     }
@@ -3000,39 +3160,51 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
     event.preventDefault();
     setMessage('');
     setBusy(true);
-    try {
-      const payload = { name: form.name, phone: form.phone, address: form.address, creditLimit: Number(form.creditLimit || 0) };
-      if (form.cnic.trim()) payload.cnic = form.cnic.trim();
-      if (canEditUdhar) {
-        if (Number(form.udhaarTotal) !== init.udhaarTotal || Number(form.udhaarPaid) !== init.udhaarPaid) {
-          payload.udhaarTotal = Math.max(0, Number(form.udhaarTotal) || 0);
-          payload.udhaarPaid = Math.max(0, Math.min(Number(form.udhaarPaid) || 0, Number(payload.udhaarTotal)));
-        }
-        if (form.paymentDate !== init.paymentDate || form.paymentTime !== init.paymentTime) {
-          if (form.paymentDate) payload.paymentDate = form.paymentDate;
-          if (form.paymentTime) payload.paymentTime = form.paymentTime;
-        }
+    // Built before the request so the same edit can be queued if there is no network.
+    const payload = { name: form.name, phone: form.phone, address: form.address, creditLimit: Number(form.creditLimit || 0) };
+    if (form.cnic.trim()) payload.cnic = form.cnic.trim();
+    if (canEditUdhar) {
+      if (Number(form.udhaarTotal) !== init.udhaarTotal || Number(form.udhaarPaid) !== init.udhaarPaid) {
+        payload.udhaarTotal = Math.max(0, Number(form.udhaarTotal) || 0);
+        payload.udhaarPaid = Math.max(0, Math.min(Number(form.udhaarPaid) || 0, Number(payload.udhaarTotal)));
       }
-      // Carry the per-unit price so a picked product contributes a real amount to the udhar, not
-      // just a name in the profile list.
-      payload.products = form.products.map(product => {
-        const baseUnit = product.baseUnit || product.unit;
-        return {
-          id: product.id || '',
-          name: product.name || '',
-          manual: Boolean(!product.id),
-          qty: Math.max(0, Number(product.qty) || 1),
-          unit: String(product.unit || '').trim(),
-          baseUnit: String(baseUnit || '').trim(),
-          price: rateForUnit(product.price, product.unit, baseUnit)
-        };
-      });
+      if (form.paymentDate !== init.paymentDate || form.paymentTime !== init.paymentTime) {
+        if (form.paymentDate) payload.paymentDate = form.paymentDate;
+        if (form.paymentTime) payload.paymentTime = form.paymentTime;
+      }
+    }
+    // Carry the per-unit price so a picked product contributes a real amount to the udhar, not
+    // just a name in the profile list.
+    payload.products = form.products.map(product => {
+      const baseUnit = product.baseUnit || product.unit;
+      return {
+        id: product.id || '',
+        name: product.name || '',
+        manual: Boolean(!product.id),
+        qty: Math.max(0, Number(product.qty) || 1),
+        unit: String(product.unit || '').trim(),
+        baseUnit: String(baseUnit || '').trim(),
+        price: rateForUnit(product.price, product.unit, baseUnit)
+      };
+    });
+    try {
       await client.put(`/api/customers/${customer.id}`, payload);
       setMessage(LANG === 'ur' ? 'محفوظ ہو گیا۔' : 'Saved.');
       await refresh();
       onClose();
     } catch (err) {
-      setMessage(friendlyError(err));
+      if (isNetworkFailure(err)) {
+        // Keep the edit on this device and close the form, so the counter can carry on. Sending the
+        // same fields again later gives the same result on the server, and the new udhaar total
+        // goes in with it.
+        queueAction('customer', { customerId: customer.id, ...payload });
+        setMessage(LANG === 'ur'
+          ? 'محفوظ ہو گیا۔ یہ تبدیلی انترنت آنے پر خودکار طور پر سنک ہو گئی۔'
+          : 'Saved on this device. It will sync automatically when the internet returns.');
+        setTimeout(onClose, 1200);
+      } else {
+        setMessage(friendlyError(err));
+      }
     } finally {
       setBusy(false);
     }
@@ -3407,7 +3579,16 @@ function ReturnsPage({ data, client, refresh }) {
       setReason('');
       await refresh();
     } catch (err) {
-      setMessage(friendlyError(err));
+      if (isNetworkFailure(err)) {
+        // Held on the device until the network is back; stock and udhar move only when the server
+        // applies it, and the clientId stops it being applied twice.
+        queueAction('return', { saleId: lookup.sale.id, items: complete ? undefined : items, complete, reason });
+        setQuantities({});
+        setReason('');
+        setMessage(offlineSavedMessage(0, 'return'));
+      } else {
+        setMessage(friendlyError(err));
+      }
     } finally {
       setBusy(false);
     }
@@ -3760,6 +3941,8 @@ function App() {
   const [online, setOnline] = useState(navigator.onLine);
   const [error, setError] = useState('');
   const [dataWarning, setDataWarning] = useState('');
+  const [syncNotice, setSyncNotice] = useState('');
+  const pendingActions = useQueuedActionCount();
   const [cloudSync, setCloudSync] = useState(null);
   const [storageNotice, setStorageNotice] = useState('');
   const [langTick, bumpLang] = useState(0);
@@ -3829,6 +4012,28 @@ function App() {
     return () => { window.removeEventListener('online', onOnline); window.removeEventListener('offline', onOffline); };
   }, [session?.token]);
 
+  // Anything recorded while offline (udhaar payment, new udhaar, return) is sent as soon as the
+  // network is back, from any page, and re-checked on a timer in case the browser misses the event.
+  useEffect(() => {
+    if (!session?.token || session.token === 'offline-token') return;
+    let stopped = false;
+    async function flush() {
+      if (stopped) return;
+      const done = await flushActionQueue(client);
+      if (stopped) return;
+      if (done.synced > 0) {
+        setSyncNotice(LANG === 'ur' ? `${done.synced} آف لائن اندراج سنک ہو گیا۔` : `${done.synced} offline entr${done.synced === 1 ? 'y' : 'ies'} synced.`);
+        await refresh();
+      }
+      if (done.errors.length) setSyncNotice(friendlyErrorQueued(0, done.errors));
+    }
+    flush();
+    const timer = setInterval(flush, 15000);
+    const onBack = () => flush();
+    window.addEventListener('online', onBack);
+    return () => { stopped = true; clearInterval(timer); window.removeEventListener('online', onBack); };
+  }, [client, session?.token]);
+
   if (!session) return h(Login, { onLogin: setSession, langTick, bumpLang });
   if (!data) return h('main', { className: 'loading' }, error || t('loadingData'));
   const role = data.user.role;
@@ -3838,7 +4043,7 @@ function App() {
     h('aside', { className: 'sidebar' + (navOpen ? ' open' : '') }, h('div', { className: 'brand' }, h('img', { className: 'brand-logo', src: 'logo.png?v=27', alt: '' }), h('div', null, h('strong', null, 'Faislabadi'), h('small', null, 'GENERAL STORE'))), h('nav', null, visiblePages.map(([id]) => h('button', { key: id, className: activePage === id ? 'nav-item active' : 'nav-item', onClick: () => { setPage(id); setNavOpen(false); } }, h('span', null, t('nav_' + id)))), h(LangToggle, { tick: bumpLang })), h('div', { className: 'sidebar-footer' }, h('div', { className: 'avatar' }, data.user.name.split(' ').map(part => part[0]).join('').slice(0, 2)), h('div', null, h('strong', null, data.user.name), h('small', null, role)), h('button', { className: 'more', onClick: () => { try { client.post('/api/auth/logout', {}).catch(() => {}); } catch (_) {} localStorage.removeItem(stateKey); setSession(null); } }, t('logout')))),
     h('section', { className: 'main-area' }, h('header', { className: 'topbar' }, activePage === 'pos' && h('button', { className: 'menu-btn', 'aria-label': LANG === 'ur' ? 'مینو کھولیں' : 'Open menu', onClick: () => setNavOpen(!navOpen) }, h('span', { className: 'menu-btn-icon' }, '☰')), h('div', { className: 'crumb' }, 'Faislabadi General Store / ', h('strong', null, t('nav_' + activePage))), h('div', { className: 'top-actions' },
       cloudSync && cloudSync.enabled && h('span', { className: cloudSync.lastError ? 'sync-status offline' : 'sync-status', title: cloudSync.lastSuccessAt ? `${t('cloudSyncedAt')} ${new Date(cloudSync.lastSuccessAt).toLocaleTimeString()}` : t('waitingFirstSync') }, cloudSync.lastError ? t('cloudPending') : (cloudSync.lastSuccessAt ? t('cloudSynced') : t('cloudConnecting'))),
-      h('span', { className: online ? 'sync-status' : 'sync-status offline' }, online ? t('online') : t('offline')), h('button', { className: 'secondary', onClick: refresh }, t('refresh')), h(LangToggle, { tick: bumpLang }))), dataWarning && h('div', { className: 'notice danger', style: { margin: '12px 20px 0' } }, dataWarning), storageNotice && h('div', { className: 'notice warning', style: { margin: '12px 20px 0' } }, storageNotice),     activePage === 'dashboard' ? h(Dashboard, { data, go: setPage, client, refresh }) : activePage === 'pos' ? h(POS, { client, data, refresh, online, setOnline, go: setPage }) : activePage === 'users' ? h(UsersAdmin, { client }) : activePage === 'returns' ? h(ReturnsPage, { data, client, refresh }) : activePage === 'reports' ? h(Reports, { data, client }) : activePage === 'purchases' ? h(Purchases, { data, client, refresh }) : activePage === 'settings' ? h(Settings, { data, client }) : activePage === 'warehouse' ? h(WarehousePage, { data, client, refresh }) : h(DataPage, { page: activePage, data, client, refresh })));
+      h('span', { className: online ? 'sync-status' : 'sync-status offline' }, online ? t('online') : t('offline')), pendingActions > 0 && h('span', { className: 'sync-status offline', title: LANG === 'ur' ? 'انترنت آنے پر یہ خودکار طور پر سنک ہوں گے' : 'These will sync automatically when the internet returns' }, LANG === 'ur' ? `${pendingActions} سنک باقی` : `${pendingActions} waiting to sync`), h('button', { className: 'secondary', onClick: refresh }, t('refresh')), h(LangToggle, { tick: bumpLang }))), dataWarning && h('div', { className: 'notice danger', style: { margin: '12px 20px 0' } }, dataWarning), syncNotice && h('div', { className: 'notice warning', style: { margin: '12px 20px 0' } }, syncNotice), storageNotice && h('div', { className: 'notice warning', style: { margin: '12px 20px 0' } }, storageNotice),     activePage === 'dashboard' ? h(Dashboard, { data, go: setPage, client, refresh }) : activePage === 'pos' ? h(POS, { client, data, refresh, online, setOnline, go: setPage }) : activePage === 'users' ? h(UsersAdmin, { client }) : activePage === 'returns' ? h(ReturnsPage, { data, client, refresh }) : activePage === 'reports' ? h(Reports, { data, client }) : activePage === 'purchases' ? h(Purchases, { data, client, refresh }) : activePage === 'settings' ? h(Settings, { data, client }) : activePage === 'warehouse' ? h(WarehousePage, { data, client, refresh }) : h(DataPage, { page: activePage, data, client, refresh })));
     navOpen && h('div', { className: 'menu-backdrop', onClick: () => setNavOpen(false) });
 }
 
