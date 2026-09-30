@@ -1,6 +1,42 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { seedData, hashPassword, verifyPassword, validatePassword, calculateReport, dashboardStats, convertPackQty, maskCnic, resolveProductPricing } = require('../server');
+const { seedData, hashPassword, verifyPassword, validatePassword, calculateReport, dashboardStats, convertPackQty, maskCnic, resolveProductPricing, isProtectedPath } = require('../server');
+
+test('static file serving blocks the database, secrets and backups', () => {
+  // A data file in a deployed build must never be downloadable, even if an ignore file is wrong.
+  for (const file of [
+    'database/pos-data.json',
+    'database/cloud-cache.json',
+    'database/pos-data-backup-pre-password-change.json',
+    'database/backups/pos-data.json',
+    'database/setup-supabase.sql',
+    '.env',
+    '.env.local',
+    '.git/config'
+  ]) {
+    assert.equal(isProtectedPath(file), true, `${file} must not be served`);
+  }
+  // Traversal and encoded attempts must not slip past the check either.
+  assert.equal(isProtectedPath('../database/pos-data.json'), true);
+  assert.equal(isProtectedPath('database\\pos-data.json'), true);
+  assert.equal(isProtectedPath('/database/pos-data.json'), true);
+});
+
+test('static file serving still allows the real app files', () => {
+  for (const file of [
+    '',
+    'index.html',
+    'app.js',
+    'styles.css',
+    'logo.png',
+    'manifest.json',
+    'vendor/react.production.min.js',
+    'sw.js',
+    'api/health'
+  ]) {
+    assert.equal(isProtectedPath(file), false, `${file} must stay reachable`);
+  }
+});
 
 test('password hashes verify only the original password', () => {
   const stored = hashPassword('admin123');

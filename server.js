@@ -2020,9 +2020,23 @@ async function handleApi(request, response) {
   }
 }
 
+// Paths that must never be downloadable. Kept as a denylist so new data files are covered by
+// default instead of relying on a rule per file.
+const PROTECTED_PREFIXES = ['database', 'backups', '.git'];
+const PROTECTED_NAMES = new Set(['.env', '.env.local', '.vercelignore', '.gitignore']);
+const isProtectedPath = requested => {
+  const segments = String(requested || '').split(/[\\/]+/).filter(Boolean);
+  if (!segments.length) return false;
+  if (PROTECTED_NAMES.has(segments[segments.length - 1])) return true;
+  return segments.some(segment => PROTECTED_PREFIXES.includes(segment));
+};
+
 function serveStatic(request, response) {
   const parsedUrl = new URL(request.url, `http://${request.headers.host}`);
   const requested = parsedUrl.pathname === '/' ? 'index.html' : decodeURIComponent(parsedUrl.pathname).replace(/^\/+/, '');
+  // Never serve the database, secrets or backups over HTTP, even if such a file ever ends up inside
+  // a build. These hold real customer names, phones, CNICs, balances and session/password hashes.
+  if (isProtectedPath(requested)) return response.writeHead(404, securityHeaders).end('Not found');
   const file = path.resolve(root, requested);
   if (file !== root && !file.startsWith(`${root}${path.sep}`)) return response.writeHead(403, securityHeaders).end('Forbidden');
   fs.readFile(file, (error, content) => {
@@ -2100,3 +2114,4 @@ module.exports.voidSale = voidSale;
 module.exports.reversePayment = reversePayment;
 module.exports.can = can;
 module.exports.permissions = permissions;
+module.exports.isProtectedPath = isProtectedPath;
