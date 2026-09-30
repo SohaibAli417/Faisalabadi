@@ -1013,6 +1013,233 @@ const waLink = (phone, text) => {
   const number = waNumber(phone);
   return number ? `https://wa.me/${number}?text=${encodeURIComponent(text || '')}` : null;
 };
+
+// --- Bill as a picture for WhatsApp --------------------------------------------------
+// The bill used to go as a long block of text. It is now drawn on a canvas and shared as an image,
+// so the customer receives the same bill the printer produced. Drawing it here rather than
+// screenshotting the page keeps the result identical on every phone and needs no extra library, so
+// it also works with no internet.
+const BILL_WIDTH = 720;
+const BILL_PAD = 34;
+
+// Shortens a line so it cannot run into the column beside it. The amount is always kept.
+function ellipsize(ctx, text, maxWidth) {
+  const value = String(text == null ? '' : text);
+  if (ctx.measureText(value).width <= maxWidth) return value;
+  let cut = value;
+  while (cut.length > 1 && ctx.measureText(cut + '...').width > maxWidth) cut = cut.slice(0, -1);
+  return cut.trimEnd() + '...';
+}
+
+function drawBillImage(sale, settings, customer, labels) {
+  const t = key => (labels && labels[key] != null ? labels[key] : key);
+  const storeName = (settings && settings.storeName) || 'Faislabadi General Store';
+  const storePhone = (settings && settings.phone) || '';
+  const storeAddress = (settings && settings.address) || '';
+  const saleDate = new Date(sale.createdAt || Date.now());
+  const dateStr = saleDate.toLocaleDateString('en-PK', { year: 'numeric', month: 'short', day: 'numeric' });
+  const timeStr = saleDate.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' });
+  const isCredit = sale.paymentType === 'Credit';
+  const isPartial = isCredit && Number(sale.paidAmount) > 0 && Number(sale.paidAmount) < Number(sale.total);
+  const methodLabel = isPartial ? t('partialPayment') : isCredit ? t('udhaarPayment') : sale.paymentType === 'Card' ? t('card') : t('cash');
+  const due = Math.max(0, Number(sale.total) - Number(sale.paidAmount));
+  const handed = Math.max(Number(sale.paidAmount), Number(sale.receivedAmount) || 0);
+  const change = !isCredit ? Math.max(0, handed - Number(sale.total)) : 0;
+  const delivery = sale.delivery && typeof sale.delivery === 'object' ? sale.delivery : null;
+  const baseBalance = Number.isFinite(Number(sale.previousBalance)) ? Number(sale.previousBalance) : Number(customer && customer.balance) || 0;
+  const items = (sale.items || []).map(item => ({
+    name: item.name,
+    qty: Number(item.qty) || 0,
+    unit: unitLabel(item.unit),
+    price: Number(item.price) || 0,
+    line: (Number(item.price) || 0) * (Number(item.qty) || 0)
+  }));
+
+  const meta = [
+    [t('invoiceWord'), sale.invoiceNo || t('pendingInvoice')],
+    [t('dateLabel'), dateStr],
+    [t('hPaymentTime'), timeStr],
+    [t('cashierLabel'), sale.createdBy || '-'],
+    [t('customerLabel'), (customer && customer.name) || t('walkIn')],
+    [t('paymentLabel'), methodLabel]
+  ];
+  if (sale.reference) meta.push([t('referenceLabel'), sale.reference]);
+  if (sale.offlineDraft) meta.push(['Status', 'OFFLINE - WILL SYNC']);
+
+  const totals = [[t('subtotal'), money(sale.subtotal)]];
+  if (Number(sale.discount) > 0) totals.push([t('discount'), '- ' + money(sale.discount)]);
+  if (Number(sale.additionalDiscount) > 0) totals.push([t('additionalDiscount'), '- ' + money(sale.additionalDiscount)]);
+  if (Number(sale.tax) > 0) totals.push([t('taxWord') + ' (' + (settings && settings.taxRate ? (settings.taxRate * 100).toFixed(0) : '18') + '%)', money(sale.tax)]);
+  totals.push([t('grandTotalLabel'), money(sale.total)]);
+  if (handed > 0) totals.push([t('amountReceived'), money(handed)]);
+  if (change > 0) totals.push([t('changeLabel'), money(change)]);
+  if (due > 0) totals.push([t('udharRemaining'), money(due)]);
+  if (due > 0) totals.push([t('balanceForCustomer'), money(baseBalance + (sale.preview ? due : 0))]);
+
+  // Measured in two passes: lay the bill out on a throwaway canvas to learn its height, then draw
+  // it for real on a canvas of exactly that size. No guessing, so nothing is ever cut off.
+  const measure = document.createElement('canvas').getContext('2d');
+  const canvas = document.createElement('canvas');
+  canvas.width = BILL_WIDTH;
+  const build = ctx => {
+    let y = BILL_PAD;
+    // `align` is passed in because every helper below needs to right-align against a column edge,
+    // and the canvas keeps whatever align it was last given.
+    const text = (value, size, weight, colour, indent = 0, align = 'left') => {
+      ctx.font = `${weight || '400'} ${size || 17}px "Segoe UI", system-ui, sans-serif`;
+      ctx.fillStyle = colour || '#111';
+      ctx.textAlign = align;
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillText(value, BILL_PAD + indent, y);
+    };
+    const rightMargin = BILL_WIDTH - BILL_PAD * 2;
+    const centred = (value, size, weight, colour) => {
+      ctx.font = `${weight || '400'} ${size || 17}px "Segoe UI", system-ui, sans-serif`;
+      ctx.fillStyle = colour || '#111';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillText(value, BILL_WIDTH / 2, y);
+      ctx.textAlign = 'left';
+    };
+    const divider = () => {
+      ctx.strokeStyle = '#d8d8d8';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath();
+      ctx.moveTo(BILL_PAD, Math.round(y) + 0.5);
+      ctx.lineTo(BILL_WIDTH - BILL_PAD, Math.round(y) + 0.5);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      y += 18;
+    };
+    const pair = (left, right, size, weight, colour) => {
+      y += size || 20;
+      text(left, size, weight, colour);
+      text(right, size, weight, colour, rightMargin, 'right');
+    };
+
+    // Header
+    centred(storeName, 27, '700');
+    y += 30;
+    if (storeAddress) centred(storeAddress, 15, '400', '#444');
+    if (storePhone) centred(storePhone, 15, '400', '#444');
+    y += 12;
+    divider();
+
+    // Meta
+    for (const [left, right] of meta) pair(left, right, 18, '400', '#111');
+    y += 6;
+    divider();
+
+    // Item columns
+    const nameX = BILL_PAD;
+    const qtyX = BILL_PAD + 330;
+    const priceX = BILL_PAD + 430;
+    const totalX = BILL_WIDTH - BILL_PAD;
+    y += 20;
+    text(t('hProduct'), 15, '700', '#333');
+    text(t('qtyShort'), 15, '700', '#333', qtyX - nameX, 'right');
+    text(t('rateLabel'), 15, '700', '#333', priceX - nameX, 'right');
+    text(t('totalWord'), 15, '700', '#333', totalX - nameX, 'right');
+    y += 4;
+    divider();
+    for (const item of items) {
+      y += 24;
+      text(ellipsize(ctx, item.name, 320), 17, '400');
+      text(`${item.qty} ${item.unit}`, 17, '400', '#333', qtyX - nameX, 'right');
+      text(moneyRate(item.price), 17, '400', '#333', priceX - nameX, 'right');
+      text(moneyRate(item.line), 17, '600', '#111', totalX - nameX, 'right');
+      // A long name is given its own line rather than being squeezed into the columns.
+      if (ctx.measureText(String(item.name)).width > 320) y += 21;
+    }
+    y += 8;
+    divider();
+
+    // Totals
+    for (const [left, right] of totals) pair(left, right, 18, left === t('grandTotalLabel') ? '700' : '400');
+    y += 6;
+    divider();
+
+    // Delivery
+    if (delivery && DELIVERY_FIELDS.some(([key]) => delivery[key])) {
+      pair(t('deliveryInfo'), '', 18, '700', '#333');
+      for (const [key, labelKey] of DELIVERY_FIELDS) {
+        if (delivery[key]) pair(t(labelKey), delivery[key], 17, '400', '#333');
+      }
+      y += 6;
+      divider();
+    }
+
+    // Footer, same wording as the printed bill
+    y += 22;
+    centred('Thank you for shopping with us!', 17, '400');
+    y += 24;
+    centred('Goods once sold will not be exchanged or returned', 15, '400', '#444');
+    y += 30;
+    centred('Designed and Developed By', 14, '400', '#777');
+    y += 20;
+    centred('Sohaib Ali', 16, '700', '#333');
+    y += 20;
+    centred('Mobile No: 03074224449', 14, '400', '#777');
+    y += BILL_PAD;
+    return y;
+  };
+
+  const height = build(measure);
+  canvas.height = Math.max(320, Math.ceil(height));
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  build(ctx);
+  return canvas;
+}
+
+// Shares the bill as a picture. Phones that support sharing files get the image attached to the
+// message straight from the share sheet; anywhere else the picture is saved so it can be attached by
+// hand. Either way the customer receives the bill itself, not a wall of text.
+async function shareBillImage(sale, settings, customer, labels) {
+  const canvas = drawBillImage(sale, settings, customer, labels);
+  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+  if (!blob) throw new Error('Could not create the bill image');
+  const safeInvoice = String(sale.invoiceNo || 'bill').replace(/[^a-z0-9-]+/gi, '-');
+  const file = new File([blob], `${safeInvoice}.png`, { type: 'image/png' });
+  const caption = `${(settings && settings.storeName) || 'Faislabadi General Store'} - ${sale.invoiceNo || ''}`.trim();
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], text: caption });
+      return 'shared';
+    } catch (err) {
+      if (err && err.name === 'AbortError') return 'cancelled';
+    }
+  }
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = file.name;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+  return 'downloaded';
+}
+
+// Same thing for the screens that only need a button: the outcome is reported in that screen's own
+// message line, so the cashier can see whether the picture was sent or saved.
+async function shareBillAsImage(sale, settings, customer, report) {
+  try {
+    const outcome = await shareBillImage(sale, settings, customer, STRINGS[LANG] || STRINGS.en);
+    if (!report) return;
+    if (outcome === 'shared') {
+      report(LANG === 'ur' ? 'بل کی تصویر بھیج دی گئی۔' : 'Bill picture sent.');
+    } else {
+      report(LANG === 'ur'
+        ? 'بل کی تصویر محفوظ ہو گئی۔ اب WhatsApp کھول کر یہ تصویر بھیجیں۔'
+        : 'Bill picture saved. Open WhatsApp and send this picture.');
+    }
+  } catch (err) {
+    if (report) report(friendlyError(err));
+  }
+}
 // WhatsApp renders a fenced block as monospace, so the same aligned columns the printed receipt uses
 // stay aligned on the phone. This is a real invoice layout, not a "name / qty / price" text dump.
 const WA_WIDTH = 32;
@@ -1980,10 +2207,9 @@ function POS({ client, data, refresh, online, setOnline, go }) {
         h('strong', { style: Number(selectedCustomer.balance) > 0 ? { color: '#c0392b' } : { color: '#267152' } }, money(selectedCustomer.balance)),
         h('button', { className: 'secondary small khata-btn pos-khata-btn', title: t('openKhataHelp'), onClick: () => setKhataOpen(true) }, t('openKhata')),
         (() => {
-          const link = currentWaLink || lastBillWaLink;
-          return link
-            ? h('a', { className: 'secondary small wa-btn pos-khata-wa', title: t('whatsappSendHelp'), href: link, target: '_blank', rel: 'noreferrer' }, t('whatsappBill'))
-            : h('span', { className: 'wa-na small' }, t('noWhatsapp'));
+          if (!selectedCustomer.phone) return h('span', { className: 'wa-na small' }, t('noWhatsapp'));
+          if (!billForShare) return null;
+          return h('button', { className: 'secondary small wa-btn pos-khata-wa', title: t('whatsappSendHelp'), onClick: () => shareBillAsImage(billForShare, data.settings, selectedCustomer, setMessage) }, t('whatsappBill'));
         })()));
   }
 
@@ -2002,8 +2228,8 @@ function POS({ client, data, refresh, online, setOnline, go }) {
     const monthKeys = Object.keys(byMonth).sort().reverse();
 
     function profileSaleRow(sale) {
-      const waBtn = waLink(selectedCustomer.phone, saleBillText(withPrevBalance(sale), data.settings))
-        ? h('a', { className: 'wa-btn', href: waLink(selectedCustomer.phone, saleBillText(withPrevBalance(sale), data.settings)), target: '_blank', rel: 'noreferrer' }, t('whatsappBill'))
+      const waBtn = selectedCustomer && selectedCustomer.phone
+        ? h('button', { className: 'wa-btn', onClick: () => shareBillAsImage(withPrevBalance(sale), data.settings, selectedCustomer, setMessage) }, t('whatsappBill'))
         : h('span', { className: 'wa-na' }, t('noWhatsapp'));
       return h('div', { className: 'cust-sale', key: sale.id },
         h('div', { className: 'cust-sale-meta' },
@@ -2153,16 +2379,14 @@ function POS({ client, data, refresh, online, setOnline, go }) {
           : h('input', { value: delivery[key] || '', onChange: e => setDeliveryField(key, e.target.value) })))));
 
   // Declared before checkoutSection because renderCustomerPanel() (used inside it) reads these.
-  const currentWaLink = (customerId !== 'cus_walkin' && selectedCustomer && cart.length)
-    ? waLink(selectedCustomer.phone, saleBillText(currentBillPreview(), data.settings))
-    : null;
+  const canShareBill = customerId !== 'cus_walkin' && Boolean(selectedCustomer && selectedCustomer.phone);
+  const currentBillForShare = canShareBill && cart.length ? currentBillPreview() : null;
 
   // When the cart is empty, fall back to the customer's most recent udhar bill so the WhatsApp
   // button stays useful right after selecting a customer from search.
   const lastProfileSale = ((profile && profile.entries) || []).filter(entry => entry.type === 'sale').slice(-1)[0];
-  const lastBillWaLink = (customerId !== 'cus_walkin' && selectedCustomer && lastProfileSale)
-      ? waLink(selectedCustomer.phone, saleBillText(withPrevBalance(lastProfileSale), data.settings))
-    : null;
+  const billForShare = currentBillForShare || (canShareBill && lastProfileSale ? withPrevBalance(lastProfileSale) : null);
+
 
   const checkoutSection = h('section', { className: 'checkout-section pos-panel' },
     renderCustomerProfile(),
@@ -2176,7 +2400,7 @@ function POS({ client, data, refresh, online, setOnline, go }) {
     h('div', { className: 'actions-left' },
       h('button', { className: 'primary', onClick: confirmNewSale }, t('newSale')),
       h('button', { className: 'secondary', onClick: () => saveDraft() }, t('saveDraft')),
-      currentWaLink && h('a', { className: 'secondary wa-btn pos-wa-btn', href: currentWaLink, target: '_blank', rel: 'noreferrer' }, t('whatsappBill')),
+      billForShare && h('button', { className: 'secondary wa-btn pos-wa-btn', onClick: () => shareBillAsImage(billForShare, data.settings, selectedCustomer, setMessage) }, t('whatsappBill')),
       h('button', { className: 'secondary danger-btn', onClick: confirmCancelSale }, t('cancelSale')),
       go && h('button', { className: 'secondary', onClick: () => go('returns') }, t('revertBill'))),
     h('div', { className: 'actions-right' },
@@ -2201,6 +2425,7 @@ function POS({ client, data, refresh, online, setOnline, go }) {
 
 function ReceiptModal({ sale, customers, settings, onClose }) {
   const customer = customers.find(item => item.id === sale.customerId);
+  const [shareNote, setShareNote] = useState('');
   const saleDate = new Date(sale.createdAt);
   const dateStr = saleDate.toLocaleDateString('en-PK', { year: 'numeric', month: 'short', day: 'numeric' });
   const timeStr = saleDate.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' });
@@ -2222,11 +2447,13 @@ function ReceiptModal({ sale, customers, settings, onClose }) {
     ? Number(sale.previousBalance)
     : (Number(customer && customer.balance) || 0);
   const closingBalance = due > 0 ? money(baseBalance + (sale.preview ? due : 0)) : null;
-  useEffect(() => {
-    function handlePrintKey(e) { if (e.key === 'F4') { e.preventDefault(); window.print(); } }
-    window.addEventListener('keydown', handlePrintKey);
-    return () => window.removeEventListener('keydown', handlePrintKey);
-  }, []);
+    useEffect(() => {
+      function handlePrintKey(e) { if (e.key === 'F4') { e.preventDefault(); window.print(); } }
+      window.addEventListener('keydown', handlePrintKey);
+      return () => window.removeEventListener('keydown', handlePrintKey);
+    }, []);
+    // The bill goes as a picture of the printed receipt, not as text.
+    const onWhatsapp = () => shareBillAsImage(sale, settings, customer, setShareNote);
   return ReactDOM.createPortal(h('div', { className: 'modal receipt-modal', onClick: onClose },
     h('section', { className: 'receipt ' + paperClass, onClick: function(e) { e.stopPropagation(); } },
       sale.preview && h('div', { className: 'receipt-banner no-print' }, t('notSavedPreview')),
@@ -2286,11 +2513,12 @@ function ReceiptModal({ sale, customers, settings, onClose }) {
         h('p', { className: 'credit-name' }, 'Sohaib Ali'),
         h('p', { className: 'credit-phone' }, 'Mobile No: 03074224449')),
       h('div', { className: 'success-actions no-print' },
-        isCredit && customer && customer.phone && waLink(customer.phone, saleBillText(sale, settings))
-          ? h('a', { className: 'wa-btn', href: waLink(customer.phone, saleBillText(sale, settings)), target: '_blank', rel: 'noreferrer' }, t('whatsappBill'))
+        customer && customer.phone
+          ? h('button', { className: 'wa-btn', onClick: onWhatsapp }, t('whatsappBill'))
           : null,
         h('button', { className: 'secondary', onClick: function() { window.print(); } }, 'Print (F4)'),
-        h('button', { className: 'primary', onClick: onClose }, t('close'))))),
+        h('button', { className: 'primary', onClick: onClose }, t('close'))),
+      shareNote && h('div', { className: 'receipt-share-note no-print' }, shareNote))),
     document.body);
 }
 
@@ -2972,8 +3200,8 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
                      h('b', { className: isCreditEntry ? 'amount-due' : 'amount-paid' }, `${isCreditEntry ? '+' : '-'}${money(entry.amount)}`),
                      h('span', { className: 'entry-balance' }, `${t('balanceForCustomer')} ${money(balanceAfter[entry.id] ?? balance)}`)),
                   h('div', { className: 'entry-actions' },
-    entry.type === 'sale' && waLink(customer.phone, saleBillText(withPrevBalance(entry), settings))
-      ? h('a', { className: 'wa-btn entry-wa', href: waLink(customer.phone, saleBillText(withPrevBalance(entry), settings)), target: '_blank', rel: 'noreferrer' }, t('whatsappBill'))
+    entry.type === 'sale' && customer.phone
+      ? h('button', { className: 'wa-btn entry-wa', onClick: () => shareBillAsImage(withPrevBalance(entry), settings, customer, setMessage) }, t('whatsappBill'))
                       : null,
                      canReverse && entry.type !== 'udhar'
                        ? h('button', { className: 'danger-btn small entry-reverse', disabled: busy, onClick: () => reverseEntry(entry) },
@@ -3023,24 +3251,30 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
     const rate = rateForUnit(base, product.unit, product.baseUnit || product.unit);
     return round3(rate * (Number(product.qty) || 0));
   };
-  // Every change to the product list moves the udhar total by exactly the same amount, so what the
-  // cashier sees added up is what gets saved as the customer's balance.
-  const applyProductChange = (old, products, before) => {
-    const after = products.reduce((sum, product) => sum + productValue(product), 0);
-    const was = before.reduce((sum, product) => sum + productValue(product), 0);
-    const change = round3(after - was);
-    if (!change) return { ...old, products };
-    return {
-      ...old,
-      products,
-      udhaarTotal: canEditUdhar ? Math.max(0, round3((Number(old.udhaarTotal) || 0) + change)) : old.udhaarTotal
-    };
+  // Names the products behind the entry so the khata line reads as goods, not a bare number.
+  const productUdharNote = (amount, products, before) => {
+    const was = new Set(before.map(p => `${p.id || 'manual'}|${p.name}|${p.qty}|${p.unit}`));
+    const added = products
+      .filter(p => !was.has(`${p.id || 'manual'}|${p.name}|${p.qty}|${p.unit}`))
+      .map(p => `${p.name}${productQtyLabel(p)}`.trim())
+      .filter(Boolean);
+    const list = added.length ? added.join(', ') : t('productLabel');
+    return LANG === 'ur' ? `${list} — ${money(amount)}` : `${list} - ${money(amount)}`;
   };
+  // The product list is kept separate from the udhar total. Adding a priced product is not a silent
+  // edit of a stored number, it is a dated entry in the khata, so the total on the form stays exactly
+  // where the cashier left it and the addition is sent on its own below.
+  const applyProductChange = (old, products) => ({ ...old, products });
   const remaining = Math.max(0, (Number(form.udhaarTotal) || 0) - (Number(form.udhaarPaid) || 0));
   // What the picked products are worth. Each row re-prices from its own product rate whenever the
   // unit changes, so picking a product in grams never charges the per-kilo rate. This is the same
   // figure that is added into the udhar total when a product is added, changed or removed.
   const productsTotal = round3(form.products.reduce((sum, product) => sum + productValue(product), 0));
+  // What saving will actually record: only a rise in the products is a new purchase. A lower figure
+  // is the profile list being tidied up, not goods being taken back, so it never touches the ledger.
+  const pendingProductValue = canEditUdhar
+    ? Math.max(0, round3(productsTotal - init.products.reduce((sum, product) => sum + productValue(product), 0)))
+    : 0;
   const addedProductIds = new Set(form.products.filter(p => p.id).map(p => p.id));
   const productHits = productSearch.trim()
     ? (products || []).filter(prod => !addedProductIds.has(prod.id) && `${prod.name || ''} ${prod.category || ''} ${prod.sku || ''}`.toLowerCase().includes(productSearch.trim().toLowerCase())).slice(0, 6)
@@ -3058,7 +3292,7 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
         unit: prod.unit || '',
         baseUnit: prod.unit || '',
         price: Number(prod.price) || 0
-      }], old.products));
+      }]));
       setProductSearch('');
       setManualDraft('');
     }
@@ -3083,14 +3317,10 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
     setManualDraft('');
   }
     function removeProduct(index) {
-      setForm(old => applyProductChange(old, old.products.filter((_, i) => i !== index), old.products));
+      setForm(old => applyProductChange(old, old.products.filter((_, i) => i !== index)));
     }
     function setProductQty(index, qty) {
-      setForm(old => applyProductChange(
-        old,
-        old.products.map((p, i) => i === index ? { ...p, qty } : p),
-        old.products
-      ));
+      setForm(old => applyProductChange(old, old.products.map((p, i) => i === index ? { ...p, qty } : p)));
     }
     function setProductUnit(index, unit) {
       // Keep the physical amount and re-price it from the product's own rate: 2 kg at Rs 100/kg
@@ -3107,7 +3337,7 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
           const nextFactor = unitToBase(unit, baseUnit);
           return { ...p, unit, qty: round3((Number(p.qty) || 0) * (factor / (nextFactor || 1))) };
         });
-        return applyProductChange(old, next, old.products);
+        return applyProductChange(old, next);
       });
     }
 
@@ -3187,16 +3417,35 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
         price: rateForUnit(product.price, product.unit, baseUnit)
       };
     });
+    // A priced product added on this form is a real credit purchase, so it is recorded as a dated
+    // udhar entry instead of quietly rewriting a stored total. It is a separate request field, which
+    // is what lets the ledger show it under the day it happened.
+    if (canEditUdhar && pendingProductValue > 0) {
+      payload.productUdhar = {
+        amount: pendingProductValue,
+        note: productUdharNote(pendingProductValue, form.products, init.products),
+        atDate: form.paymentDate || extraUdharDate,
+        atTime: form.paymentTime || extraUdharTime,
+        // Fixed before the request so a queued offline replay carries the same id and cannot add
+        // the amount a second time when it eventually syncs.
+        clientId: `productUdhar_${Date.now()}_${Math.floor(Math.random() * 1e6)}`
+      };
+    }
     try {
-      await client.put(`/api/customers/${customer.id}`, payload);
-      setMessage(LANG === 'ur' ? 'محفوظ ہو گیا۔' : 'Saved.');
+      const saved = await client.put(`/api/customers/${customer.id}`, payload);
+      const entry = saved && saved.productUdharEntry;
+      setMessage(entry
+        ? (LANG === 'ur'
+          ? `محفوظ ہو گیا۔ ${money(entry.amount)} کا نیا اُدھار درج ہو گیا۔`
+          : `Saved. ${money(entry.amount)} recorded as a new dated udhar entry.`)
+        : (LANG === 'ur' ? 'محفوظ ہو گیا۔' : 'Saved.'));
       await refresh();
       onClose();
     } catch (err) {
       if (isNetworkFailure(err)) {
         // Keep the edit on this device and close the form, so the counter can carry on. Sending the
-        // same fields again later gives the same result on the server, and the new udhaar total
-        // goes in with it.
+        // same fields again later gives the same result on the server, and the dated udhar entry goes
+        // in with it under its own clientId.
         queueAction('customer', { customerId: customer.id, ...payload });
         setMessage(LANG === 'ur'
           ? 'محفوظ ہو گیا۔ یہ تبدیلی انترنت آنے پر خودکار طور پر سنک ہو گئی۔'
@@ -3228,9 +3477,15 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
               : null),
           h('button', { type: 'button', className: 'chip-remove', title: t('clearProduct'), onClick: () => removeProduct(index) }, '×'));
       })),
-      Number(productsTotal) > 0
-        ? h('p', { className: 'hint chip-total' }, `${t('productLabel')}: ${moneyRate(productsTotal)}`)
-        : null),
+      // Spells out what saving is about to do, so a product that no longer nudges the total on the
+      // form does not look like it was ignored.
+      Number(pendingProductValue) > 0
+        ? h('p', { className: 'hint chip-total' }, LANG === 'ur'
+          ? `نیا اُدھار درج ہو گا: ${moneyRate(pendingProductValue)}`
+          : `Will be added to udhar on save: ${moneyRate(pendingProductValue)}`)
+        : Number(productsTotal) > 0
+          ? h('p', { className: 'hint chip-total' }, `${t('productLabel')}: ${moneyRate(productsTotal)}`)
+          : null),
     !form.manualMode && h('input', {
       key: 'search',
       className: 'product-search',

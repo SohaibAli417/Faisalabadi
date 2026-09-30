@@ -124,4 +124,105 @@ test('a cashier without udhar permission cannot replay udhar amounts through the
   const cashier = db.users.find(user => /cashier/i.test(user.role));
   assert.equal(can(cashier, 'udhar'), false);
   assert.throws(() => updateCustomer(db, 'cus_2', { udhaarTotal: 5000 }, cashier), /Only Admin or Manager/);
+  // A product added in the same edit is udhar too, so it has to be refused by the same rule.
+  assert.throws(() => updateCustomer(db, 'cus_2', { products: [], productUdhar: { amount: 500 } }, cashier), /Only Admin or Manager/);
+});
+
+test('a priced product added on the customer form lands in the khata on the date it was picked', () => {
+  const { db, admin } = fixture();
+  const before = db.udharEntries.length;
+  const result = updateCustomer(db, 'cus_2', {
+    products: [{ id: 'prd_3', name: 'stale', qty: 2, unit: 'kg', baseUnit: 'kg', price: 100 }],
+    productUdhar: { amount: 200, note: 'Atta - Rs 200', atDate: '2026-09-14', atTime: '18:30', clientId: 'prod_1' }
+  }, admin);
+  assert.equal(db.udharEntries.length, before + 1);
+  const entry = result.productUdharEntry;
+  assert.equal(entry.amount, 200);
+  assert.equal(entry.note, 'Atta - Rs 200');
+  // The date and time the cashier picked have to survive into the stored entry, not the moment it
+  // happened to sync.
+  const stored = new Date(entry.at);
+  assert.equal(stored.getFullYear(), 2026);
+  assert.equal(stored.getMonth(), 8);
+  assert.equal(stored.getDate(), 14);
+  assert.equal(stored.getHours(), 18);
+  assert.equal(stored.getMinutes(), 30);
+  assert.equal(Number(db.customers.find(item => item.id === 'cus_2').balance), 200);
+});
+
+test('a product udhar does not create a stored total, so later credit bills still count', () => {
+  const { db, admin } = fixture();
+  const customer = db.customers.find(item => item.id === 'cus_2');
+  assert.equal(customer.recordedTotal, undefined);
+  updateCustomer(db, 'cus_2', { products: [], productUdhar: { amount: 200, clientId: 'prod_2' } }, admin);
+  // A stored total would freeze the balance here and quietly drop this credit bill out of it.
+  assert.equal(db.customers.find(item => item.id === 'cus_2').recordedTotal, undefined);
+  createSale(db, { customerId: 'cus_2', paymentType: 'Credit', items: [{ productId: 'prd_3', qty: 1 }] }, admin);
+  const sale = db.sales[db.sales.length - 1];
+  assert.equal(Number(db.customers.find(item => item.id === 'cus_2').balance), 200 + Number(sale.total));
+});
+
+test('a replayed product udhar is recorded once, not twice', () => {
+  const { db, admin } = fixture();
+  const payload = {
+    products: [{ id: 'prd_3', name: 'stale', qty: 2, unit: 'kg', baseUnit: 'kg', price: 100 }],
+    productUdhar: { amount: 200, note: 'Atta', clientId: 'prod_replay' }
+  };
+  updateCustomer(db, 'cus_2', payload, admin);
+  const afterFirst = Number(db.customers.find(item => item.id === 'cus_2').balance);
+  updateCustomer(db, 'cus_2', payload, admin);
+  updateCustomer(db, 'cus_2', payload, admin);
+  assert.equal(db.udharEntries.filter(e => e.clientId === 'prod_replay').length, 1);
+  assert.equal(Number(db.customers.find(item => item.id === 'cus_2').balance), afterFirst);
+});
+
+test('a product udhar on a customer with a stored total keeps the two balances in step', () => {
+  const { db, admin } = fixture();
+  const customer = db.customers.find(item => item.id === 'cus_2');
+  customer.recordedTotal = 1000;
+  customer.recordedPaid = 0;
+  customer.balance = 1000;
+  updateCustomer(db, 'cus_2', { products: [], productUdhar: { amount: 250, clientId: 'prod_legacy' } }, admin);
+  // This customer runs off the stored total, so it has to move as well or the khata would show the
+  // entry but the balance would stay at the old number.
+  assert.equal(Number(db.customers.find(item => item.id === 'cus_2').recordedTotal), 1250);
+  assert.equal(Number(db.customers.find(item => item.id === 'cus_2').balance), 1250);
+});
+
+test('a product udhar refused on the credit limit leaves the rest of the edit unwritten', () => {
+  const { db, admin } = fixture();
+  const customer = db.customers.find(item => item.id === 'cus_2');
+  customer.name = 'Original Name';
+  customer.creditLimit = 500;
+  customer.balance = 400;
+  assert.throws(() => updateCustomer(db, 'cus_2', {
+    name: 'Renamed Despite Refusal',
+    products: [{ id: 'prd_3', name: 'stale', qty: 1, unit: 'kg', baseUnit: 'kg', price: 100 }],
+    productUdhar: { amount: 300, clientId: 'prod_over_limit' }
+  }, admin), /Credit limit exceeded/);
+  const saved = db.customers.find(item => item.id === 'cus_2');
+  assert.equal(saved.name, 'Original Name');
+  assert.equal(db.udharEntries.filter(e => e.clientId === 'prod_over_limit').length, 0);
+  assert.equal(Number(saved.balance), 400);
+});
+
+test('a product udhar and a typed total in one save add up instead of overwriting each other', () => {
+  const { db, admin } = fixture();
+  const customer = db.customers.find(item => item.id === 'cus_2');
+  customer.recordedTotal = 1000;
+  customer.recordedPaid = 0;
+  customer.balance = 1000;
+  updateCustomer(db, 'cus_2', {
+    udhaarTotal: 1500,
+    udhaarPaid: 0,
+    productUdhar: { amount: 200, clientId: 'prod_stacked' }
+  }, admin);
+  const saved = db.customers.find(item => item.id === 'cus_2');
+  assert.equal(Number(saved.recordedTotal), 1700);
+  assert.equal(Number(saved.balance), 1700);
+});
+
+test('a walk-in customer cannot be given udhar through a product', () => {
+  const { db, admin } = fixture();
+  assert.throws(() => updateCustomer(db, 'cus_walkin', { products: [], productUdhar: { amount: 100 } }, admin), /Walk-in/);
 });

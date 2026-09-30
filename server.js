@@ -792,11 +792,9 @@ function decorateCustomer(db, customer, totalsMap) {
   let creditPurchases = money(totals.creditPurchases);
   let totalPaid = money(totals.totalPaid);
   let balance = money(customer.balance);
-  const hasRecordedTotal = customer.recordedTotal !== undefined && customer.recordedTotal !== null && customer.recordedTotal !== '';
-  const hasRecordedPaid = customer.recordedPaid !== undefined && customer.recordedPaid !== null && customer.recordedPaid !== '';
-  if (hasRecordedTotal) creditPurchases = money(customer.recordedTotal);
-  if (hasRecordedPaid) totalPaid = money(customer.recordedPaid);
-  if (hasRecordedTotal && hasRecordedPaid) balance = Math.max(0, creditPurchases - totalPaid);
+  if (hasRecordedValue(customer.recordedTotal)) creditPurchases = money(customer.recordedTotal);
+  if (hasRecordedValue(customer.recordedPaid)) totalPaid = money(customer.recordedPaid);
+  if (hasRecordedValue(customer.recordedTotal) && hasRecordedValue(customer.recordedPaid)) balance = Math.max(0, creditPurchases - totalPaid);
   let productList = [];
   if (Array.isArray(customer.products) && customer.products.length) {
     for (const item of customer.products) {
@@ -998,7 +996,7 @@ function receiveUdharPayment(db, customerId, amountInput, actor, options = {}) {
         balance: money(customer.balance),
         duplicate: true,
         recordedPaid: customer.recordedPaid,
-        hasRecordedPaid: customer.recordedPaid !== undefined && customer.recordedPaid !== null && customer.recordedPaid !== ''
+        hasRecordedPaid: hasRecordedValue(customer.recordedPaid)
       };
     }
   }
@@ -1086,14 +1084,48 @@ function addUdharEntry(db, customerId, body, actor) {
   return { entry, balance: customer.balance };
 }
 
+// A customer runs off a stored total once one has been set, and off the summed ledger until then.
+// This is the single place that decides which of the two applies, so the credit-limit pre-check and
+// the recalculation after the edit can never drift apart.
+function hasRecordedValue(value) {
+  return value !== undefined && value !== null && value !== '';
+}
+function customerBalanceFromRecorded(db, customer, totals, nextTotal, nextPaid) {
+  const total = hasRecordedValue(nextTotal) ? money(nextTotal) : money(totals.creditPurchases);
+  const paid = hasRecordedValue(nextPaid) ? money(nextPaid) : money(totals.totalPaid);
+  return Math.max(0, total - paid);
+}
+
 function updateCustomer(db, id, body, actor) {
   const customer = db.customers.find(item => item.id === id);
   if (!customer) throw new Error('Customer not found');
   // Checked before anything is written: a refused udhar amount must not leave a half-applied edit
   // (a new name or product list) behind on the customer.
   const wantsUdharEdit = body.udhaarTotal !== undefined || body.udhaarPaid !== undefined || body.paymentDate !== undefined || body.paymentTime !== undefined;
-  if (wantsUdharEdit && !can(actor, 'udhar')) {
+  // Adding a priced product is udhar too, so it is gated by the same permission as typing an amount.
+  const wantsProductUdhar = body.productUdhar !== undefined && body.productUdhar !== null;
+  if ((wantsUdharEdit || wantsProductUdhar) && !can(actor, 'udhar')) {
     throw new Error('Only Admin or Manager can edit udhaar amounts and payment dates');
+  }
+  // Checked up front for the same reason as the permission above: a refused product udhar must not
+  // leave the rest of the customer edit already written. The balance is projected the same way the
+  // total edit below recalculates it, so a save that raises the total and adds a product in one go
+  // is measured against the number the cashier will actually end up with.
+  if (wantsProductUdhar) {
+    if (id === 'cus_walkin') throw new Error('Walk-in customers cannot have udhar');
+    const productAmount = money(body.productUdhar && body.productUdhar.amount);
+    if (!(productAmount > 0)) throw new Error('Amount must be more than zero');
+    let projectedBalance = money(customer.balance);
+    if (can(actor, 'udhar') && (body.udhaarTotal !== undefined || body.udhaarPaid !== undefined)) {
+      const totals = customerTotals(db)[id] || { creditPurchases: 0, totalPaid: 0 };
+      const nextTotal = body.udhaarTotal !== undefined ? money(body.udhaarTotal) : customer.recordedTotal;
+      const nextPaid = body.udhaarPaid !== undefined ? money(body.udhaarPaid) : customer.recordedPaid;
+      projectedBalance = customerBalanceFromRecorded(db, customer, totals, nextTotal, nextPaid);
+    }
+    const limit = Number(customer.creditLimit || 0);
+    if (limit > 0 && projectedBalance + productAmount > limit) {
+      throw new Error(`Credit limit exceeded. ${customer.name} can take Rs ${money(limit - projectedBalance)} more udhar.`);
+    }
   }
   for (const field of ['name', 'phone', 'cnic', 'address', 'creditLimit']) {
     if (body[field] !== undefined) customer[field] = field === 'creditLimit' ? money(body[field]) : String(body[field]).trim();
@@ -1131,13 +1163,8 @@ function updateCustomer(db, id, body, actor) {
     if (body.udhaarTotal !== undefined) customer.recordedTotal = money(body.udhaarTotal);
     if (body.udhaarPaid !== undefined) customer.recordedPaid = money(body.udhaarPaid);
     if (body.udhaarTotal !== undefined || body.udhaarPaid !== undefined) {
-      const totalsMap = customerTotals(db);
-      const totals = totalsMap[id] || { creditPurchases: 0, totalPaid: 0 };
-      const hasRecordedTotal = customer.recordedTotal !== undefined && customer.recordedTotal !== null && customer.recordedTotal !== '';
-      const hasRecordedPaid = customer.recordedPaid !== undefined && customer.recordedPaid !== null && customer.recordedPaid !== '';
-      const total = hasRecordedTotal ? money(customer.recordedTotal) : money(totals.creditPurchases);
-      const paid = hasRecordedPaid ? money(customer.recordedPaid) : money(totals.totalPaid);
-      customer.balance = Math.max(0, total - paid);
+      const totals = customerTotals(db)[id] || { creditPurchases: 0, totalPaid: 0 };
+      customer.balance = customerBalanceFromRecorded(db, customer, totals, customer.recordedTotal, customer.recordedPaid);
     }
     if (body.paymentDate !== undefined || body.paymentTime !== undefined) {
       const related = (db.payments || []).filter(p => p.customerId === id);
@@ -1153,9 +1180,25 @@ function updateCustomer(db, id, body, actor) {
       }
     }
   }
+  // A priced product added in the customer form is recorded as a real, dated udhar entry so it shows
+  // up in the khata on the day it happened, instead of only inflating a stored total that the ledger
+  // would never explain. Applied after the explicit total edit above so a product added in the same
+  // save stacks on top of the number the cashier typed rather than being overwritten by it.
+  let productUdharResult = null;
+  if (wantsProductUdhar) {
+    const added = addUdharEntry(db, id, {
+      amount: body.productUdhar.amount,
+      note: body.productUdhar.note,
+      reference: body.productUdhar.reference,
+      atDate: body.productUdhar.atDate,
+      atTime: body.productUdhar.atTime,
+      clientId: body.productUdhar.clientId
+    }, actor);
+    productUdharResult = added;
+  }
   customer._updatedAt = now();
-  audit(db, actor, 'update', 'customer', customer.id, { name: customer.name, ...(body.udhaarTotal !== undefined ? { udhaarTotal: money(body.udhaarTotal) } : {}), ...(body.udhaarPaid !== undefined ? { udhaarPaid: money(body.udhaarPaid) } : {}) });
-  return customer;
+  audit(db, actor, 'update', 'customer', customer.id, { name: customer.name, ...(body.udhaarTotal !== undefined ? { udhaarTotal: money(body.udhaarTotal) } : {}), ...(body.udhaarPaid !== undefined ? { udhaarPaid: money(body.udhaarPaid) } : {}), ...(productUdharResult ? { productUdhar: { entryId: productUdharResult.entry.id, amount: money(productUdharResult.entry.amount), duplicate: Boolean(productUdharResult.duplicate) } } : {}) });
+  return productUdharResult ? { ...customer, productUdharEntry: productUdharResult.entry } : customer;
 }
 
 function createSupplier(db, body, actor) {
@@ -1979,7 +2022,9 @@ async function handleApi(request, response) {
       }
 
       // A customer edited while offline. Setting the same fields again lands on the same result,
-      // so replaying this is safe and needs no dedupe of its own.
+      // so replaying this is safe and needs no dedupe of its own. A priced product carried in the
+      // same edit is the exception: it becomes a udhar entry, which is not idempotent, so it dedupes
+      // on the clientId stored inside productUdhar.
       if (Array.isArray(body.customers) && body.customers.length) {
         if (!can(actor, 'customers')) return json(response, 403, { error: 'Permission denied' });
         for (const queued of body.customers) {
