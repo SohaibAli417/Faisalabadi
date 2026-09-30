@@ -36,6 +36,24 @@ function customerCreditDelta(sales) {
   return delta;
 }
 
+// A manually entered udhar raises the balance on the device that recorded it, exactly like a credit
+// sale does. If that row only reached one side of the sync, the other side's customer balance has to
+// be nudged by the same amount, otherwise the merged balance silently loses the udhar.
+function udharCreditDelta(entries) {
+  const delta = {};
+  for (const entry of asArray(entries)) {
+    if (!entry || entry.voided) continue;
+    if (!entry.customerId || entry.customerId === 'cus_walkin') continue;
+    delta[entry.customerId] = (delta[entry.customerId] || 0) + Number(entry.amount || 0);
+  }
+  return delta;
+}
+
+function addDelta(target, extra) {
+  for (const id of Object.keys(extra)) target[id] = (target[id] || 0) + extra[id];
+  return target;
+}
+
 function tag(rows, origin) {
   return asArray(rows).map(row => ({ ...row, __origin: origin }));
 }
@@ -128,8 +146,14 @@ function mergeDbs(local, cloud, options = {}) {
 
   const stockDeltaFromCloudSide = productStockDelta(cloudOnlySales, cloudPurchaseOnly, cloudReturnOnly);
   const stockDeltaFromLocalSide = productStockDelta(localOnlySales, localPurchaseOnly, localReturnOnly);
-  const creditDeltaFromCloudSide = customerCreditDelta(cloudOnlySales);
-  const creditDeltaFromLocalSide = customerCreditDelta(localOnlySales);
+
+  const localUdharRows = asArray(local.udharEntries);
+  const cloudUdharRows = asArray(cloud.udharEntries);
+  const cloudUdharOnly = cloudUdharRows.filter(row => !localUdharRows.some(item => item && item.id === row.id));
+  const localUdharOnly = localUdharRows.filter(row => !cloudUdharRows.some(item => item && item.id === row.id));
+
+  const creditDeltaFromCloudSide = addDelta(customerCreditDelta(cloudOnlySales), udharCreditDelta(cloudUdharOnly));
+  const creditDeltaFromLocalSide = addDelta(customerCreditDelta(localOnlySales), udharCreditDelta(localUdharOnly));
 
   const productMap = mergeLwwCollection(local.products, cloud.products, 'id');
   const products = [...productMap.values()].map(row => {
@@ -184,6 +208,19 @@ function mergeDbs(local, cloud, options = {}) {
     flags.localChanged = true;
   }
 
+  // Reuse the "only on one side" sets already computed for the balance delta, so the union below
+  // cannot disagree with the balances that were adjusted from it.
+  const udharIds = new Map();
+  for (const row of [...localUdharRows, ...cloudUdharRows]) {
+    if (row && row.id && !udharIds.has(row.id)) udharIds.set(row.id, row);
+  }
+  const udharEntries = [...udharIds.values()]
+    .sort((a, b) => new Date(b.at || b.createdAt || 0).getTime() - new Date(a.at || a.createdAt || 0).getTime());
+  if (localUdharOnly.length || cloudUdharOnly.length) {
+    flags.cloudChanged = true;
+    flags.localChanged = true;
+  }
+
   const auditIds = new Map();
   for (const row of [...asArray(local.auditLogs), ...asArray(cloud.auditLogs)]) {
     if (row && row.id && !auditIds.has(row.id)) auditIds.set(row.id, row);
@@ -220,6 +257,7 @@ function mergeDbs(local, cloud, options = {}) {
     purchases,
     returns,
     payments,
+    udharEntries,
     stockMovements,
     auditLogs
   };
@@ -233,4 +271,4 @@ function mergeDbs(local, cloud, options = {}) {
   return { merged, localChanged: flags.localChanged, cloudChanged: flags.cloudChanged };
 }
 
-module.exports = { mergeDbs, mergeSessions, recordTime, productStockDelta, customerCreditDelta };
+module.exports = { mergeDbs, mergeSessions, recordTime, productStockDelta, customerCreditDelta, udharCreditDelta };

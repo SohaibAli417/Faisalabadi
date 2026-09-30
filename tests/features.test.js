@@ -4,9 +4,9 @@ const {
   seedData, ensureSchema, createSale, processReturn, receiveUdharPayment,
   clearUdhar, returnedQtyByItem, customerTotals, decorateCustomer,
   createSupplier, updateSupplier, deleteSupplier, deleteCustomer, can,
-  voidSale, reversePayment
+  voidSale, reversePayment, addUdharEntry
 } = require('../server');
-const { mergeDbs } = require('../sync');
+const { mergeDbs, udharCreditDelta } = require('../sync');
 
 function fixture() {
   const db = seedData();
@@ -505,4 +505,118 @@ test('customerTotals and the ledger both exclude voided payments and sales', () 
   const paymentsForCustomer = db.payments.filter(item => item.customerId === 'cus_1');
   const visiblePayments = paymentsForCustomer.filter(item => !item.voided);
   assert.ok(visiblePayments.length < paymentsForCustomer.length);
+});
+
+test('addUdharEntry appends a row, raises the balance, and never rewrites old transactions', () => {
+  const { db, admin } = fixture();
+  ensureSchema(db);
+  const customer = db.customers.find(item => item.id === 'cus_1');
+  const balanceBefore = Number(customer.balance);
+  const salesBefore = JSON.stringify(db.sales);
+  const paymentsBefore = JSON.stringify(db.payments);
+  const { entry, balance } = addUdharEntry(db, 'cus_1', { amount: 750, note: 'Sona 1 kg', reference: 'AB-12' }, admin);
+  assert.equal(entry.amount, 750);
+  assert.equal(entry.type === undefined, true);
+  assert.equal(entry.note, 'Sona 1 kg');
+  assert.equal(entry.reference, 'AB-12');
+  assert.equal(balance, balanceBefore + 750);
+  assert.equal(Number(customer.balance), balanceBefore + 750);
+  assert.equal(entry.previousBalance, balanceBefore);
+  assert.equal(entry.balanceAfter, balanceBefore + 750);
+  assert.equal(db.udharEntries[0].id, entry.id);
+  // Append-only: nothing that already existed may be altered by adding new udhar.
+  assert.equal(JSON.stringify(db.sales), salesBefore);
+  assert.equal(JSON.stringify(db.payments), paymentsBefore);
+  // A second entry stacks on the first, and the first one is left alone.
+  const second = addUdharEntry(db, 'cus_1', { amount: 250 }, admin).entry;
+  assert.equal(second.previousBalance, balanceBefore + 750);
+  assert.equal(db.udharEntries.length, 2);
+  const first = db.udharEntries.find(item => item.id === entry.id);
+  assert.equal(Number(first.balanceAfter), balanceBefore + 750);
+});
+
+test('addUdharEntry moves a legacy recordedTotal forward so the derived balance stays right', () => {
+  const { db, admin } = fixture();
+  ensureSchema(db);
+  // Older stores keep a recorded total, and their balance is derived from it. The seeded customers
+  // do not have one, so add it here to reproduce a legacy customer.
+  const customer = db.customers.find(item => item.id === 'cus_1');
+  customer.recordedTotal = 5000;
+  customer.recordedPaid = 150;
+  const totalBefore = Number(customer.recordedTotal);
+  addUdharEntry(db, customer.id, { amount: 500 }, admin);
+  assert.equal(Number(customer.recordedTotal), totalBefore + 500);
+  // recordedPaid is a payment total, so adding udhar must not touch it.
+  const paidBefore = customer.recordedPaid === undefined ? null : Number(customer.recordedPaid);
+  addUdharEntry(db, customer.id, { amount: 300 }, admin);
+  if (paidBefore !== null) assert.equal(Number(customer.recordedPaid), paidBefore);
+});
+
+test('addUdharEntry rejects bad input instead of writing a broken row', () => {
+  const { db, admin } = fixture();
+  ensureSchema(db);
+  const customer = db.customers.find(item => item.id === 'cus_1');
+  const balanceBefore = Number(customer.balance);
+  const rowsBefore = db.udharEntries.length;
+  assert.throws(() => addUdharEntry(db, 'cus_missing', { amount: 100 }, admin), /Customer not found/);
+  assert.throws(() => addUdharEntry(db, 'cus_walkin', { amount: 100 }, admin), /Walk-in/);
+  assert.throws(() => addUdharEntry(db, 'cus_1', { amount: 0 }, admin), /more than zero/);
+  assert.throws(() => addUdharEntry(db, 'cus_1', { amount: -50 }, admin), /more than zero/);
+  assert.equal(db.udharEntries.length, rowsBefore);
+  assert.equal(Number(customer.balance), balanceBefore);
+});
+
+test('addUdharEntry honours the credit limit', () => {
+  const { db, admin } = fixture();
+  const customer = db.customers.find(item => item.id === 'cus_1');
+  customer.creditLimit = Number(customer.balance) + 1000;
+  addUdharEntry(db, 'cus_1', { amount: 900 }, admin);
+  const balanceNow = Number(customer.balance);
+  assert.throws(() => addUdharEntry(db, 'cus_1', { amount: 500 }, admin), /Credit limit exceeded/);
+  // The rejected attempt must leave nothing behind.
+  assert.equal(Number(customer.balance), balanceNow);
+  assert.equal(db.udharEntries.filter(entry => entry.amount === 500).length, 0);
+});
+
+test('a payment settles manual udhar too and the customer totals include both', () => {
+  const { db, admin } = fixture();
+  const add = addUdharEntry(db, 'cus_1', { amount: 1000 }, admin).entry;
+  const creditAfterAdd = (customerTotals(db).cus_1 || {}).creditPurchases || 0;
+  assert.ok(creditAfterAdd >= 1000, 'manual udhar must count towards credit purchases');
+  const before = Number(db.customers.find(item => item.id === 'cus_1').balance);
+  receiveUdharPayment(db, 'cus_1', 400, admin);
+  assert.equal(Number(db.customers.find(item => item.id === 'cus_1').balance), before - 400);
+  // The entry itself is never edited by a later payment.
+  const stored = db.udharEntries.find(item => item.id === add.id);
+  assert.equal(Number(stored.amount), 1000);
+});
+
+test('sync unions udhar entries from both sides and reconciles the customer balance', () => {
+  const local = { meta: {}, customers: [{ id: 'cus_1', name: 'Ali', balance: 0, _updatedAt: '2026-01-01T00:00:00.000Z' }], sales: [], payments: [], udharEntries: [] };
+  const cloud = { meta: {}, customers: [{ id: 'cus_1', name: 'Ali', balance: 0, _updatedAt: '2026-01-01T00:00:00.000Z' }], sales: [], payments: [], udharEntries: [] };
+  // Same row on both sides must not be duplicated.
+  const shared = { id: 'udh_shared', customerId: 'cus_1', amount: 100, at: '2026-01-02T00:00:00.000Z' };
+  local.udharEntries = [shared];
+  cloud.udharEntries = [{ id: 'udh_cloud', customerId: 'cus_1', amount: 300, at: '2026-01-03T00:00:00.000Z' }];
+  const first = mergeDbs(local, cloud);
+  const ids = first.merged.udharEntries.map(entry => entry.id).sort();
+  assert.deepEqual(ids, ['udh_cloud', 'udh_shared']);
+  // The cloud-only udhar was not in the local balance yet, so the merged balance must include it.
+  const mergedCustomer = first.merged.customers.find(item => item.id === 'cus_1');
+  assert.equal(Number(mergedCustomer.balance), 300);
+  assert.equal(first.localChanged, true);
+  assert.equal(first.cloudChanged, true);
+});
+
+test('udharCreditDelta ignores voided rows, walk-ins and rows with no customer', () => {
+  const delta = udharCreditDelta([
+    { id: 'a', customerId: 'cus_1', amount: 100 },
+    { id: 'b', customerId: 'cus_1', amount: 50 },
+    { id: 'c', customerId: 'cus_1', amount: 999, voided: true },
+    { id: 'd', customerId: 'cus_walkin', amount: 500 },
+    { id: 'e', customerId: 'cus_2', amount: 25 }
+  ]);
+  assert.equal(delta.cus_1, 150);
+  assert.equal(delta.cus_walkin, undefined);
+  assert.equal(delta.cus_2, 25);
 });

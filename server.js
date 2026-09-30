@@ -182,6 +182,9 @@ function ensureSchema(db) {
   if (!Array.isArray(db.sales)) { db.sales = []; changed = true; }
   if (!Array.isArray(db.returns)) { db.returns = []; changed = true; }
   if (!Array.isArray(db.payments)) { db.payments = []; changed = true; }
+  // udharEntries holds manually entered udhar rows. Existing customers have none, so this only
+  // adds an empty list - no existing record, balance or history is touched.
+  if (!Array.isArray(db.udharEntries)) { db.udharEntries = []; changed = true; }
   if (!Array.isArray(db.stockMovements)) { db.stockMovements = []; changed = true; }
   if (!Array.isArray(db.drafts)) { db.drafts = []; changed = true; }
   if (!db.meta || typeof db.meta !== 'object') { db.meta = { createdAt: now(), updatedAt: now(), invoiceSeq: 0 }; changed = true; }
@@ -663,6 +666,12 @@ function customerTotals(db) {
     const prevMs = totals.lastPaymentAt ? new Date(totals.lastPaymentAt).getTime() : 0;
     if (atMs && atMs >= prevMs) totals.lastPaymentAt = payment.at;
   }
+  // Manually entered udhar counts as a credit purchase too, otherwise the customer totals would
+  // drift away from the balance the very same entries produce.
+  for (const udhar of db.udharEntries || []) {
+    if (udhar.voided || !udhar.customerId || udhar.customerId === 'cus_walkin') continue;
+    entry(udhar.customerId).creditPurchases += money(udhar.amount);
+  }
   return totals;
 }
 
@@ -871,6 +880,58 @@ function receiveUdharPayment(db, customerId, amountInput, actor, options = {}) {
   db.payments = [payment, ...(db.payments || [])];
   audit(db, actor, options.clear ? 'clear-udhar' : 'payment', 'customer', customerId, { amount, newBalance: customer.balance, note: options.note || '' });
   return { payment, balance: customer.balance };
+}
+
+// Adds a manually entered udhar as a NEW transaction row. Nothing existing is replaced: the
+// customer's stored balance only grows by the new amount, and every earlier transaction stays as
+// it was. This mirrors the way createSale/receiveUdharPayment move the balance.
+function addUdharEntry(db, customerId, body, actor) {
+  const customer = db.customers.find(item => item.id === customerId);
+  if (!customer) throw new Error('Customer not found');
+  if (customerId === 'cus_walkin') throw new Error('Walk-in customers cannot have udhar');
+  const amount = money(body.amount);
+  if (!(amount > 0)) throw new Error('Amount must be more than zero');
+  const note = String(body.note || body.description || '').trim();
+  const reference = String(body.reference || '').trim();
+
+  let at;
+  if (body.atDate || body.atTime) {
+    const combined = combineDateTime(body.atDate, body.atTime);
+    if (combined) at = combined.toISOString();
+  }
+  if (!at) at = now();
+
+  const previousBalance = money(customer.balance);
+  const limit = Number(customer.creditLimit || 0);
+  if (limit > 0 && previousBalance + amount > limit) {
+    throw new Error(`Credit limit exceeded. ${customer.name} can take Rs ${money(limit - previousBalance)} more udhar.`);
+  }
+
+  const entry = {
+    id: uid('udh'),
+    customerId,
+    amount,
+    note,
+    reference,
+    at,
+    createdAt: now(),
+    createdBy: actor.id,
+    createdByName: actor.name || '',
+    previousBalance,
+    balanceAfter: money(previousBalance + amount),
+    voided: false,
+    _updatedAt: now()
+  };
+  db.udharEntries = [entry, ...(db.udharEntries || [])];
+
+  customer.balance = entry.balanceAfter;
+  // Customers with a recorded total keep a balance derived from it, so it has to move too.
+  if (customer.recordedTotal !== undefined && customer.recordedTotal !== null && customer.recordedTotal !== '') {
+    customer.recordedTotal = money(Number(customer.recordedTotal) + amount);
+  }
+  customer._updatedAt = now();
+  audit(db, actor, 'create', 'udhar', entry.id, { customerId, amount, note, reference, at, previousBalance, newBalance: entry.balanceAfter });
+  return { entry, balance: customer.balance };
 }
 
 function createSupplier(db, body, actor) {
@@ -1529,16 +1590,31 @@ async function handleApi(request, response) {
           note: payment.note || '',
           createdBy: payment.createdBy || ''
         }));
-      const allEntries = [...creditSales, ...payments].sort((a, b) => new Date(a.at) - new Date(b.at));
+      const udharEntries = (db.udharEntries || [])
+        .filter(entry => entry.customerId === id && !entry.voided)
+        .map(entry => ({
+          type: 'udhar',
+          id: entry.id,
+          at: entry.at || entry.createdAt,
+          amount: entry.amount,
+          invoiceNo: '',
+          note: entry.note || '',
+          reference: entry.reference || '',
+          createdBy: entry.createdByName || ''
+        }));
+      const allEntries = [...creditSales, ...payments, ...udharEntries].sort((a, b) => new Date(a.at) - new Date(b.at));
       let running = 0;
       const balanceAfter = {};
+      const balanceBefore = {};
       for (const entry of allEntries) {
+        balanceBefore[entry.id] = money(running);
         if (entry.type === 'sale') running += money(entry.amount) - money(entry.paidAtBilling);
-        else running -= money(entry.amount);
+        else if (entry.type === 'payment') running -= money(entry.amount);
+        else running += money(entry.amount);
         balanceAfter[entry.id] = money(running);
       }
       const entries = allEntries.reverse();
-      return json(response, 200, { customer: { ...customer, cnicMasked: maskCnic(customer.cnic), cnic: undefined }, entries, balanceAfter });
+      return json(response, 200, { customer: { ...customer, cnicMasked: maskCnic(customer.cnic), cnic: undefined }, entries, balanceAfter, balanceBefore });
     }
 
     if (method === 'POST' && /^\/api\/customers\/[^/]+\/payments$/.test(url.pathname)) {
@@ -1554,6 +1630,20 @@ async function handleApi(request, response) {
         const result = receiveUdharPayment(db, id, body.amount, actor, options);
         await saveDb(db);
         return json(response, 201, { payment: result.payment, balance: result.balance });
+      } catch (error) {
+        const status = error.message === 'Customer not found' ? 404 : 400;
+        return json(response, status, { error: error.message });
+      }
+    }
+
+    if (method === 'POST' && /^\/api\/customers\/[^/]+\/udhar$/.test(url.pathname)) {
+      if (!can(actor, 'udhar')) return json(response, 403, { error: 'Only Admin or Manager can add udhar' });
+      const id = url.pathname.split('/')[3];
+      const body = await parseBody(request);
+      try {
+        const { entry, balance } = addUdharEntry(db, id, body, actor);
+        await saveDb(db);
+        return json(response, 201, { entry, balance, previousBalance: entry.previousBalance });
       } catch (error) {
         const status = error.message === 'Customer not found' ? 404 : 400;
         return json(response, status, { error: error.message });
@@ -1996,6 +2086,7 @@ module.exports.ensureSchema = ensureSchema;
 module.exports.createSale = createSale;
 module.exports.processReturn = processReturn;
 module.exports.receiveUdharPayment = receiveUdharPayment;
+module.exports.addUdharEntry = addUdharEntry;
 module.exports.clearUdhar = clearUdhar;
 module.exports.returnedQtyByItem = returnedQtyByItem;
 module.exports.customerTotals = customerTotals;

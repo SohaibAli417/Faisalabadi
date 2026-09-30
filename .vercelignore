@@ -11,9 +11,12 @@ assets/
 !.env.example
 
 # Backups and runtime data - huge, not needed on server
-database/backups/
-database/pre-dedupe-backup-*.json
-database/pos-data-corrupt-*.json
+# NOTE: Vercel uses this file INSTEAD of .gitignore, so anything not listed here IS uploaded.
+# Vercel runs in cloud mode and reads from Supabase, so no local database file is ever needed.
+# database/pos-data.json holds real customer names, phones, CNICs and balances - never upload it.
+database/
+database/pos-data*.json
+database/cloud-cache.json
 
 # Logs
 .server.*.log
@@ -22,3 +25,8 @@ database/pos-data-corrupt-*.json
 # Local tooling
 .vercel
 node_modules/.cache
+
+# Large non-code assets - not needed to run the POS
+faislabadi-pos-client-delivery.zip
+layout.mp4
+Faislabadi_General_Store_POS_Requirements.pdf

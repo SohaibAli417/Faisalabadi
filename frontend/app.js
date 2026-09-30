@@ -72,15 +72,18 @@ const bootstrapCacheKey = 'faislabadi-pos-bootstrap-cache';
 const printerConfigKey = 'faislabadi-pos-printer';
 const money = value => `Rs ${Math.round(Number(value || 0)).toLocaleString('en-PK')}`;
 const UNITS = [
-  { value: 'kg', urdu: 'کلو' },
-  { value: 'gram', urdu: 'گرام' },
-  { value: 'litre', urdu: 'لیٹر' },
-  { value: 'pcs', urdu: 'عدد' },
-  { value: 'pack', urdu: 'پیک' },
-  { value: 'dozen', urdu: 'درجن' },
-  { value: 'boree', urdu: 'بوری' }
+  { value: 'kg', urdu: 'کلو', en: 'KG' },
+  { value: 'gram', urdu: 'گرام', en: 'Gram' },
+  { value: 'litre', urdu: 'لیٹر', en: 'Litre' },
+  { value: 'pcs', urdu: 'عدد', en: 'Adad' },
+  { value: 'pack', urdu: 'پیک', en: 'Pack' },
+  { value: 'box', urdu: 'باکس', en: 'Box' },
+  { value: 'dozen', urdu: 'درجن', en: 'Dozen' },
+  { value: 'meter', urdu: 'میٹر', en: 'Meter' },
+  { value: 'boree', urdu: 'بوری', en: 'Boree' }
 ];
 const unitLabel = unit => (UNITS.find(item => item.value === unit) || {}).urdu || unit || '';
+const unitName = unit => (UNITS.find(item => item.value === unit) || {}).en || unit || '';
 const isWeightUnit = unit => ['kg', 'gram', 'litre', 'boree'].includes(unit);
 const pad2 = n => String(n).padStart(2, '0');
 const initialsOf = name => String(name || '?').trim().split(/\s+/).map(word => word[0] || '').join('').slice(0, 2).toUpperCase();
@@ -144,7 +147,14 @@ const STRINGS = {
     udharKhataEyebrow: 'UDHAR KHATA', cnicLabel: 'CNIC:', totalCreditPurchases: 'Total credit purchases', totalPaidLabel: 'Total paid',
     remaining: 'Remaining', payUdharMax: 'Pay udhar - max', clearUdharBtn: 'Clear Udhar', loading: 'Loading...', noUdharHistory: 'No udhar history yet.',
     payFullAmount: 'Pay full amount', udharNeedsManager: 'Only Admin or Manager can receive or clear udhar. Ask them to record this payment.',
+    addLabel: 'Add',     addNewUdhaar: 'Add New Udhaar', udhaarAmount: 'Amount', udhaarNote: 'Description / Note',
+    udhaarReference: 'Reference (optional)', udhaarSaved: 'New udhaar added to the khata.', previousBalance: 'Previous balance',
+    newBalance: 'New balance', udhaarEntry: 'Udhaar', prevBillLabel: 'Previous bill', dateTimeLabel: 'Date / Time',
     creditSaleEntry: 'Credit sale', paymentReceived: 'Payment received', close: 'Close',
+    addNewUdhar: 'Add New Udhaar', closeAddUdhar: 'Close', saveUdharBtn: 'Save Udhaar',
+    udharAmountPh: 'Udhar amount (Rs)', udharNotePh: 'What was taken / note',
+    udharReferencePh: 'Reference (optional)', udharDateTitle: 'Udhar date', udharTimeTitle: 'Udhar time',
+    udharEntryLabel: 'New udhar', refPrefix: 'Ref',
     allMonths: 'All months', reverseBill: 'Reverse bill', reversePayment: 'Reverse payment', balanceForCustomer: 'Balance:',
     saleReturnsEyebrow: 'SALE RETURNS', returnsSubtitle: 'Search a bill by invoice number, then return selected products or the complete bill. Stock and udhar update automatically.',
     enterBillId: 'Enter Bill ID / Invoice No (e.g. FS-1049)', findInvoice: 'Find invoice', noInvoiceLoaded: 'No invoice loaded yet.',
@@ -262,7 +272,14 @@ const STRINGS = {
     udharKhataEyebrow: 'اُدھار کھاتہ', cnicLabel: 'شناختی کارڈ:', totalCreditPurchases: 'کل اُدھار خریداری', totalPaidLabel: 'کل ادا شدہ',
     remaining: 'باقی', payUdharMax: 'اُدھار وصول کریں - زیادہ سے زیادہ', clearUdharBtn: 'پورا اُدھار کلیر کریں', loading: 'لوڈ ہو رہا ہے...', noUdharHistory: 'ابھی اُدھار کی تاریخ نہیں۔',
     payFullAmount: 'پوری رقم دیں', udharNeedsManager: 'اُدھار وصول یا کلیر صرف ایڈمن یا منیجر کر سکتا ہے۔ ان سے کہیں کہ ادائیگی درج کریں۔',
+    addLabel: 'شامل کریں', addNewUdhaar: 'نیا اُدھار درج کریں', udhaarAmount: 'رقم', udhaarNote: 'تفصیل / نوٹ',
+    udhaarReference: 'حوالہ (اختیاری)', udhaarSaved: 'نیا اُدھار کھاتے میں شامل ہو گیا۔', previousBalance: 'پچھلا بیلنس',
+    newBalance: 'نیا بیلنس', udhaarEntry: 'اُدھار', prevBillLabel: 'پچھلا بل', dateTimeLabel: 'تاریخ / وقت',
     creditSaleEntry: 'اُدھار سیل', paymentReceived: 'ادائیگی موصول', close: 'بند کریں',
+    addNewUdhar: 'نیا اُدھار درج کریں', closeAddUdhar: 'بند کریں', saveUdharBtn: 'اُدھار محفوظ کریں',
+    udharAmountPh: 'اُدھار کی رقم (روپے)', udharNotePh: 'کیا لیا / تفصیل',
+    udharReferencePh: 'حوالہ (اختیاری)', udharDateTitle: 'تاریخ', udharTimeTitle: 'وقت',
+    udharEntryLabel: 'نیا اُدھار', refPrefix: 'حوالہ',
     allMonths: 'تمام مہینے', reverseBill: 'بل واپس لوٹائیں', reversePayment: 'ادائیگی واپس', balanceForCustomer: 'بقیہ:',
     saleReturnsEyebrow: 'فروخت واپسی', returnsSubtitle: 'بل نمبر سے بل تلاش کریں، پھر منتخب اشیاء یا پورا بل واپس کریں۔ اسٹاک اور اُدھار خود بخود اپڈیٹ ہو جائیں گے۔',
     enterBillId: 'بل آئی ڈی / انوائس نمبر لکھیں (مثلاً FS-1049)', findInvoice: 'بل تلاش کریں', noInvoiceLoaded: 'ابھی کوئی بل کھولا نہیں گیا۔',
@@ -849,55 +866,147 @@ const waLink = (phone, text) => {
   const number = waNumber(phone);
   return number ? `https://wa.me/${number}?text=${encodeURIComponent(text || '')}` : null;
 };
+// WhatsApp renders a fenced block as monospace, so the same aligned columns the printed receipt uses
+// stay aligned on the phone. This is a real invoice layout, not a "name / qty / price" text dump.
+const WA_WIDTH = 32;
+const waLine = (left, right) => {
+  const l = String(left == null ? '' : left);
+  const r = String(right == null ? '' : right);
+  if (!l) return r;
+  if (!r) return l;
+  const gap = Math.max(1, WA_WIDTH - l.length - r.length);
+  return l + ' '.repeat(gap) + r;
+};
+const waRow = (left, right) => ('  ' + waLine(left, right)).slice(0, 64);
+const waRule = char => char.repeat(WA_WIDTH);
+const waCenter = text => {
+  const pad = Math.max(0, Math.floor((WA_WIDTH - String(text).length) / 2));
+  return ' '.repeat(pad) + text;
+};
+const waDate = value => {
+  const d = value ? new Date(value) : null;
+  if (!d || isNaN(d.getTime())) return '';
+  return `${d.toLocaleDateString('en-PK', { day: '2-digit', month: 'short', year: 'numeric' })} ${d.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' })}`;
+};
+const plain = value => String(value == null ? '' : value).replace(/[*_`#]/g, '');
+// Ledger rows carry the running balance of every entry. Handing the bill text the "before" figure
+// lets a shared bill show previous balance -> this bill -> new balance, with no extra request.
+const withPrevBalance = entry => (entry && Number.isFinite(Number(entry.balanceBefore))
+  ? { ...entry, previousBalance: Number(entry.balanceBefore) }
+  : entry);
+
+function waHeader(settings) {
+  const storeName = plain((settings && settings.storeName) || 'Faislabadi General Store');
+  const rows = [waCenter('*' + storeName + '*')];
+  if (settings && settings.address) rows.push(waCenter(plain(settings.address)));
+  if (settings && settings.phone) rows.push(waCenter(plain(settings.phone)));
+  return rows;
+}
+function waFooter(settings) {
+  const rows = [waRule('-')];
+  if (settings && settings.address) rows.push(waCenter(plain(settings.address)));
+  if (settings && settings.phone) rows.push(waCenter('Tel: ' + plain(settings.phone)));
+  rows.push(waCenter(LANG === 'ur' ? 'شکریہ! دوبارہ تشریف لائیں۔' : 'Thank you! Please visit again.'));
+  return rows;
+}
 function saleBillText(sale, settings) {
-  const lines = [];
-  const storeName = (settings && settings.storeName) || 'Faislabadi General Store';
-  const storePhone = (settings && settings.phone) || '';
-  const storeAddress = (settings && settings.address) || '';
-  lines.push('*' + storeName + '*');
-  if (storeAddress) lines.push(storeAddress);
-  if (storePhone) lines.push(storePhone);
-  lines.push('--------------------------------');
-  lines.push((LANG === 'ur' ? 'انوائس' : 'Invoice') + ': ' + (sale.invoiceNo || '-'));
-  lines.push((LANG === 'ur' ? 'تاریخ / وقت' : 'Date / Time') + ': ' + new Date(sale.at || sale.createdAt).toLocaleString('en-PK'));
-  lines.push('--------------------------------');
+  const rows = [];
+  const total = Number(sale.total != null ? sale.total : sale.amount) || 0;
+  const paid = Number(sale.paidAmount != null ? sale.paidAmount : (sale.paidAtBilling || 0)) || 0;
+  const due = Math.max(0, total - paid);
+  const prevBalance = Number(sale.previousBalance);
+
+  rows.push(...waHeader(settings));
+  rows.push(waRule('='));
+  rows.push(waRow(LANG === 'ur' ? 'انوائس' : 'Invoice No', sale.invoiceNo || '-'));
+  rows.push(waRow(LANG === 'ur' ? 'تاریخ' : 'Date', waDate(sale.createdAt || sale.at)));
+  rows.push(waRow(LANG === 'ur' ? 'وقت' : 'Time', (() => {
+    const d = new Date(sale.createdAt || sale.at || 0);
+    return isNaN(d.getTime()) ? '' : d.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' });
+  })()));
+  if (sale.customerNameAtBilling || sale.customerName) rows.push(waRow(LANG === 'ur' ? 'گاہک' : 'Customer', plain(sale.customerNameAtBilling || sale.customerName)));
+  if (sale.reference) rows.push(waRow(LANG === 'ur' ? 'حوالہ' : 'Reference', plain(sale.reference)));
+  rows.push(waRule('-'));
+  rows.push(waCenter(LANG === 'ur' ? 'اشیاء' : 'ITEMS'));
+  rows.push(waRow('  ' + (LANG === 'ur' ? 'نام' : 'Item'), LANG === 'ur' ? 'اکائی' : 'Qty'));
+  rows.push(waRow('  ' + (LANG === 'ur' ? 'ریٹ' : 'Rate'), LANG === 'ur' ? 'رقم' : 'Amount'));
+  rows.push(waRule('-'));
   (sale.items || []).forEach(item => {
     const qty = Number(item.qty) || 0;
     const price = Number(item.price) || 0;
-    lines.push(item.name || '');
-    lines.push(`   ${qty} ${unitLabel(item.unit)}  x  ${money(price)}  =  ${money(qty * price)}`);
+    const amount = item.amount != null ? Number(item.amount) : qty * price;
+    rows.push(waRow('  ' + plain(item.name), `${qty} ${item.unit ? unitName(item.unit) : ''}`.trim()));
+    rows.push(waRow(`    @ ${money(price)}`, money(amount)));
   });
-  lines.push('--------------------------------');
-  lines.push((LANG === 'ur' ? 'کل رقم' : 'Total') + ': ' + money(sale.amount || sale.total || 0));
-  if (sale.paidAtBilling || (sale.paidAmount && Number(sale.paidAmount) > 0)) {
-    lines.push((LANG === 'ur' ? 'ادا شدہ' : 'Paid') + ': ' + money(sale.paidAtBilling || sale.paidAmount || 0));
+  rows.push(waRule('-'));
+  const subtotal = Number(sale.subtotal) || (total + (Number(sale.discount) || 0) - (Number(sale.tax) || 0));
+  rows.push(waRow(LANG === 'ur' ? 'سب ٹوٹل' : 'Subtotal', money(subtotal)));
+  if (Number(sale.discount) > 0) rows.push(waRow(LANG === 'ur' ? 'رعایت' : 'Discount', '- ' + money(sale.discount)));
+  if (Number(sale.tax) > 0) rows.push(waRow(LANG === 'ur' ? 'ٹیکس' : 'Tax', money(sale.tax)));
+  rows.push(waRow('*' + (LANG === 'ur' ? 'کل رقم' : 'GRAND TOTAL') + '*', '*' + money(total) + '*'));
+  if (Number(sale.receivedAmount) > paid) rows.push(waRow(LANG === 'ur' ? 'موصول شدہ' : 'Received', money(sale.receivedAmount)));
+  if (paid > 0) rows.push(waRow(LANG === 'ur' ? 'ادا شدہ' : 'Paid', money(paid)));
+  if (!Number.isNaN(prevBalance) && due > 0) rows.push(waRow(LANG === 'ur' ? 'پچھلا بیلنس' : 'Previous balance', money(prevBalance)));
+  if (due > 0) {
+    rows.push(waRow('*' + (LANG === 'ur' ? 'اس بل کا باقی' : 'This bill due') + '*', '*' + money(due) + '*'));
+    rows.push(waRow('*' + (LANG === 'ur' ? 'کل باقی اُدھار' : 'TOTAL BALANCE') + '*', '*' + money(prevBalance + due) + '*'));
   }
-  const due = Math.max(0, Number(sale.amount || sale.total || 0) - Number(sale.paidAmount || 0));
-  if (due > 0) lines.push((LANG === 'ur' ? 'باقی اُدھار' : 'Udhar Due') + ': ' + money(due));
-  lines.push('--------------------------------');
-  lines.push(LANG === 'ur' ? 'شکریہ! دوبارہ تشریف لائیں۔' : 'Thank you! Visit again.');
-  return lines.join('\n');
+  rows.push(...waFooter(settings));
+  return '```\n' + rows.join('\n') + '\n```';
 }
+// One ledger row's effect on the outstanding balance. Sales and manually entered udhar add, payments
+// subtract. Used for the WhatsApp running balance so the statement always adds up to the real one.
+const entryDelta = entry => {
+  const amount = Number(entry && entry.amount) || 0;
+  if (entry && entry.type === 'payment') return -amount;
+  if (entry && entry.type === 'sale') return amount - (Number(entry.paidAtBilling) || 0);
+  return amount;
+};
 function khataStatementText(customer, entries, balance, settings) {
-  const lines = [];
-  const storeName = (settings && settings.storeName) || 'Faislabadi General Store';
-  const storeAddress = (settings && settings.address) || '';
-  const storePhone = (settings && settings.phone) || '';
-  lines.push('*' + storeName + '*' + (storeAddress ? '\n' + storeAddress : '') + (storePhone ? '\n' + storePhone : ''));
-  lines.push('--------------------------------');
-  lines.push((LANG === 'ur' ? 'کھاتہ' : 'Khata') + ': ' + (customer.name || '-'));
-  lines.push((LANG === 'ur' ? 'عددی شناخت' : 'ID') + ': #' + (customer.id || '-'));
-  lines.push('--------------------------------');
-  (entries || []).slice(0, 30).forEach(entry => {
-    lines.push((entry.type === 'sale' ? '+' : '-') + ' ' + money(entry.amount) + '  ' + new Date(entry.at).toLocaleDateString('en-PK') + (entry.invoiceNo ? '  ' + entry.invoiceNo : ''));
+  const rows = [];
+  const all = entries || [];
+  // Opening balance = the balance that is left once every stored transaction is taken out again, so
+  // it stays correct no matter how many rows the statement shows.
+  const opening = Math.max(0, (Number(balance) || 0) - all.reduce((sum, entry) => sum + entryDelta(entry), 0));
+  rows.push(...waHeader(settings));
+  rows.push(waRule('='));
+  rows.push(waRow(LANG === 'ur' ? 'کھاتہ' : 'KHATA', plain(customer && customer.name)));
+  rows.push(waRow(LANG === 'ur' ? 'گاہک نمبر' : 'Customer ID', '#' + plain(customer && customer.id)));
+  if (customer && customer.phone) rows.push(waRow(LANG === 'ur' ? 'موبائل' : 'Mobile', plain(customer.phone)));
+  rows.push(waRow(LANG === 'ur' ? 'کھاتہ بند' : 'Statement date', waDate(new Date().toISOString())));
+  rows.push(waRule('-'));
+  rows.push(waRow(LANG === 'ur' ? 'پچھلا بیلنس' : 'Previous balance', money(opening)));
+  rows.push(waCenter(LANG === 'ur' ? 'نئی لین ڈار این ٹری' : 'NEW TRANSACTIONS'));
+  rows.push(waRule('-'));
+  rows.push(waRow(LANG === 'ur' ? 'تاریخ / وقت' : 'Date / Time', LANG === 'ur' ? 'رقم / بیلنس' : 'Amount / Balance'));
+  rows.push(waRule('-'));
+  // The ledger arrives newest first; walk it oldest first so the running balance reads correctly.
+  const shown = all.slice(0, 40).slice().reverse();
+  let running = opening;
+  shown.forEach(entry => {
+    running = Math.max(0, running + entryDelta(entry));
+    const isCredit = entry.type !== 'payment';
+    const heading = entry.type === 'sale'
+      ? (LANG === 'ur' ? 'اُدھار بل' : 'Credit bill') + (entry.invoiceNo ? ' ' + plain(entry.invoiceNo) : '')
+      : entry.type === 'udhar'
+        ? (LANG === 'ur' ? 'نیا اُدھار' : 'New udhar') + (entry.note ? ' - ' + plain(entry.note) : '')
+        : (LANG === 'ur' ? 'ادائیگی موصول' : 'Payment received') + (entry.invoiceNo ? ' (' + plain(entry.invoiceNo) + ')' : (entry.note ? ' - ' + plain(entry.note) : ''));
+    const shownAmount = entry.type === 'sale' ? Number(entry.amount || 0) - (Number(entry.paidAtBilling) || 0) : Number(entry.amount) || 0;
+    rows.push(waRow('  ' + heading, (isCredit ? '+' : '-') + money(shownAmount)));
+    rows.push(waRow('    ' + waDate(entry.at), (LANG === 'ur' ? 'بیلنس ' : 'Bal ') + money(running)));
     (entry.items || []).forEach(item => {
-      lines.push(`     ${item.name} ×${item.qty}${item.unit ? ' ' + unitLabel(item.unit) : ''}`);
+      rows.push(waRow('    - ' + plain(item.name), `${item.qty}${item.unit ? ' ' + unitName(item.unit) : ''} x ${money(item.price)} = ${money(item.amount)}`));
     });
+    if (entry.reference) rows.push(waRow('    ' + (LANG === 'ur' ? 'حوالہ' : 'Ref'), plain(entry.reference)));
+    if (entry.createdBy) rows.push(waRow('    ' + (LANG === 'ur' ? 'بذریعہ' : 'By'), plain(entry.createdBy)));
   });
-  lines.push('--------------------------------');
-  lines.push((LANG === 'ur' ? 'باقی اُدھار' : 'Balance Due') + ': ' + money(balance));
-  lines.push(LANG === 'ur' ? 'شکریہ!' : 'Thank you!');
-  return lines.join('\n');
+  if (all.length > shown.length) {
+    rows.push(waRow('  ' + (LANG === 'ur' ? 'اور پرانی لین ڈار این ٹری شامل ہیں' : 'plus ' + (all.length - shown.length) + ' earlier transactions'), ''));
+  }
+  rows.push(waRule('-'));
+  rows.push(waRow('*' + (LANG === 'ur' ? 'کل باقی اُدھار' : 'TOTAL OUTSTANDING') + '*', '*' + money(balance) + '*'));
+  rows.push(...waFooter(settings));
+  return '```\n' + rows.join('\n') + '\n```';
 }
 
 function ScanCamera({ onCode, onClose }) {
@@ -994,11 +1103,18 @@ function POS({ client, data, refresh, online, setOnline, go }) {
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchIndex, setSearchIndex] = useState(-1);
+  // Hover is a purely visual pointer state and is cleared as soon as the pointer leaves the list.
+  // searchIndex is the real keyboard selection, so moving the mouse can never make a row look
+  // selected - and Enter always acts on the keyboard selection only.
+  const [searchHover, setSearchHover] = useState(-1);
   const [cart, setCart] = useState([]);
+  // Which bill row the pointer/focus is on. Visual only - it never changes what is billed.
+  const [focusIndex, setFocusIndex] = useState(-1);
   const [draftId, setDraftId] = useState(null);
   const [customerSearch, setCustomerSearch] = useState('');
   const [customerOpen, setCustomerOpen] = useState(false);
   const [customerIdx, setCustomerIdx] = useState(-1);
+  const [customerHover, setCustomerHover] = useState(-1);
   const [customerId, setCustomerId] = useState('cus_walkin');
   const [paymentType, setPaymentType] = useState('Cash');
   const [receivedInput, setReceivedInput] = useState('');
@@ -1015,6 +1131,9 @@ function POS({ client, data, refresh, online, setOnline, go }) {
   const [message, setMessage] = useState('');
   const [profile, setProfile] = useState(null);
   const [profileTick, setProfileTick] = useState(0);
+  const [charging, setCharging] = useState(false);
+  const chargingRef = React.useRef(false);
+  const profileFor = React.useRef('');
   const searchRef = React.useRef(null);
   const customerInputRef = React.useRef(null);
   const billRef = React.useRef(null);
@@ -1113,6 +1232,17 @@ function POS({ client, data, refresh, online, setOnline, go }) {
     }));
   }
 
+  function setLinePrice(index, value) {
+    // The rate is the source of truth, so editing it returns the row to rate x qty.
+    setCart(items => items.map((item, itemIndex) => (itemIndex === index
+      ? { ...item, price: Math.max(0, Math.round(Number(value) || 0)), mode: 'qty' }
+      : item)));
+  }
+
+  function setLineUnit(index, value) {
+    setCart(items => items.map((item, itemIndex) => (itemIndex === index ? { ...item, unit: value } : item)));
+  }
+
   function toggleLineMode(index) {
     setCart(items => items.map((item, itemIndex) => {
       if (itemIndex !== index) return item;
@@ -1148,19 +1278,27 @@ function POS({ client, data, refresh, online, setOnline, go }) {
   useEffect(() => {
     let stopped = false;
     if (!customerId || customerId === 'cus_walkin') {
+      profileFor.current = '';
       setProfile(null);
       return undefined;
     }
-    setProfile(null);
+    // Only blank the panel when the cashier actually switches customer. Refreshing the same
+    // customer's ledger keeps the old rows on screen, so the bill just completed never disappears
+    // and never leaves an empty "loading" panel behind.
+    if (profileFor.current !== customerId) {
+      profileFor.current = customerId;
+      setProfile(null);
+    }
     client.get(`/api/customers/${customerId}/ledger`)
       .then(payload => { if (!stopped) setProfile(payload); })
-      .catch(() => { if (!stopped) setProfile(null); });
+      .catch(() => {});
     return () => { stopped = true; };
   }, [customerId, client, data.user && data.user.role, profileTick]);
 
   function resetSale(options) {
     const keepCustomerId = (options && options.keepCustomerId) || 'cus_walkin';
     setCart([]);
+    setFocusIndex(-1);
     setDraftId(null);
     setCustomerId(keepCustomerId);
     if (keepCustomerId === 'cus_walkin') setCustomerSearch('');
@@ -1251,6 +1389,9 @@ function POS({ client, data, refresh, online, setOnline, go }) {
   }
 
   async function charge(printAfter) {
+    // Guard against a double tap / double F2 sending the same cart twice and billing the customer
+    // for two identical invoices.
+    if (chargingRef.current) return;
     if (!cart.length || cart.some(item => !(Number(item.qty) > 0))) {
       setMessage(t('completeSaleBlockedCart'));
       return;
@@ -1272,22 +1413,28 @@ function POS({ client, data, refresh, online, setOnline, go }) {
       }
     }
     const payload = buildPayload();
+    chargingRef.current = true;
+    setCharging(true);
     try {
       const sale = await client.post('/api/sales', payload);
-      if (draftId) {
-        try { await client.del(`/api/drafts/${draftId}`); } catch (_) {}
-      }
-      setReceipt(sale);
-      // Keep an udhar customer selected so their khata immediately refreshes with the new bill,
-      // instead of dropping back to walk-in and hiding it.
+      // Snapshot the balance from before the bill, so the invoice and the WhatsApp bill can show
+      // previous balance / new balance without any extra request.
+      const prevBalance = Number((selectedCustomer && selectedCustomer.balance) || 0);
       const keepCustomerId = sale.dueAmount > 0 && customerId !== 'cus_walkin' ? customerId : null;
+      setReceipt({ ...sale, previousBalance: prevBalance, customerNameAtBilling: (selectedCustomer && selectedCustomer.name) || '' });
+      // Show the new bill in the customer's khata right away, before any network round trip.
+      if (keepCustomerId) showSaleInProfile(sale, prevBalance);
       resetSale({ keepCustomerId });
-      await refresh();
-      if (keepCustomerId) setProfileTick(n => n + 1);
       setMessage(t('saleCompleteMessage'));
-      if (printAfter || printerCfg.autoPrint) {
-        setTimeout(() => window.print(), 500);
+      // Print as soon as the receipt is on screen (next painted frame) instead of waiting on the
+      // background refresh - no artificial delay, and still never before the receipt is rendered.
+      if (printAfter || printerCfg.autoPrint) schedulePrint();
+      if (draftId) {
+        // Fire and forget: clearing the draft must not hold up the receipt.
+        client.del(`/api/drafts/${draftId}`).catch(() => {});
       }
+      refresh();
+      if (keepCustomerId) setProfileTick(n => n + 1);
     } catch (err) {
       if (!navigator.onLine || /fetch/i.test(err.message)) {
         const queued = loadJson(queueKey, []);
@@ -1321,11 +1468,56 @@ function POS({ client, data, refresh, online, setOnline, go }) {
       } else {
         setMessage(friendlyError(err));
       }
+    } finally {
+      chargingRef.current = false;
+      setCharging(false);
     }
   }
 
   const chargeRef = React.useRef(null);
   chargeRef.current = () => charge(false);
+
+  // Print on the first frame the browser can actually paint the receipt, instead of sleeping a fixed
+  // 500ms. Nothing is skipped, the bill just is not held back by an arbitrary wait.
+  function schedulePrint() {
+    requestAnimationFrame(() => requestAnimationFrame(() => window.print()));
+  }
+
+  // Put the just-completed bill into the on-screen khata immediately. The ledger is still refetched
+  // in the background for accuracy, but the new transaction is visible without waiting for it.
+  function showSaleInProfile(sale, prevBalance) {
+    const paid = Math.round(Number(sale.paidAmount) || 0);
+    const due = Math.max(0, Math.round(Number(sale.total) || 0) - paid);
+    setProfile(old => {
+      const base = old || {};
+      const entry = {
+        type: 'sale',
+        id: sale.id,
+        at: sale.createdAt,
+        invoiceNo: sale.invoiceNo,
+        amount: sale.total,
+        paidAtBilling: paid,
+        balanceBefore: prevBalance,
+        balanceAfter: prevBalance + due,
+        products: (sale.items || []).map(item => `${item.name} x${item.qty}`).join(', '),
+        items: (sale.items || []).map(item => ({
+          name: item.name,
+          sku: item.sku || '',
+          qty: Number(item.qty) || 0,
+          unit: item.unit || 'pcs',
+          price: Number(item.price) || 0,
+          amount: Math.round((Number(item.price) || 0) * (Number(item.qty) || 0))
+        })),
+        createdBy: sale.createdByName || ''
+      };
+      return {
+        ...base,
+        entries: [entry, ...(base.entries || [])],
+        balanceAfter: Object.assign({}, base.balanceAfter, { [entry.id]: entry.balanceAfter }),
+        balanceBefore: Object.assign({}, base.balanceBefore, { [entry.id]: entry.balanceBefore })
+      };
+    });
+  }
 
   function addFromCode(code) {
     const target = barcodeMap[String(code).toLowerCase().trim()];
@@ -1416,10 +1608,17 @@ function POS({ client, data, refresh, online, setOnline, go }) {
     return {
       invoiceNo: draftId ? `${t('draftsLabel')} #${draftId}` : t('pendingInvoice'),
       at: Date.now(),
+      createdAt: new Date().toISOString(),
+      customerName: (selectedCustomer && selectedCustomer.name) || '',
       items: cart.map(item => ({ name: item.name, qty: item.qty, unit: item.unit, price: item.price })),
+      subtotal: Math.round(subtotal),
+      discount: combinedD,
+      total,
       amount: total,
       paidAmount: paidNow,
-      paidAtBilling: paidNow
+      paidAtBilling: paidNow,
+      // So a pending bill can still show previous balance -> new balance when it is shared.
+      previousBalance: Number((selectedCustomer && selectedCustomer.balance) || 0)
     };
   }
 
@@ -1514,33 +1713,45 @@ function POS({ client, data, refresh, online, setOnline, go }) {
     const amt = item.mode === 'amt' ? (Number(item.amount) || 0) : round3(priceNum * (Number(item.qty) || 0));
     const low = product && Number(item.qty) > Number(product.stock || 0);
     const step = isWeightUnit(item.unit) ? 0.25 : 1;
-    return h('div', { className: 'bill-row' + (low ? ' low-stock' : ''), key: `${item.productId || item.name}-${index}` },
+    const selected = focusIndex === index;
+    return h('div', {
+      className: 'bill-row' + (low ? ' low-stock' : '') + (selected ? ' hover' : ''),
+      key: `${item.productId || item.name}-${index}`,
+      onMouseEnter: () => setFocusIndex(index),
+      onMouseLeave: () => setFocusIndex(current => (current === index ? -1 : current))
+    },
       h('div', { className: 'bill-product' },
         h('strong', null, item.name),
         item.sku ? h('small', null, item.sku) : null,
         low && h('span', { className: 'low-badge' }, t('lowBadge'))),
       h('div', { className: 'bill-qty' },
-        h('button', { className: 'step-btn', onClick: () => changeQty(index, -step) }, '−'),
+        h('button', { className: 'step-btn', title: t('removeLabel'), onClick: () => changeQty(index, -step) }, '−'),
         item.mode === 'qty'
-          ? h('input', { type: 'number', min: '0', step: isWeightUnit(item.unit) ? '0.25' : '1', value: item.qty, onChange: e => setLineQty(index, e.target.value) })
-          : h('input', { type: 'number', min: '0', step: 'any', value: Number(item.amount) || 0, onChange: e => setLineAmount(index, e.target.value) }),
-        h('button', { className: 'step-btn', onClick: () => changeQty(index, step) }, '+'),
+          ? h('input', { type: 'number', min: '0', step: isWeightUnit(item.unit) ? '0.25' : '1', value: item.qty, title: t('quantityWord'), onChange: e => setLineQty(index, e.target.value) })
+          : h('input', { type: 'number', min: '0', step: 'any', value: Number(item.amount) || 0, title: t('amountWord'), onChange: e => setLineAmount(index, e.target.value) }),
+        h('button', { className: 'step-btn', title: t('addLabel'), onClick: () => changeQty(index, step) }, '+'),
         h('button', { className: 'mode-btn', title: item.mode === 'qty' ? t('amountWord') : t('quantityWord') + ' mode', onClick: () => toggleLineMode(index) }, item.mode === 'qty' ? 'Qty' : 'Rs')),
-      h('span', { className: 'bill-uom' }, unitLabel(item.unit)),
-      h('span', { className: 'bill-rate' }, money(priceNum)),
+      h('div', { className: 'bill-uom' },
+        h('select', { className: 'bill-uom-select', value: item.unit || 'pcs', title: t('unitLabelWord'), onChange: e => setLineUnit(index, e.target.value) },
+          !UNITS.some(unit => unit.value === item.unit) && item.unit
+            ? h('option', { key: 'custom', value: item.unit }, item.unit)
+            : null,
+          UNITS.map(unit => h('option', { key: unit.value, value: unit.value }, LANG === 'ur' ? unit.urdu : unit.en)))),
+      h('div', { className: 'bill-rate' },
+        h('input', { className: 'bill-rate-input', type: 'number', min: '0', step: 'any', value: priceNum, title: t('rateLabel'), onChange: e => setLinePrice(index, e.target.value) })),
       h('span', { className: 'bill-total' }, money(amt)),
-      h('button', { className: 'bill-remove', title: t('removeLabel'), onClick: () => removeLine(index) }, '×'));
+      h('button', { className: 'bill-remove', title: t('removeLabel'), 'aria-label': t('removeLabel'), onClick: () => removeLine(index) }, '×'));
   }
 
   function renderCustomerPanel() {
     return h('div', null,
       h('div', { className: 'checkout-title' }, h('h3', null, t('customerLabelShort'))),
       h('div', { className: 'customer-combobox' },
-        h('input', { ref: customerInputRef, value: customerSearch, onFocus: () => setCustomerOpen(Boolean(customerSearch.trim())), onChange: e => { setCustomerSearch(e.target.value); setCustomerOpen(true); setCustomerIdx(-1); }, onKeyDown: handleCustomerKey, placeholder: t('selectCustomerPh'), autoComplete: 'off' }),
-        customerOpen && h('div', { className: 'search-dropdown customer-dropdown' },
+        h('input', { ref: customerInputRef, value: customerSearch, onFocus: () => setCustomerOpen(Boolean(customerSearch.trim())), onChange: e => { setCustomerSearch(e.target.value); setCustomerOpen(true); setCustomerIdx(-1); setCustomerHover(-1); }, onKeyDown: handleCustomerKey, placeholder: t('selectCustomerPh'), autoComplete: 'off' }),
+        customerOpen && h('div', { className: 'search-dropdown customer-dropdown', onMouseLeave: () => setCustomerHover(-1) },
           h('button', { className: 'search-item walkin-item', onClick: () => selectCustomer({ id: 'cus_walkin', name: t('walkInCustomer') }) },
             h('span', { className: 'search-item-name' }, t('walkInCustomer'))),
-          customers.map((customer, index) => h('button', { key: customer.id, className: 'search-item' + (index === customerIdx ? ' active' : ''), onMouseEnter: () => setCustomerIdx(index), onClick: () => selectCustomer(customer) },
+          customers.map((customer, index) => h('button', { key: customer.id, className: 'search-item' + (index === customerIdx ? ' active' : '') + (index === customerHover ? ' hover' : ''), onMouseEnter: () => setCustomerHover(index), onClick: () => selectCustomer(customer) },
             h('span', { className: 'search-item-name' }, customer.name),
             h('span', { className: 'search-item-meta' }, customer.phone || ''),
             Number(customer.balance) > 0 ? h('span', { className: 'search-item-price' }, `${t('udharBadge')} ${money(customer.balance)}`) : null)))),
@@ -1571,8 +1782,8 @@ function POS({ client, data, refresh, online, setOnline, go }) {
     const monthKeys = Object.keys(byMonth).sort().reverse();
 
     function profileSaleRow(sale) {
-      const waBtn = waLink(selectedCustomer.phone, saleBillText(sale, data.settings))
-        ? h('a', { className: 'wa-btn', href: waLink(selectedCustomer.phone, saleBillText(sale, data.settings)), target: '_blank', rel: 'noreferrer' }, t('whatsappBill'))
+      const waBtn = waLink(selectedCustomer.phone, saleBillText(withPrevBalance(sale), data.settings))
+        ? h('a', { className: 'wa-btn', href: waLink(selectedCustomer.phone, saleBillText(withPrevBalance(sale), data.settings)), target: '_blank', rel: 'noreferrer' }, t('whatsappBill'))
         : h('span', { className: 'wa-na' }, t('noWhatsapp'));
       return h('div', { className: 'cust-sale', key: sale.id },
         h('div', { className: 'cust-sale-meta' },
@@ -1674,13 +1885,13 @@ function POS({ client, data, refresh, online, setOnline, go }) {
 
   const searchSection = h('section', { className: 'search-section pos-panel' },
     h('div', { className: 'search-row' },
-      h('label', { className: 'search' },
-        h('input', { ref: searchRef, autoFocus: true, value: query, onChange: e => { setQuery(e.target.value); setSearchOpen(true); setSearchIndex(0); }, onFocus: () => setSearchOpen(true), onKeyDown: handleSearchKey, placeholder: t('searchPlaceholder'), autoComplete: 'off', autoCapitalize: 'none', autoCorrect: 'off', spellCheck: false })),
+        h('label', { className: 'search' },
+          h('input', { ref: searchRef, autoFocus: true, value: query, onChange: e => { setQuery(e.target.value); setSearchOpen(true); setSearchIndex(-1); setSearchHover(-1); }, onFocus: () => setSearchOpen(true), onKeyDown: handleSearchKey, placeholder: t('searchPlaceholder'), autoComplete: 'off', autoCapitalize: 'none', autoCorrect: 'off', spellCheck: false })),
       h('button', { className: 'secondary icon-btn', title: t('scanCamera'), onClick: () => setCameraOpen(true) }, cameraGlyph),
       h('button', { className: 'secondary' + (manualOpen ? ' active' : ''), onClick: () => setManualOpen(v => !v) }, t('looseItem')),
       h('button', { className: 'secondary', onClick: () => setDraftsModal(true) }, `${t('draftsLabel')} (${(data.drafts || []).length})`)),
-    searchOpen && shown.length ? h('div', { className: 'search-dropdown' },
-      shown.map((product, index) => h('div', { key: product.id, className: 'search-item' + (index === searchIndex ? ' active' : ''), onMouseEnter: () => setSearchIndex(index), onClick: () => addFromSearch(product) },
+    searchOpen && shown.length ? h('div', { className: 'search-dropdown', onMouseLeave: () => setSearchHover(-1) },
+      shown.map((product, index) => h('div', { key: product.id, className: 'search-item' + (index === searchIndex ? ' active' : '') + (index === searchHover ? ' hover' : ''), onMouseEnter: () => setSearchHover(index), onClick: () => addFromSearch(product) },
         h('div', { className: 'search-item-top' },
           h('span', { className: 'search-item-name' }, product.name),
           h('span', { className: 'search-item-meta' }, `${product.sku ? product.sku + ' · ' : ''}${product.stock} ${unitLabel(product.unit)}`),
@@ -1730,7 +1941,7 @@ function POS({ client, data, refresh, online, setOnline, go }) {
   // button stays useful right after selecting a customer from search.
   const lastProfileSale = ((profile && profile.entries) || []).filter(entry => entry.type === 'sale').slice(-1)[0];
   const lastBillWaLink = (customerId !== 'cus_walkin' && selectedCustomer && lastProfileSale)
-    ? waLink(selectedCustomer.phone, saleBillText(lastProfileSale, data.settings))
+      ? waLink(selectedCustomer.phone, saleBillText(withPrevBalance(lastProfileSale), data.settings))
     : null;
 
   const checkoutSection = h('section', { className: 'checkout-section pos-panel' },
@@ -1749,9 +1960,9 @@ function POS({ client, data, refresh, online, setOnline, go }) {
       h('button', { className: 'secondary danger-btn', onClick: confirmCancelSale }, t('cancelSale')),
       go && h('button', { className: 'secondary', onClick: () => go('returns') }, t('revertBill'))),
     h('div', { className: 'actions-right' },
-      h('button', { className: 'secondary', onClick: previewSale }, t('printInvoice')),
-      h('button', { className: 'primary', onClick: () => charge(true) }, t('completeAndPrint')),
-      h('button', { className: 'primary', onClick: () => charge(false) }, t('completeSale'))));
+      h('button', { className: 'secondary', disabled: charging, onClick: previewSale }, t('printInvoice')),
+      h('button', { className: 'primary', disabled: charging, onClick: () => charge(true) }, t('completeAndPrint')),
+      h('button', { className: 'primary', disabled: charging, onClick: () => charge(false) }, t('completeSale'))));
 
   return h('div', { className: 'pos-page' },
     message && h('div', { className: 'notice pos-notice' }, message),
@@ -1785,7 +1996,12 @@ function ReceiptModal({ sale, customers, settings, onClose }) {
   const handed = Math.max(Number(sale.paidAmount), Number(sale.receivedAmount) || 0);
   const change = !isCredit ? Math.max(0, handed - Number(sale.total)) : 0;
   const delivery = sale.delivery && typeof sale.delivery === 'object' ? sale.delivery : null;
-  const closingBalance = due > 0 ? money((Number(customer && customer.balance) || 0) + (sale.preview ? due : 0)) : null;
+  // Prefer the balance snapshotted at billing time: the in-memory customer list is still the
+  // pre-sale copy for a moment after saving, so using it would print a stale total.
+  const baseBalance = Number.isFinite(Number(sale.previousBalance))
+    ? Number(sale.previousBalance)
+    : (Number(customer && customer.balance) || 0);
+  const closingBalance = due > 0 ? money(baseBalance + (sale.preview ? due : 0)) : null;
   useEffect(() => {
     function handlePrintKey(e) { if (e.key === 'F4') { e.preventDefault(); window.print(); } }
     window.addEventListener('keydown', handlePrintKey);
@@ -2280,6 +2496,10 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
   const [payTime, setPayTime] = useState(toTimeInputValue(new Date().toISOString()));
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [udharOpen, setUdharOpen] = useState(false);
+  const [udharForm, setUdharForm] = useState({ amount: '', note: '', reference: '' });
+  const [udharDate, setUdharDate] = useState(toDateInputValue(new Date().toISOString()));
+  const [udharTime, setUdharTime] = useState(toTimeInputValue(new Date().toISOString()));
   // The server only lets Admin/Manager record or clear udhar, so do not show controls that will 403.
   const canManageUdhar = !user || user.role === 'Admin' || user.role === 'Manager';
   async function loadLedger() {
@@ -2331,6 +2551,38 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
       if (updated) setSummary({ creditPurchases: updated.creditPurchases || 0, totalPaid: updated.totalPaid || 0 });
     } catch (_) {}
   }
+  async function addUdhar(event) {
+    if (event) event.preventDefault();
+    setMessage('');
+    if (!(Number(udharForm.amount) > 0)) {
+      setMessage(LANG === 'ur' ? 'پہلے رقم درج کریں۔' : 'Enter the udhar amount first.');
+      return;
+    }
+    setBusy(true);
+    try {
+      const payload = { amount: Number(udharForm.amount), note: udharForm.note.trim(), reference: udharForm.reference.trim() };
+      if (udharDate || udharTime) {
+        payload.atDate = udharDate;
+        payload.atTime = udharTime;
+      }
+      const result = await client.post(`/api/customers/${customer.id}/udhar`, payload);
+      setBalance(result.balance);
+      setUdharForm({ amount: '', note: '', reference: '' });
+      setUdharDate(toDateInputValue(new Date().toISOString()));
+      setUdharTime(toTimeInputValue(new Date().toISOString()));
+      setUdharOpen(false);
+      setMessage(LANG === 'ur'
+        ? `${money(result.entry.amount)} نیا اُدھار درج ہو گیا۔ کل بیلنس: ${money(result.balance)}۔`
+        : `New udhar of ${money(result.entry.amount)} recorded. New balance: ${money(result.balance)}.`);
+      await loadLedger();
+      await loadSummary();
+      refresh();
+    } catch (err) {
+      setMessage(friendlyError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
   async function clearUdhar() {
     const ok = await askConfirm(LANG === 'ur'
       ? `${customer.name} کا پورا اُدھار کلیر کریں؟`
@@ -2366,6 +2618,8 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
     return (recent.length ? recent : all).slice(-12).reverse();
   };
   async function reverseEntry(entry) {
+    // Only real sales and payments can be voided; a hand-typed udhar stays as history, so no button.
+    if (entry.type === 'udhar') return;
     const isSale = entry.type === 'sale';
     const verb = isSale ? t('reverseBill') : t('reversePayment');
     const detail = isSale
@@ -2421,6 +2675,23 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
         h('div', null, h('span', null, t('remaining')), h('strong', { style: Number(balance) > 0 ? { color: '#c0392b' } : { color: '#267152' } }, money(balance)))),
       message && h('div', { className: 'notice' }, message),
       canManageUdhar
+        ? h('button', {
+            type: 'button',
+            className: 'secondary khata-udhar-toggle' + (udharOpen ? ' open' : ''),
+            disabled: busy,
+            onClick: () => setUdharOpen(open => !open)
+          }, udharOpen ? t('closeAddUdhar') : t('addNewUdhar'))
+        : null,
+      canManageUdhar && udharOpen
+        ? h('form', { className: 'payment-form khata-udhar-form', onSubmit: addUdhar },
+            h('input', { type: 'number', min: '1', step: 'any', required: true, placeholder: t('udharAmountPh'), value: udharForm.amount, onChange: e => setUdharForm({ ...udharForm, amount: e.target.value }) }),
+            h('input', { type: 'text', placeholder: t('udharNotePh'), value: udharForm.note, onChange: e => setUdharForm({ ...udharForm, note: e.target.value }) }),
+            h('input', { type: 'text', placeholder: t('udharReferencePh'), value: udharForm.reference, onChange: e => setUdharForm({ ...udharForm, reference: e.target.value }) }),
+            h('input', { type: 'date', value: udharDate, onChange: e => setUdharDate(e.target.value), title: t('udharDateTitle') }),
+            h('input', { type: 'time', value: udharTime, onChange: e => setUdharTime(e.target.value), title: t('udharTimeTitle') }),
+            h('button', { type: 'submit', className: 'primary', disabled: busy || !(Number(udharForm.amount) > 0) }, t('saveUdharBtn')))
+        : null,
+      canManageUdhar
         ? h('form', { className: 'payment-form khata-pay-form', onSubmit: receivePayment },
             h('input', { type: 'number', min: '1', step: 'any', placeholder: `${t('payUdharMax')} ${money(balance)}`, value: amount, onChange: e => setAmount(e.target.value) }),
             h('input', { type: 'date', value: payDate, onChange: e => setPayDate(e.target.value), title: t('hPaymentDate') }),
@@ -2446,24 +2717,27 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
                 h('span', null, `${entries.filter(e => (e.at || '').slice(0, 7) === monthKey).length} ${t('billWord')}`)),
               entries.filter(e => (e.at || '').slice(0, 7) === monthKey).map(entry => {
                 const canReverse = user && (user.role === 'Admin' || user.role === 'Manager');
-                return h('div', { className: `ledger-entry ${entry.type}`, key: entry.id },
-                  h('div', { className: 'entry-info' },
-                    h('strong', null, entry.type === 'sale'
-                      ? `${t('creditSaleEntry')} ${entry.invoiceNo}`
-                      : `${t('paymentReceived')}${entry.invoiceNo ? ' (' + entry.invoiceNo + ')' : ''}${entry.note && !entry.invoiceNo ? ' - ' + entry.note : ''}`),
-                    entry.products && h('small', null, entry.products),
-                    h('small', null, `${when(entry.at)}${entry.createdBy ? ' - ' + entry.createdBy : ''}${entry.note && entry.invoiceNo ? ' - ' + entry.note : ''}`)),
-                  h('div', { className: 'entry-amounts' },
-                    h('b', { className: entry.type === 'sale' ? 'amount-due' : 'amount-paid' }, entry.type === 'sale' ? `+${money(entry.amount)}` : `-${money(entry.amount)}`),
-                    h('span', { className: 'entry-balance' }, `${t('balanceForCustomer')} ${money(balanceAfter[entry.id] ?? balance)}`)),
+                 const isCreditEntry = entry.type !== 'payment';
+                 return h('div', { className: `ledger-entry ${entry.type}`, key: entry.id },
+                   h('div', { className: 'entry-info' },
+                     h('strong', null, entry.type === 'sale'
+                       ? `${t('creditSaleEntry')} ${entry.invoiceNo}`
+                       : entry.type === 'udhar'
+                         ? `${t('udharEntryLabel')}${entry.note ? ' - ' + entry.note : ''}`
+                         : `${t('paymentReceived')}${entry.invoiceNo ? ' (' + entry.invoiceNo + ')' : ''}${entry.note && !entry.invoiceNo ? ' - ' + entry.note : ''}`),
+                     entry.products && h('small', null, entry.products),
+                     h('small', null, `${when(entry.at)}${entry.createdBy ? ' - ' + entry.createdBy : ''}${entry.reference ? ' - ' + t('refPrefix') + ' ' + entry.reference : ''}${entry.note && entry.invoiceNo ? ' - ' + entry.note : ''}`)),
+                   h('div', { className: 'entry-amounts' },
+                     h('b', { className: isCreditEntry ? 'amount-due' : 'amount-paid' }, `${isCreditEntry ? '+' : '-'}${money(entry.amount)}`),
+                     h('span', { className: 'entry-balance' }, `${t('balanceForCustomer')} ${money(balanceAfter[entry.id] ?? balance)}`)),
                   h('div', { className: 'entry-actions' },
-                    entry.type === 'sale' && waLink(customer.phone, saleBillText(entry, settings))
-                      ? h('a', { className: 'wa-btn entry-wa', href: waLink(customer.phone, saleBillText(entry, settings)), target: '_blank', rel: 'noreferrer' }, t('whatsappBill'))
+    entry.type === 'sale' && waLink(customer.phone, saleBillText(withPrevBalance(entry), settings))
+      ? h('a', { className: 'wa-btn entry-wa', href: waLink(customer.phone, saleBillText(withPrevBalance(entry), settings)), target: '_blank', rel: 'noreferrer' }, t('whatsappBill'))
                       : null,
-                    canReverse
-                      ? h('button', { className: 'danger-btn small entry-reverse', disabled: busy, onClick: () => reverseEntry(entry) },
-                        entry.type === 'sale' ? t('reverseBill') : t('reversePayment'))
-                      : null));
+                     canReverse && entry.type !== 'udhar'
+                       ? h('button', { className: 'danger-btn small entry-reverse', disabled: busy, onClick: () => reverseEntry(entry) },
+                         entry.type === 'sale' ? t('reverseBill') : t('reversePayment'))
+                       : null));
                 }))))),
       h('div', { className: 'success-actions no-print' }, h('button', { className: 'primary', onClick: onClose }, t('close'))))),
     document.body);
@@ -2487,7 +2761,11 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
   const [productSearch, setProductSearch] = useState('');
   const [manualDraft, setManualDraft] = useState('');
   const [message, setMessage] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState('');
+  const [extraUdharOpen, setExtraUdharOpen] = useState(false);
+  const [extraUdhar, setExtraUdhar] = useState({ amount: '', note: '', reference: '' });
+  const [extraUdharDate, setExtraUdharDate] = useState(toDateInputValue(new Date().toISOString()));
+  const [extraUdharTime, setExtraUdharTime] = useState(toTimeInputValue(new Date().toISOString()));
   const remaining = Math.max(0, (Number(form.udhaarTotal) || 0) - (Number(form.udhaarPaid) || 0));
   const addedProductIds = new Set(form.products.filter(p => p.id).map(p => p.id));
   const productHits = productSearch.trim()
@@ -2528,6 +2806,42 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
   }
   function setProductUnit(index, unit) {
     setForm(old => ({ ...old, products: old.products.map((p, i) => i === index ? { ...p, unit } : p) }));
+  }
+
+  // Same append-only endpoint the Khata uses, so a udhar typed here shows up in the ledger and in
+  // sync exactly like one typed there - the two screens can never disagree.
+  async function addExtraUdhar(event) {
+    if (event) event.preventDefault();
+    setMessage('');
+    if (!(Number(extraUdhar.amount) > 0)) {
+      setMessage(LANG === 'ur' ? 'پہلے رقم درج کریں۔' : 'Enter the udhar amount first.');
+      return;
+    }
+    setBusy(true);
+    try {
+      const payload = {
+        amount: Number(extraUdhar.amount),
+        note: extraUdhar.note.trim(),
+        reference: extraUdhar.reference.trim()
+      };
+      if (extraUdharDate || extraUdharTime) {
+        payload.atDate = extraUdharDate;
+        payload.atTime = extraUdharTime;
+      }
+      const result = await client.post(`/api/customers/${customer.id}/udhar`, payload);
+      setExtraUdhar({ amount: '', note: '', reference: '' });
+      setExtraUdharDate(toDateInputValue(new Date().toISOString()));
+      setExtraUdharTime(toTimeInputValue(new Date().toISOString()));
+      setExtraUdharOpen(false);
+      setMessage(LANG === 'ur'
+        ? `${money(result.entry.amount)} نیا اُدھار درج ہو گیا۔ کل بیلنس: ${money(result.balance)}۔`
+        : `New udhar of ${money(result.entry.amount)} recorded. New balance: ${money(result.balance)}.`);
+      await refresh();
+    } catch (err) {
+      setMessage(friendlyError(err));
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function save(event) {
@@ -2610,6 +2924,19 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
         h('div', { className: 'section-label' }, t('productLabel')),
         productPicker,
         canEditUdhar && h('div', { className: 'section-label' }, t('udharKhataEyebrow')),
+        canEditUdhar && h('button', {
+          type: 'button',
+          className: 'secondary khata-udhar-toggle' + (extraUdharOpen ? ' open' : ''),
+          disabled: busy,
+          onClick: () => setExtraUdharOpen(open => !open)
+        }, extraUdharOpen ? t('closeAddUdhar') : t('addNewUdhar')),
+        canEditUdhar && extraUdharOpen && h('form', { className: 'payment-form khata-udhar-form', onSubmit: addExtraUdhar },
+          h('input', { type: 'number', min: '1', step: 'any', required: true, placeholder: t('udharAmountPh'), value: extraUdhar.amount, onChange: e => setExtraUdhar({ ...extraUdhar, amount: e.target.value }) }),
+          h('input', { type: 'text', placeholder: t('udharNotePh'), value: extraUdhar.note, onChange: e => setExtraUdhar({ ...extraUdhar, note: e.target.value }) }),
+          h('input', { type: 'text', placeholder: t('udharReferencePh'), value: extraUdhar.reference, onChange: e => setExtraUdhar({ ...extraUdhar, reference: e.target.value }) }),
+          h('input', { type: 'date', value: extraUdharDate, onChange: e => setExtraUdharDate(e.target.value), title: t('udharDateTitle') }),
+          h('input', { type: 'time', value: extraUdharTime, onChange: e => setExtraUdharTime(e.target.value), title: t('udharTimeTitle') }),
+          h('button', { type: 'submit', className: 'primary', disabled: busy || !(Number(extraUdhar.amount) > 0) }, t('saveUdharBtn'))),
         canEditUdhar && h('div', { className: 'edit-form-row' },
           h('div', null, h('label', null, t('hTotalCredit')), h('input', { type: 'number', min: '0', value: form.udhaarTotal, onChange: e => setForm({ ...form, udhaarTotal: e.target.value }) })),
           h('div', null, h('label', null, t('hTotalPaid')), h('input', { type: 'number', min: '0', value: form.udhaarPaid, onChange: e => setForm({ ...form, udhaarPaid: e.target.value }) })),
@@ -2618,8 +2945,8 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
           h('div', null, h('label', null, t('hPaymentDate')), h('input', { type: 'date', value: form.paymentDate, onChange: e => setForm({ ...form, paymentDate: e.target.value }) })),
           h('div', null, h('label', null, t('hPaymentTime')), h('input', { type: 'time', value: form.paymentTime, onChange: e => setForm({ ...form, paymentTime: e.target.value }) }))),
         canEditUdhar && h('p', { className: 'hint' }, LANG === 'ur'
-          ? 'نوٹ: ادائیگی درج کرنے کے لیے کھاتہ کھولیں۔ اُدھار رقم اور آخری ادائیگی کی تاریخ یہاں تبدیل کی جا سکتی ہے۔'
-          : 'Record payments from the Khata. Edit total / paid amounts and the last payment date/time here.'),
+          ? 'نوٹ: نیا اُدھار اوپر "نیا اُدھار درج کریں" سے درج کریں - ہر اُدھار الگ اندراج کے طور پر محفوظ ہوتا ہے۔ ادائیگی کھاتہ سے درج کریں۔'
+          : 'Add each udhar with "Add New Udhaar" above - every entry is stored separately in the ledger. Record payments from the Khata.'),
         h('div', { className: 'form-actions' },
           h('button', { className: 'primary', disabled: busy }, t('saveLabel')),
           h('button', { type: 'button', className: 'secondary', onClick: onClose }, t('cancelLabel')))))),
