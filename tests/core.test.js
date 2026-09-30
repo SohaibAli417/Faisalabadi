@@ -1,6 +1,124 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { seedData, hashPassword, verifyPassword, validatePassword, calculateReport, dashboardStats, convertPackQty, maskCnic, resolveProductPricing, isProtectedPath } = require('../server');
+const {
+  seedData, hashPassword, verifyPassword, validatePassword, calculateReport, dashboardStats,
+  convertPackQty, maskCnic, resolveProductPricing, isProtectedPath,
+  unitToBase, qtyToBase, priceToUnit, stockQtyFor, createSale, ensureSchema, unitsCompatible
+} = require('../server');
+
+test('unit conversion moves qty and rate in opposite directions so the value never changes', () => {
+  // 1 kg == 1000 gram, so 500 gram is 0.5 kg.
+  assert.equal(unitToBase('gram', 'kg'), 0.001);
+  assert.equal(unitToBase('kg', 'gram'), 1000);
+  assert.equal(qtyToBase(500, 'gram', 'kg'), 0.5);
+  assert.equal(qtyToBase(2, 'kg', 'gram'), 2000);
+  // A rate per kg becomes a rate per gram, and back again.
+  assert.equal(priceToUnit(100, 'gram', 'kg'), 0.1);
+  assert.equal(priceToUnit(0.1, 'kg', 'gram'), 100);
+  // The pair must round-trip: qty x rate is the same money in either unit.
+  assert.equal(qtyToBase(500, 'gram', 'kg') * 100, priceToUnit(100, 'gram', 'kg') * 500);
+  assert.equal(qtyToBase(2, 'kg', 'gram') * priceToUnit(100, 'gram', 'kg'), 2 * 100);
+  // Same-unit and unknown-unit cases stay 1:1 rather than collapsing to zero.
+  assert.equal(unitToBase('kg', 'kg'), 1);
+  assert.equal(unitToBase('pcs', 'pcs'), 1);
+  assert.equal(unitToBase('mystery', 'kg'), 1);
+  assert.equal(qtyToBase(3, 'mystery', 'kg'), 3);
+});
+
+test('units of different kinds are refused instead of being treated as 1:1', () => {
+  const db = seedData();
+  ensureSchema(db);
+  const admin = db.users[0];
+  const product = db.products[0];
+  product.unit = 'litre';
+  product.stock = 10;
+  // 5 gram of a litre product would silently take 5 litre of stock at a 1:1 factor.
+  assert.throws(
+    () => createSale(db, { customerId: 'cus_walkin', paymentType: 'Cash', taxRate: 0, items: [{ productId: product.id, qty: 5, unit: 'gram', price: 1 }] }, admin),
+    /cannot be billed in gram/
+  );
+  assert.equal(Number(product.stock), 10);
+  // Same dimension still converts, and a custom unit the app does not know stays 1:1.
+  const kgProduct = db.products[1];
+  kgProduct.unit = 'kg';
+  kgProduct.stock = 5;
+  const sameDimension = createSale(db, { customerId: 'cus_walkin', paymentType: 'Cash', taxRate: 0, items: [{ productId: kgProduct.id, qty: 1000, unit: 'gram', price: 0.1 }] }, admin);
+  assert.equal(sameDimension.items[0].baseQty, 1);
+  assert.equal(Number(kgProduct.stock), 4);
+  assert.equal(unitsCompatible('kg', 'kg'), true);
+  assert.equal(unitsCompatible('gram', 'litre'), false);
+  assert.equal(unitsCompatible('customUnit', 'kg'), true);
+});
+
+test('billing a kg product in grams checks and reduces stock in kg, not grams', () => {
+  const db = seedData();
+  ensureSchema(db);
+  const admin = db.users[0];
+  const product = db.products[0];
+  product.unit = 'kg';
+  product.stock = 10;
+  product.price = 100;
+  // 2000 gram of a product that only has 10 kg in stock must succeed and take 2 kg.
+  const sale = createSale(db, { customerId: 'cus_walkin', paymentType: 'Cash', taxRate: 0, items: [{ productId: product.id, qty: 2000, unit: 'gram', price: 0.1 }] }, admin);
+  assert.equal(sale.items[0].unit, 'gram');
+  assert.equal(sale.items[0].qty, 2000);
+  assert.equal(sale.items[0].baseQty, 2);
+  assert.equal(Number(product.stock), 8);
+  assert.equal(sale.total, 200);
+});
+
+test('a sub-rupee per-gram rate is kept, not rounded away to zero', () => {
+  const db = seedData();
+  ensureSchema(db);
+  const admin = db.users[0];
+  const product = db.products[0];
+  product.unit = 'kg';
+  product.stock = 10;
+  product.price = 7;
+  // Rs 7/kg is Rs 0.007/gram. Rounding the rate to whole rupees would make the line free.
+  const sale = createSale(db, { customerId: 'cus_walkin', paymentType: 'Cash', taxRate: 0, items: [{ productId: product.id, qty: 1000, unit: 'gram', price: 0.007 }] }, admin);
+  assert.equal(sale.items[0].price, 0.007);
+  assert.equal(sale.total, 7);
+});
+
+test('a gram quantity larger than the kg stock is rejected', () => {
+  const db = seedData();
+  ensureSchema(db);
+  const admin = db.users[0];
+  const product = db.products[0];
+  product.unit = 'kg';
+  product.stock = 1;
+  // 20 kg worth of grams against 1 kg of stock must fail, not pass as "20 > 1".
+  assert.throws(
+    () => createSale(db, { customerId: 'cus_walkin', paymentType: 'Cash', items: [{ productId: product.id, qty: 20000, unit: 'gram', price: 0.1 }] }, admin),
+    /insufficient stock/
+  );
+  assert.equal(Number(product.stock), 1);
+});
+
+test('voiding a gram-billed sale restocks the same kg amount it took', () => {
+  const db = seedData();
+  ensureSchema(db);
+  const admin = db.users[0];
+  const product = db.products[0];
+  product.unit = 'kg';
+  product.stock = 10;
+  const sale = createSale(db, { customerId: 'cus_walkin', paymentType: 'Cash', items: [{ productId: product.id, qty: 2000, unit: 'gram', price: 0.1 }] }, admin);
+  assert.equal(Number(product.stock), 8);
+  require('../server').voidSale(db, sale, admin);
+  // Must go back to 10, not to 10010.
+  assert.equal(Number(product.stock), 10);
+});
+
+test('stockQtyFor converts older sale rows that predate unit conversion', () => {
+  // Rows saved before this change have no baseQty; they must still restock correctly.
+  assert.equal(stockQtyFor({ qty: 2000, unit: 'gram' }, { unit: 'kg' }), 2);
+  assert.equal(stockQtyFor({ qty: 2, unit: 'kg' }, { unit: 'kg' }), 2);
+  assert.equal(stockQtyFor({ qty: 500, unit: 'gram' }, { unit: 'kg' }), 0.5);
+  // A stored baseQty always wins, so the original conversion is never recalculated.
+  assert.equal(stockQtyFor({ qty: 2000, unit: 'gram', baseQty: 2 }, { unit: 'kg' }), 2);
+  assert.equal(stockQtyFor({ qty: 3, unit: 'pcs' }, { unit: 'pcs' }), 3);
+});
 
 test('static file serving blocks the database, secrets and backups', () => {
   // A data file in a deployed build must never be downloadable, even if an ignore file is wrong.

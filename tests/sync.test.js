@@ -56,6 +56,49 @@ test('stock reconciliation: cloud-only sale reduces the winning local stock', ()
   assert.equal(merged.sales.length, 1);
 });
 
+test('stock reconciliation uses baseQty so a gram-billed sale does not move kg stock', () => {
+  // A kg product billed as 2000 gram deducted 2 kg, not 2000. The merge must apply the same
+  // amount, otherwise syncing a second device wipes the stock level.
+  const product = { id: 'prd_1', name: 'Rice', unit: 'kg', stock: 8, _updatedAt: '2026-08-02T09:00:00Z' };
+  const local = baseDb({ products: [{ ...product }] });
+  const cloud = baseDb({
+    products: [{ ...product }],
+    sales: [{
+      id: 'sal_cloud_1', createdAt: '2026-08-02T11:00:00Z', voided: false, paymentType: 'Cash', total: 200,
+      items: [{ productId: 'prd_1', qty: 2000, unit: 'gram', baseQty: 2, price: 0.1 }]
+    }]
+  });
+
+  const { merged } = mergeDbs(local, cloud);
+  assert.equal(merged.products[0].stock, 6);
+  // A fraction left after a gram sale must survive, not be rounded to a whole unit.
+  assert.equal(merged.products[0].stock, 6);
+});
+
+test('stock reconciliation keeps fractional kg stock instead of rounding to whole units', () => {
+  const product = { id: 'prd_1', name: 'Rice', unit: 'kg', stock: 1, _updatedAt: '2026-08-02T09:00:00Z' };
+  const local = baseDb({ products: [{ ...product }] });
+  const cloud = baseDb({
+    products: [{ ...product }],
+    sales: [{
+      id: 'sal_cloud_1', createdAt: '2026-08-02T11:00:00Z', voided: false, paymentType: 'Cash', total: 50,
+      items: [{ productId: 'prd_1', qty: 500, unit: 'gram', baseQty: 0.5, price: 0.1 }]
+    }]
+  });
+
+  const { merged } = mergeDbs(local, cloud);
+  assert.equal(merged.products[0].stock, 0.5);
+});
+
+test('stock delta falls back to qty for sale rows saved before unit conversion', () => {
+  const delta = productStockDelta(
+    [{ id: 'sal_1', items: [{ productId: 'prd_1', qty: 3 }] }],
+    [],
+    []
+  );
+  assert.equal(delta.prd_1, -3);
+});
+
 test('last-writer-wins: newer product edit wins regardless of side', () => {
   const oldProduct = { id: 'prd_1', name: 'Soap', price: 100, _updatedAt: '2026-08-01T01:00:00Z' };
   const local = baseDb({ products: [oldProduct] });

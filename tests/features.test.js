@@ -268,6 +268,24 @@ test('returning from a credit sale reduces udhar first instead of paying cash', 
   assert.equal(sale.dueAmount, 0);
 });
 
+test('returning a gram-billed line refunds the money and restocks kg, not grams', () => {
+  const { db, admin } = fixture();
+  const product = db.products.find(item => item.id === 'prd_1');
+  product.unit = 'kg';
+  product.stock = 10;
+  product.price = 100;
+  // Bill 2000 gram at Rs 0.1/gram = Rs 200 and take 2 kg off a 10 kg stock.
+  const sale = createSale(db, { customerId: 'cus_walkin', paymentType: 'Cash', taxRate: 0, items: [{ productId: product.id, qty: 2000, unit: 'gram', price: 0.1 }] }, admin);
+  assert.equal(Number(product.stock), 8);
+  assert.equal(sale.total, 200);
+
+  const result = processReturn(db, { saleId: sale.id, complete: true }, admin);
+  // The refund must be the full Rs 200, not 0 from a rate rounded to whole rupees.
+  assert.equal(result.record.total, 200);
+  // Restock must be 2 kg, not 2000 kg.
+  assert.equal(Number(product.stock), 10);
+});
+
 test('returning from a partially paid sale reduces udhar then refunds the rest in cash', () => {
   const { db, admin } = fixture();
   const customer = db.customers.find(item => item.id === 'cus_1');

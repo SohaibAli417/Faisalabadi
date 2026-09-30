@@ -6,6 +6,15 @@ function asArray(value) {
   return Array.isArray(value) ? value : [];
 }
 
+// Stock lives in each product's base unit, so a sale line has to move stock by `baseQty` (what the
+// server actually deducted) and not by the billed `qty`. A gram-billed line carries qty 2000 and
+// baseQty 2; using qty would remove 2000 kg. Rows saved before unit conversion have no baseQty, so
+// they fall back to qty, which was always the product's own unit back then.
+const saleStockQty = item => {
+  if (item && item.baseQty !== undefined && item.baseQty !== null) return Number(item.baseQty) || 0;
+  return Number((item && item.qty) || 0);
+};
+
 function productStockDelta(sales, purchases, returns) {
   const delta = {};
   const bump = (productId, qty) => {
@@ -14,10 +23,10 @@ function productStockDelta(sales, purchases, returns) {
   };
   for (const sale of sales) {
     if (sale.voided) continue;
-    for (const item of asArray(sale.items)) bump(item.productId, -Number(item.qty || 0));
+    for (const item of asArray(sale.items)) bump(item.productId, -saleStockQty(item));
   }
-  for (const purchase of purchases) for (const item of asArray(purchase.items)) bump(item.productId, Number(item.qty || 0));
-  for (const refund of returns) for (const item of asArray(refund.items)) bump(item.productId, Number(item.qty || 0));
+  for (const purchase of purchases) for (const item of asArray(purchase.items)) bump(item.productId, saleStockQty(item));
+  for (const refund of returns) for (const item of asArray(refund.items)) bump(item.productId, saleStockQty(item));
   return delta;
 }
 
@@ -160,7 +169,9 @@ function mergeDbs(local, cloud, options = {}) {
     const clean = cleanRow(row);
     const delta = row.__origin === 'local' ? stockDeltaFromCloudSide : stockDeltaFromLocalSide;
     if (typeof delta[clean.id] === 'number') {
-      clean.stock = Math.max(0, Math.round(Number(clean.stock || 0) + delta[clean.id]));
+      // Stock is not money: a kg product sold in grams leaves fractions, so keep three decimals
+      // instead of rounding to a whole unit.
+      clean.stock = Math.max(0, Math.round((Number(clean.stock || 0) + delta[clean.id]) * 1000) / 1000);
     }
     return clean;
   }).sort((a, b) => recordTime(b) - recordTime(a));

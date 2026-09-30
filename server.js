@@ -117,6 +117,12 @@ function round2(value) {
   return Math.round(Number(value || 0) * 100) / 100;
 }
 
+// Stock moves in a product's base unit, so quantities need a decimal place finer than money:
+// 500 gram is 0.5 kg and 1 kg split into three bills must not drift to 0.33 + 0.33 + 0.33.
+function round3(value) {
+  return Math.round(Number(value || 0) * 1000) / 1000;
+}
+
 function validatePassword(password) {
   const value = String(password || '');
   if (value.length < 8) return 'Password must be at least 8 characters.';
@@ -415,6 +421,14 @@ function safeMoney(value, fallback = 0) {
   return Number.isFinite(n) && n >= 0 ? Math.round(n) : fallback;
 }
 
+// A rate can be a fraction of a rupee: billing a Rs 100/kg product per gram means Rs 0.1/gram, and
+// a cheap product can be well under one paisa per gram. Rounding a rate to whole rupees (as
+// money() does) would turn those into 0, so rates keep four decimals while totals stay in rupees.
+function safeRate(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? Math.round(n * 10000) / 10000 : fallback;
+}
+
 function resolveProductPricing(input) {
   const cost = money(input.cost);
   const explicitPrice = input.price !== undefined && input.price !== null && String(input.price).trim() !== '';
@@ -523,6 +537,74 @@ function convertPackQty(qty, mode, source) {
    return { qty: round2(amount), factor: 1, label: '' };
 }
 
+// Units that share one dimension, with how many base units each one is worth.
+// Stock is always stored in the product's own base unit (product.unit), so anything the cashier
+// enters in another unit has to be converted before it touches stock, and the rate has to move the
+// opposite way. Without this, 500 gram priced per kg silently bills 500 x the kg rate.
+const UNIT_FACTORS = {
+  kg: 1,
+  gram: 0.001,
+  litre: 1,
+  meter: 1,
+  pcs: 1,
+  pack: 1,
+  box: 1,
+  dozen: 1,
+  boree: 1
+};
+// Which kind of thing a unit measures. Only units of the same dimension have a known conversion, so
+// billing a litre product in gram is refused rather than treated as 1:1 - a silent 1:1 would take
+// 1 litre of stock for a line that claims to be 1 gram.
+const UNIT_DIMENSIONS = {
+  kg: 'weight',
+  gram: 'weight',
+  litre: 'volume',
+  meter: 'length',
+  pcs: 'count',
+  pack: 'count',
+  box: 'count',
+  dozen: 'count',
+  boree: 'count'
+};
+const unitFactor = unit => {
+  const key = String(unit == null ? '' : unit).trim().toLowerCase();
+  return Object.prototype.hasOwnProperty.call(UNIT_FACTORS, key) ? UNIT_FACTORS[key] : null;
+};
+const unitDimension = unit => {
+  const key = String(unit == null ? '' : unit).trim().toLowerCase();
+  return Object.prototype.hasOwnProperty.call(UNIT_DIMENSIONS, key) ? UNIT_DIMENSIONS[key] : null;
+};
+// True when the two units can be converted, or when either side is a custom unit the app has never
+// heard of (those stay 1:1, exactly as before this change).
+const unitsCompatible = (unit, baseUnit) => {
+  const from = unitDimension(unit);
+  const to = unitDimension(baseUnit);
+  if (!from || !to) return true;
+  return from === to;
+};
+// How many base units one `unit` represents. Unknown units are treated as 1:1 rather than 0, so a
+// custom unit never turns a sale into zero.
+const unitToBase = (unit, baseUnit) => {
+  const from = unitFactor(unit);
+  const to = unitFactor(baseUnit);
+  if (!from || !to) return 1;
+  return from / to;
+};
+// Quantity expressed in the product's base unit. `round3` keeps 500 gram as 0.5 kg, not 0.
+const qtyToBase = (qty, unit, baseUnit) => round3(Number(qty || 0) * unitToBase(unit, baseUnit));
+// The stock movement size for a stored sale line. New rows carry baseQty; rows saved before unit
+// conversion are recomputed from the billed unit, so old bills still restock the right amount.
+const stockQtyFor = (item, product) => {
+  if (item && item.baseQty !== undefined && item.baseQty !== null) return round3(Number(item.baseQty));
+  return qtyToBase(item && item.qty, item && item.unit, product && product.unit);
+};
+// Rate expressed per `unit`. One unit is `unitToBase(unit, baseUnit)` base units, so the rate scales
+// the same way the quantity does: Rs 100/kg is Rs 0.1/gram. Rates keep decimals here instead of
+// going through money(), which rounds to whole rupees.
+const priceToUnit = (price, unit, baseUnit) => {
+  return safeRate(Number(price || 0) * unitToBase(unit, baseUnit));
+};
+
 function maskCnic(cnic) {
   if (!cnic) return '';
   const digits = String(cnic).replace(/\D/g, '');
@@ -544,11 +626,22 @@ function createSale(db, payload, actor, source = 'online') {
       if (!product) throw new Error(`Product not found: ${item.productId}`);
       const qty = Number(item.qty || 1);
       if (qty <= 0) throw new Error('Quantity must be positive');
-      if (Number(product.stock) < qty) throw new Error(`${product.name} has insufficient stock`);
-      return { productId: product.id, name: product.name, sku: product.sku, unit: product.unit, qty, price: safeMoney(item.price, product.price), cost: money(product.cost), manual: false };
+      // The cashier may bill in a different unit than the one stock is kept in (gram on a kg
+      // product). Stock lives in the product's base unit, so the check and the decrement both use
+      // the converted quantity - otherwise 500 gram would look like 500 kg of stock.
+      const unit = String(item.unit || product.unit || 'pcs').trim() || product.unit || 'pcs';
+      if (!unitsCompatible(unit, product.unit)) {
+        throw new Error(`${product.name} is stocked in ${product.unit}, so it cannot be billed in ${unit}`);
+      }
+      const baseQty = qtyToBase(qty, unit, product.unit);
+      if (baseQty <= 0) throw new Error('Quantity must be positive');
+      if (Number(product.stock) < baseQty) {
+        throw new Error(`${product.name} has insufficient stock (available: ${round3(product.stock)} ${product.unit})`);
+      }
+      return { productId: product.id, name: product.name, sku: product.sku, unit, qty, baseQty, price: safeRate(item.price, product.price), cost: money(product.cost), manual: false };
     }
     const qty = Number(item.qty || 1);
-    const price = money(item.price);
+    const price = safeRate(item.price);
     if (!item.name || qty <= 0 || price <= 0) throw new Error('Manual items require name, price, and quantity');
     return { productId: null, name: String(item.name).trim(), sku: item.sku || '', unit: item.unit || 'pcs', qty, price, cost: money(item.cost), manual: true };
   });
@@ -624,9 +717,11 @@ function createSale(db, payload, actor, source = 'online') {
     if (item.productId) {
       const product = db.products.find(row => row.id === item.productId);
       if (product) {
-        product.stock = Number(product.stock) - item.qty;
+        // Decrement by the base-unit quantity, not the number the cashier typed.
+        const baseQty = item.baseQty !== undefined ? item.baseQty : item.qty;
+        product.stock = round3(Number(product.stock) - baseQty);
         product._updatedAt = changedAt;
-        db.stockMovements.unshift({ id: uid('stm'), at: changedAt, productId: product.id, type: 'sale', qty: -item.qty, note: 'POS sale' });
+        db.stockMovements.unshift({ id: uid('stm'), at: changedAt, productId: product.id, type: 'sale', qty: -baseQty, unit: product.unit, note: 'POS sale' });
       }
     }
   }
@@ -675,10 +770,21 @@ function customerTotals(db) {
   return totals;
 }
 
+// Normalises a stored customer-profile product line. Keeps the unit it was entered in plus the
+// per-unit rate and the product's own base unit, so the UI can re-price a line (2 kg -> 2000 gram)
+// instead of showing a kilo rate against a gram quantity.
 function productQtyUnit(item) {
   const qty = Number((item && item.qty) || 1);
   const unit = item && typeof item.unit === 'string' ? item.unit.trim().slice(0, 20) : '';
-  return { qty: qty > 0 ? Math.round(qty * 100) / 100 : 1, unit };
+  const baseUnit = item && typeof item.baseUnit === 'string' ? item.baseUnit.trim().slice(0, 20) : '';
+  const price = Number((item && item.price) || 0);
+  return {
+    qty: qty > 0 ? Math.round(qty * 1000) / 1000 : 1,
+    unit,
+    baseUnit,
+    // A line with no stored price is linked to a real product, so take its current rate.
+    price: price > 0 ? money(price) : 0
+  };
 }
 
 function decorateCustomer(db, customer, totalsMap) {
@@ -699,8 +805,18 @@ function decorateCustomer(db, customer, totalsMap) {
       if (!name) continue;
       if (id) {
         const linked = db.products.find(product => product.id === id);
-        if (linked) productList.push({ id: linked.id, name: linked.name, manual: false, ...productQtyUnit(item) });
-        else productList.push({ id: null, name, manual: true, ...productQtyUnit(item) });
+        // Fill in the product's current rate and base unit when the line was saved without them.
+        if (linked) {
+          const normalised = productQtyUnit(item);
+          productList.push({
+            id: linked.id,
+            name: linked.name,
+            manual: false,
+            ...normalised,
+            baseUnit: normalised.baseUnit || linked.unit || '',
+            price: normalised.price || money(linked.price)
+          });
+        } else productList.push({ id: null, name, manual: true, ...productQtyUnit(item) });
       } else {
         productList.push({ id: null, name, manual: true, ...productQtyUnit(item) });
       }
@@ -794,16 +910,20 @@ function processReturn(db, body, actor) {
     if (qty > eligible + 1e-9) {
       throw new Error(`${soldItem.name}: only ${eligible} of ${soldItem.qty} can still be returned`);
     }
-    returnItems.push({ productId: soldItem.productId, name: soldItem.name, unit: soldItem.unit, qty, price: money(soldItem.price), cost: money(soldItem.cost) });
+      // Carry the rate as it was billed. Rounding it to whole rupees would refund 0 for a
+      // per-gram line such as Rs 0.1/gram.
+      returnItems.push({ productId: soldItem.productId, name: soldItem.name, unit: soldItem.unit, qty, price: safeRate(soldItem.price), cost: money(soldItem.cost) });
   }
 
   for (const item of returnItems) {
     if (!item.productId) continue;
     const product = db.products.find(row => row.id === item.productId);
     if (product) {
-      product.stock = Number(product.stock) + item.qty;
+      // Restock in the product's base unit, matching how the sale reduced it.
+      const baseQty = stockQtyFor(item, product);
+      product.stock = round3(Number(product.stock) + baseQty);
       product._updatedAt = now();
-      db.stockMovements.unshift({ id: uid('stm'), at: now(), productId: product.id, type: 'return', qty: item.qty, note: `Return on ${sale.invoiceNo}` });
+      db.stockMovements.unshift({ id: uid('stm'), at: now(), productId: product.id, type: 'return', qty: baseQty, unit: product.unit, note: `Return on ${sale.invoiceNo}` });
     }
   }
 
@@ -1000,9 +1120,12 @@ function voidSale(db, sale, actor) {
     if (!item.productId) continue;
     const product = db.products.find(row => row.id === item.productId);
     if (product) {
-      product.stock = Number(product.stock) + Number(item.qty);
+      // Give back exactly what was taken. New sales store baseQty; older ones are converted from
+      // the billed unit, so a gram-billed line restores 0.5 kg and not 500 kg.
+      const baseQty = stockQtyFor(item, product);
+      product.stock = round3(Number(product.stock) + baseQty);
       product._updatedAt = changedAt;
-      db.stockMovements.unshift({ id: uid('stm'), at: changedAt, productId: product.id, type: 'void', qty: Number(item.qty), note: `Void ${sale.invoiceNo}` });
+      db.stockMovements.unshift({ id: uid('stm'), at: changedAt, productId: product.id, type: 'void', qty: baseQty, unit: product.unit, note: `Void ${sale.invoiceNo}` });
     }
   }
   const due = money(sale.dueAmount);
@@ -1710,7 +1833,7 @@ async function handleApi(request, response) {
             sku: item.sku || '',
             unit: item.unit || 'pcs',
             qty: Number.isFinite(Number(item.qty)) && Number(item.qty) > 0 ? Math.round(Number(item.qty) * 1000) / 1000 : 0,
-            price: safeMoney(item.price, 0),
+            price: safeRate(item.price, 0),
             manual: !!item.manual
           })).filter(item => item.name && item.qty > 0)
         : [];
@@ -2115,3 +2238,10 @@ module.exports.reversePayment = reversePayment;
 module.exports.can = can;
 module.exports.permissions = permissions;
 module.exports.isProtectedPath = isProtectedPath;
+module.exports.unitToBase = unitToBase;
+module.exports.qtyToBase = qtyToBase;
+module.exports.priceToUnit = priceToUnit;
+module.exports.stockQtyFor = stockQtyFor;
+module.exports.UNIT_FACTORS = UNIT_FACTORS;
+module.exports.unitDimension = unitDimension;
+module.exports.unitsCompatible = unitsCompatible;

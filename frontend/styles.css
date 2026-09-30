@@ -386,6 +386,8 @@ td {
 .ledger-entry.payment { background: #eefaf1; }
 .ledger-entry.udhar { background: #fff6ea; }
 .ledger-entry.udhar .entry-info strong { color: #b3541e; }
+.chip-amount { font-weight: 800; color: #267152; white-space: nowrap; }
+.chip-total { font-weight: 800; color: #267152; }
 
 .entry-info { display: flex; flex-direction: column; }
 .entry-info small { color: #64748b; }

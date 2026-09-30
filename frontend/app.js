@@ -71,6 +71,9 @@ const usersCacheKey = 'faislabadi-pos-users-cache';
 const bootstrapCacheKey = 'faislabadi-pos-bootstrap-cache';
 const printerConfigKey = 'faislabadi-pos-printer';
 const money = value => `Rs ${Math.round(Number(value || 0)).toLocaleString('en-PK')}`;
+// A per-unit rate can land well under one rupee once a kg price is shown per gram (Rs 100/kg is
+// Rs 0.10/g), so bill and receipt lines show up to two decimals instead of rounding to whole rupees.
+const moneyRate = value => `Rs ${(Math.round(Number(value || 0) * 100) / 100).toLocaleString('en-PK', { maximumFractionDigits: 2 })}`;
 const UNITS = [
   { value: 'kg', urdu: 'کلو', en: 'KG' },
   { value: 'gram', urdu: 'گرام', en: 'Gram' },
@@ -85,6 +88,44 @@ const UNITS = [
 const unitLabel = unit => (UNITS.find(item => item.value === unit) || {}).urdu || unit || '';
 const unitName = unit => (UNITS.find(item => item.value === unit) || {}).en || unit || '';
 const isWeightUnit = unit => ['kg', 'gram', 'litre', 'boree'].includes(unit);
+
+// How many base units one unit is worth, matching the server's table exactly. Stock lives in the
+// product's own unit, so billing in grams on a kg product has to move the qty one way and the rate
+// the other way - otherwise the line total silently changes when the UOM dropdown is used.
+const UNIT_FACTORS = { kg: 1, gram: 0.001, litre: 1, meter: 1, pcs: 1, pack: 1, box: 1, dozen: 1, boree: 1 };
+// Same grouping as the server. Only units of the same kind have a known conversion, so the UOM
+// dropdown can hide units that would otherwise be silently treated as 1:1.
+const UNIT_DIMENSIONS = { kg: 'weight', gram: 'weight', litre: 'volume', meter: 'length', pcs: 'count', pack: 'count', box: 'count', dozen: 'count', boree: 'count' };
+const unitDimension = unit => {
+  const key = String(unit == null ? '' : unit).trim().toLowerCase();
+  return Object.prototype.hasOwnProperty.call(UNIT_DIMENSIONS, key) ? UNIT_DIMENSIONS[key] : null;
+};
+// Units the cashier may pick for something kept in `baseUnit`. A line with no product unit (manual
+// entry) can use any unit.
+const unitsForBase = baseUnit => {
+  const dimension = unitDimension(baseUnit);
+  if (!dimension) return UNITS;
+  const allowed = UNITS.filter(unit => unitDimension(unit.value) === dimension);
+  // A product in an odd unit must still be able to keep its own unit in the list.
+  return allowed.some(unit => unit.value === baseUnit) ? allowed : UNITS;
+};
+const unitToBase = (unit, baseUnit) => {
+  const from = UNIT_FACTORS[String(unit == null ? '' : unit).trim().toLowerCase()];
+  const to = UNIT_FACTORS[String(baseUnit == null ? '' : baseUnit).trim().toLowerCase()];
+  if (!from || !to) return 1;
+  return from / to;
+};
+  // Rate per `unit`. One unit is `unitToBase(unit, baseUnit)` base units and the rate scales the
+  // same way the quantity does, so Rs 100/kg becomes Rs 0.1/gram. Kept at six decimals so a cheap
+  // per-gram rate such as Rs 0.006 is not rounded away.
+  const rateForUnit = (baseRate, unit, baseUnit) => {
+    return Math.round((Number(baseRate) || 0) * unitToBase(unit, baseUnit) * 1e6) / 1e6;
+  };
+  // The same conversion in reverse: a rate typed in `unit` lifted back to the product's base unit.
+  const rateToBase = (rate, unit, baseUnit) => {
+    const factor = unitToBase(unit, baseUnit);
+    return Math.round((Number(rate) || 0) / (factor || 1) * 1e6) / 1e6;
+  };
 const pad2 = n => String(n).padStart(2, '0');
 const initialsOf = name => String(name || '?').trim().split(/\s+/).map(word => word[0] || '').join('').slice(0, 2).toUpperCase();
 const customerProductsList = customer => {
@@ -878,10 +919,17 @@ const waLine = (left, right) => {
   return l + ' '.repeat(gap) + r;
 };
 const waRow = (left, right) => ('  ' + waLine(left, right)).slice(0, 64);
-const waRule = char => char.repeat(WA_WIDTH);
+// Rules carry the same two-space indent as the rows, so the divider lines up with the text above
+// and below them instead of ending two characters short.
+const waRule = char => '  ' + char.repeat(WA_WIDTH);
 const waCenter = text => {
   const pad = Math.max(0, Math.floor((WA_WIDTH - String(text).length) / 2));
   return ' '.repeat(pad) + text;
+};
+const waDateOnly = value => {
+  const d = value ? new Date(value) : null;
+  if (!d || isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-PK', { year: 'numeric', month: 'short', day: 'numeric' });
 };
 const waDate = value => {
   const d = value ? new Date(value) : null;
@@ -909,49 +957,74 @@ function waFooter(settings) {
   rows.push(waCenter(LANG === 'ur' ? 'شکریہ! دوبارہ تشریف لائیں۔' : 'Thank you! Please visit again.'));
   return rows;
 }
+// Walks the same blocks the printed receipt shows, in the same order and with the same wording, so
+// the WhatsApp message is a readable copy of the printed bill rather than a separate format.
 function saleBillText(sale, settings) {
   const rows = [];
   const total = Number(sale.total != null ? sale.total : sale.amount) || 0;
   const paid = Number(sale.paidAmount != null ? sale.paidAmount : (sale.paidAtBilling || 0)) || 0;
   const due = Math.max(0, total - paid);
+  const handed = Math.max(paid, Number(sale.receivedAmount) || 0);
+  const change = Math.max(0, handed - total);
   const prevBalance = Number(sale.previousBalance);
+  const created = new Date(sale.createdAt || sale.at || 0);
+  const timeText = isNaN(created.getTime()) ? '' : created.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' });
+  const methodLabel = sale.paymentType === 'Credit'
+    ? (paid > 0 && paid < total ? t('partialPayment') : t('udhaarPayment'))
+    : (sale.paymentType === 'Card' ? t('card') : t('cash'));
 
+  // --- Receipt header ---
   rows.push(...waHeader(settings));
-  rows.push(waRule('='));
-  rows.push(waRow(LANG === 'ur' ? 'انوائس' : 'Invoice No', sale.invoiceNo || '-'));
-  rows.push(waRow(LANG === 'ur' ? 'تاریخ' : 'Date', waDate(sale.createdAt || sale.at)));
-  rows.push(waRow(LANG === 'ur' ? 'وقت' : 'Time', (() => {
-    const d = new Date(sale.createdAt || sale.at || 0);
-    return isNaN(d.getTime()) ? '' : d.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' });
-  })()));
-  if (sale.customerNameAtBilling || sale.customerName) rows.push(waRow(LANG === 'ur' ? 'گاہک' : 'Customer', plain(sale.customerNameAtBilling || sale.customerName)));
-  if (sale.reference) rows.push(waRow(LANG === 'ur' ? 'حوالہ' : 'Reference', plain(sale.reference)));
   rows.push(waRule('-'));
-  rows.push(waCenter(LANG === 'ur' ? 'اشیاء' : 'ITEMS'));
-  rows.push(waRow('  ' + (LANG === 'ur' ? 'نام' : 'Item'), LANG === 'ur' ? 'اکائی' : 'Qty'));
-  rows.push(waRow('  ' + (LANG === 'ur' ? 'ریٹ' : 'Rate'), LANG === 'ur' ? 'رقم' : 'Amount'));
+  // --- Receipt meta, in printed order ---
+  rows.push(waRow(t('invoiceWord'), sale.invoiceNo || t('pendingInvoice')));
+  rows.push(waRow(t('dateLabel'), waDateOnly(sale.createdAt || sale.at)));
+  rows.push(waRow(t('hPaymentTime'), timeText));
+  rows.push(waRow(t('cashierLabel'), plain(sale.createdBy) || '-'));
+  rows.push(waRow(t('customerLabel'), plain(sale.customerNameAtBilling || sale.customerName) || t('walkIn')));
+  rows.push(waRow(t('paymentLabel'), methodLabel));
+  if (sale.reference) rows.push(waRow(t('referenceLabel'), plain(sale.reference)));
+  if (sale.offlineDraft) rows.push(waRow('Status', 'OFFLINE - WILL SYNC'));
+  rows.push(waRule('-'));
+  // --- Item table: name / qty+unit / rate / amount, the four printed columns ---
+  rows.push(waRow('  ' + t('hProduct'), t('qtyShort')));
+  rows.push(waRow('  ' + t('rateLabel'), t('totalWord')));
   rows.push(waRule('-'));
   (sale.items || []).forEach(item => {
     const qty = Number(item.qty) || 0;
     const price = Number(item.price) || 0;
     const amount = item.amount != null ? Number(item.amount) : qty * price;
-    rows.push(waRow('  ' + plain(item.name), `${qty} ${item.unit ? unitName(item.unit) : ''}`.trim()));
-    rows.push(waRow(`    @ ${money(price)}`, money(amount)));
+    rows.push(waRow('  ' + plain(item.name), `${qty}${item.unit ? ' ' + unitName(item.unit) : ''}`));
+    rows.push(waRow(`    @ ${moneyRate(price)}`, moneyRate(amount)));
   });
   rows.push(waRule('-'));
+  // --- Totals block, same rows as the printed receipt ---
   const subtotal = Number(sale.subtotal) || (total + (Number(sale.discount) || 0) - (Number(sale.tax) || 0));
-  rows.push(waRow(LANG === 'ur' ? 'سب ٹوٹل' : 'Subtotal', money(subtotal)));
-  if (Number(sale.discount) > 0) rows.push(waRow(LANG === 'ur' ? 'رعایت' : 'Discount', '- ' + money(sale.discount)));
-  if (Number(sale.tax) > 0) rows.push(waRow(LANG === 'ur' ? 'ٹیکس' : 'Tax', money(sale.tax)));
-  rows.push(waRow('*' + (LANG === 'ur' ? 'کل رقم' : 'GRAND TOTAL') + '*', '*' + money(total) + '*'));
-  if (Number(sale.receivedAmount) > paid) rows.push(waRow(LANG === 'ur' ? 'موصول شدہ' : 'Received', money(sale.receivedAmount)));
-  if (paid > 0) rows.push(waRow(LANG === 'ur' ? 'ادا شدہ' : 'Paid', money(paid)));
-  if (!Number.isNaN(prevBalance) && due > 0) rows.push(waRow(LANG === 'ur' ? 'پچھلا بیلنس' : 'Previous balance', money(prevBalance)));
-  if (due > 0) {
-    rows.push(waRow('*' + (LANG === 'ur' ? 'اس بل کا باقی' : 'This bill due') + '*', '*' + money(due) + '*'));
-    rows.push(waRow('*' + (LANG === 'ur' ? 'کل باقی اُدھار' : 'TOTAL BALANCE') + '*', '*' + money(prevBalance + due) + '*'));
+  rows.push(waRow(t('subtotal'), money(subtotal)));
+  if (Number(sale.discount) > 0) rows.push(waRow(t('discount'), '- ' + money(sale.discount)));
+  if (Number(sale.additionalDiscount) > 0) rows.push(waRow(t('additionalDiscount'), '- ' + money(sale.additionalDiscount)));
+  if (Number(sale.tax) > 0) rows.push(waRow(t('taxWord'), money(sale.tax)));
+  rows.push(waRow('*' + t('grandTotalLabel') + '*', '*' + money(total) + '*'));
+  if (handed > 0) rows.push(waRow(t('amountReceived'), money(handed)));
+  if (change > 0) rows.push(waRow(t('changeLabel'), money(change)));
+  if (due > 0) rows.push(waRow(t('udharRemaining'), money(due)));
+  if (due > 0 && !Number.isNaN(prevBalance)) {
+    rows.push(waRow(t('previousBalance'), money(prevBalance)));
+    rows.push(waRow('*' + t('newBalance') + '*', '*' + money(prevBalance + due) + '*'));
   }
+  if (sale.delivery && typeof sale.delivery === 'object') {
+    const shown = DELIVERY_FIELDS.filter(([key]) => sale.delivery[key]);
+    if (shown.length) {
+      rows.push(waRule('-'));
+      rows.push(waCenter(t('deliveryInfo')));
+      shown.forEach(([key, labelKey]) => rows.push(waRow('  ' + t(labelKey), plain(sale.delivery[key]))));
+    }
+  }
+  rows.push(waRule('-'));
+  rows.push(waCenter('[' + methodLabel + ']'));
   rows.push(...waFooter(settings));
+  rows.push(waCenter('Designed and Developed By'));
+  rows.push(waCenter('Sohaib Ali - 03074224449'));
   return '```\n' + rows.join('\n') + '\n```';
 }
 // One ledger row's effect on the outstanding balance. Sales and manually entered udhar add, payments
@@ -1134,6 +1207,9 @@ function POS({ client, data, refresh, online, setOnline, go }) {
   const [charging, setCharging] = useState(false);
   const chargingRef = React.useRef(false);
   const profileFor = React.useRef('');
+  // Last allowed stock per product id, in the product's own base unit. The server is still the
+  // authority, but this lets the qty box warn before a round trip when a line is billed in grams.
+  const stockLimits = React.useRef({});
   const searchRef = React.useRef(null);
   const customerInputRef = React.useRef(null);
   const billRef = React.useRef(null);
@@ -1174,9 +1250,10 @@ function POS({ client, data, refresh, online, setOnline, go }) {
 
   function addProduct(product) {
     setCart(items => {
-      const old = items.find(item => item.productId === product.id);
-      if (old) return items.map(item => item.productId === product.id ? { ...item, qty: round3(Number(item.qty) + (isWeightUnit(item.unit) ? 0.25 : 1)) } : item);
-      return [...items, { productId: product.id, name: product.name, sku: product.sku || '', price: Number(product.price), qty: 1, unit: product.unit, manual: false, mode: 'qty' }];
+         const old = items.find(item => item.productId === product.id);
+         if (old) return items.map(item => item.productId === product.id ? { ...item, qty: round3(Number(item.qty) + (isWeightUnit(item.unit) ? 0.25 : 1)) } : item);
+         // productUnit/basePrice let a later UOM change on this row convert the qty and the rate.
+         return [...items, { productId: product.id, name: product.name, sku: product.sku || '', price: Number(product.price), basePrice: Number(product.price), productUnit: product.unit, qty: 1, unit: product.unit, manual: false, customRate: false, mode: 'qty' }];
     });
     flash(LANG === 'ur' ? `${product.name} شامل ہو گئی۔` : `${product.name} added.`);
   }
@@ -1192,9 +1269,9 @@ function POS({ client, data, refresh, online, setOnline, go }) {
   function addProductQty(product, qty) {
     const addQty = isWeightUnit(product.unit) ? round3(Number(qty)) : Math.max(1, Math.round(Number(qty) || 1));
     setCart(items => {
-      const old = items.find(item => item.productId === product.id);
-      if (old) return items.map(item => item.productId === product.id ? { ...item, qty: round3(Number(item.qty) + addQty) } : item);
-      return [...items, { productId: product.id, name: product.name, sku: product.sku || '', price: Number(product.price), qty: addQty, unit: product.unit, manual: false, mode: 'qty' }];
+         const old = items.find(item => item.productId === product.id);
+         if (old) return items.map(item => item.productId === product.id ? { ...item, qty: round3(Number(item.qty) + addQty) } : item);
+         return [...items, { productId: product.id, name: product.name, sku: product.sku || '', price: Number(product.price), basePrice: Number(product.price), productUnit: product.unit, qty: addQty, unit: product.unit, manual: false, customRate: false, mode: 'qty' }];
     });
     flash(LANG === 'ur' ? `${product.name} ${addQty} ${unitLabel(product.unit)} شامل ہوئی۔` : `${addQty} ${unitLabel(product.unit)} of ${product.name} added.`);
     if (searchRef.current) searchRef.current.focus();
@@ -1218,6 +1295,8 @@ function POS({ client, data, refresh, online, setOnline, go }) {
     setCart(items => items.map((item, itemIndex) => {
       if (itemIndex !== index) return item;
       const price = Number(item.price) || 0;
+      // Qty is kept in the unit shown on the row; the server converts it to the product's base unit
+      // for stock, so the cashier can enter 500 gram on a kg product.
       const qty = Math.max(0, round3(Number(value) || 0));
       return { ...item, qty, amount: round3(price * qty) };
     }));
@@ -1233,14 +1312,40 @@ function POS({ client, data, refresh, online, setOnline, go }) {
   }
 
   function setLinePrice(index, value) {
-    // The rate is the source of truth, so editing it returns the row to rate x qty.
+    // The rate is the source of truth, so editing it returns the row to rate x qty. customRate marks
+    // the line so a later UOM change re-prices from here instead of snapping back to list price.
     setCart(items => items.map((item, itemIndex) => (itemIndex === index
-      ? { ...item, price: Math.max(0, Math.round(Number(value) || 0)), mode: 'qty' }
+      ? { ...item, price: Math.max(0, round3(Number(value) || 0)), customRate: true, mode: 'qty' }
       : item)));
   }
 
   function setLineUnit(index, value) {
-    setCart(items => items.map((item, itemIndex) => (itemIndex === index ? { ...item, unit: value } : item)));
+    // Keep the physical amount the same and re-price it: 2 kg at Rs 100/kg becomes 2000 gram at
+    // Rs 0.05/g, so switching the UOM never changes what the customer owes. The rate is derived from
+    // the product's own rate unless the cashier typed a custom one for this line.
+    setCart(items => items.map((item, itemIndex) => {
+      if (itemIndex !== index) return item;
+      const from = item.unit;
+      if (from === value) return item;
+      const baseUnit = item.productUnit || from;
+      // Nothing sensible to convert between different kinds of unit (gram of a litre product), so
+      // leave the numbers alone instead of guessing. The dropdown only offers these anyway.
+      if (unitDimension(from) && unitDimension(baseUnit) && unitDimension(value)
+        && !(unitDimension(value) === unitDimension(baseUnit))) return item;
+      const qty = Number(item.qty) || 0;
+      const factor = unitToBase(from, baseUnit);
+      const nextFactor = unitToBase(value, baseUnit);
+      const newQty = round3(qty * (factor / (nextFactor || 1)));
+      // A typed rate belongs to the unit it was typed in, so lift it to the product's base unit
+      // first. Without this, a custom Rs 120/kg typed in kilo would be read as Rs 120 per gram
+      // base and jump by a factor of 1000.
+      const baseRate = item.customRate
+        ? rateToBase((Number(item.price) || 0), from, baseUnit)
+        : (Number(item.basePrice) || Number(item.price) || 0);
+      const price = rateForUnit(baseRate, value, baseUnit);
+      const amount = item.mode === 'amt' ? round3(price * newQty) : undefined;
+      return { ...item, unit: value, qty: newQty, price, amount: amount === undefined ? item.amount : amount };
+    }));
   }
 
   function toggleLineMode(index) {
@@ -1407,8 +1512,12 @@ function POS({ client, data, refresh, online, setOnline, go }) {
     for (const item of cart) {
       if (item.manual || !item.productId) continue;
       const product = activeProducts.find(p => p.id === item.productId);
-      if (product && Number(item.qty) > Number(product.stock || 0)) {
-        setMessage(t('quantityTooHigh').replace('{stock}', String(product.stock)).replace('{unit}', unitLabel(product.unit)).replace('{name}', product.name));
+      if (!product) continue;
+      // Compare in the product's base unit, because that is how stock is stored. Billing 2000 gram
+      // against a 0.5 kg product must not be read as 2000 kg.
+      const baseQty = round3(Number(item.qty) * unitToBase(item.unit, product.unit));
+      if (baseQty > Number(product.stock || 0) + 1e-9) {
+        setMessage(t('quantityTooHigh').replace('{stock}', String(round3(product.stock))).replace('{unit}', unitLabel(product.unit)).replace('{name}', product.name));
         return;
       }
     }
@@ -1736,7 +1845,8 @@ function POS({ client, data, refresh, online, setOnline, go }) {
           !UNITS.some(unit => unit.value === item.unit) && item.unit
             ? h('option', { key: 'custom', value: item.unit }, item.unit)
             : null,
-          UNITS.map(unit => h('option', { key: unit.value, value: unit.value }, LANG === 'ur' ? unit.urdu : unit.en)))),
+          // Only units of the same kind as the product's own unit, so the rate and stock stay honest.
+          unitsForBase(item.productUnit).map(unit => h('option', { key: unit.value, value: unit.value }, LANG === 'ur' ? unit.urdu : unit.en)))),
       h('div', { className: 'bill-rate' },
         h('input', { className: 'bill-rate-input', type: 'number', min: '0', step: 'any', value: priceNum, title: t('rateLabel'), onChange: e => setLinePrice(index, e.target.value) })),
       h('span', { className: 'bill-total' }, money(amt)),
@@ -2036,8 +2146,8 @@ function ReceiptModal({ sale, customers, settings, onClose }) {
           return h('div', { className: 'receipt-item', key: item.name + '-' + item.qty },
             h('span', { className: 'ri-name' }, item.name),
             h('span', { className: 'ri-qty' }, `${item.qty} ${unitLabel(item.unit)}`),
-            h('span', { className: 'ri-price' }, money(item.price)),
-            h('span', { className: 'ri-total' }, money(item.price * item.qty)));
+            h('span', { className: 'ri-price' }, moneyRate(item.price)),
+            h('span', { className: 'ri-total' }, moneyRate(item.price * item.qty)));
         })),
       h('div', { className: 'receipt-divider' }),
       h('div', { className: 'receipt-totals' },
@@ -2754,7 +2864,14 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
     udhaarPaid: Number(customer.totalPaid || 0),
     paymentDate: customer.lastPaymentAt ? toDateInputValue(customer.lastPaymentAt) : '',
     paymentTime: customer.lastPaymentAt ? toTimeInputValue(customer.lastPaymentAt) : '',
-    products: customerProductsList(customer),
+    products: customerProductsList(customer).map(product => ({
+      ...product,
+      qty: Number(product.qty) || 1,
+      unit: product.unit || '',
+      // Remember the product's own unit so switching to gram later re-prices correctly.
+      baseUnit: product.baseUnit || product.unit || '',
+      price: Number(product.price) || 0
+    })),
     manualMode: false
   };
   const [form, setForm] = useState(init);
@@ -2767,17 +2884,37 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
   const [extraUdharDate, setExtraUdharDate] = useState(toDateInputValue(new Date().toISOString()));
   const [extraUdharTime, setExtraUdharTime] = useState(toTimeInputValue(new Date().toISOString()));
   const remaining = Math.max(0, (Number(form.udhaarTotal) || 0) - (Number(form.udhaarPaid) || 0));
+  // What the picked products are worth. Each row re-prices from its own product rate whenever the
+  // unit changes, so picking a product in grams never charges the per-kilo rate.
+  const productsTotal = form.products.reduce((sum, product) => {
+    const base = Number(product.price) || 0;
+    const rate = rateForUnit(base, product.unit, product.baseUnit || product.unit);
+    return sum + rate * (Number(product.qty) || 0);
+  }, 0);
   const addedProductIds = new Set(form.products.filter(p => p.id).map(p => p.id));
   const productHits = productSearch.trim()
     ? (products || []).filter(prod => !addedProductIds.has(prod.id) && `${prod.name || ''} ${prod.category || ''} ${prod.sku || ''}`.toLowerCase().includes(productSearch.trim().toLowerCase())).slice(0, 6)
     : [];
   const productSelected = form.products.length > 0;
   function addProduct(prod) {
-    if (addedProductIds.has(prod.id)) return;
-    setForm(old => ({ ...old, products: [...old.products, { id: prod.id, name: prod.name, manual: false, qty: 1, unit: '' }] }));
-    setProductSearch('');
-    setManualDraft('');
-  }
+      if (addedProductIds.has(prod.id)) return;
+      // Carry the product's price and its own unit across, so the picked product contributes a real
+      // amount to the udhar total instead of showing up as a nameless line.
+      setForm(old => ({
+        ...old,
+        products: [...old.products, {
+          id: prod.id,
+          name: prod.name,
+          manual: false,
+          qty: 1,
+          unit: prod.unit || '',
+          baseUnit: prod.unit || '',
+          price: Number(prod.price) || 0
+        }]
+      }));
+      setProductSearch('');
+      setManualDraft('');
+    }
   function openManual() {
     setForm(old => ({ ...old, manualMode: true }));
     setManualDraft('');
@@ -2805,7 +2942,22 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
     setForm(old => ({ ...old, products: old.products.map((p, i) => i === index ? { ...p, qty } : p) }));
   }
   function setProductUnit(index, unit) {
-    setForm(old => ({ ...old, products: old.products.map((p, i) => i === index ? { ...p, unit } : p) }));
+    // Keep the physical amount and re-price it from the product's own rate: 2 kg at Rs 100/kg
+    // becomes 2000 gram at Rs 0.05/g, so the udhar total does not jump.
+    setForm(old => ({
+      ...old,
+      products: old.products.map((p, i) => {
+        if (i !== index) return p;
+        const baseUnit = p.baseUnit || p.unit;
+        // Do not guess a conversion between different kinds of unit; the dropdown only offers
+        // compatible ones, so this only guards values loaded from an old record.
+        if (unitDimension(p.unit) && unitDimension(baseUnit) && unitDimension(unit)
+          && unitDimension(unit) !== unitDimension(baseUnit)) return p;
+        const factor = unitToBase(p.unit, baseUnit);
+        const nextFactor = unitToBase(unit, baseUnit);
+        return { ...p, unit, qty: round3((Number(p.qty) || 0) * (factor / (nextFactor || 1))) };
+      })
+    }));
   }
 
   // Same append-only endpoint the Khata uses, so a udhar typed here shows up in the ledger and in
@@ -2861,7 +3013,20 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
           if (form.paymentTime) payload.paymentTime = form.paymentTime;
         }
       }
-      payload.products = form.products.map(product => ({ id: product.id || '', name: product.name || '', manual: Boolean(!product.id), qty: Math.max(0, Number(product.qty) || 1), unit: String(product.unit || '').trim() }));
+      // Carry the per-unit price so a picked product contributes a real amount to the udhar, not
+      // just a name in the profile list.
+      payload.products = form.products.map(product => {
+        const baseUnit = product.baseUnit || product.unit;
+        return {
+          id: product.id || '',
+          name: product.name || '',
+          manual: Boolean(!product.id),
+          qty: Math.max(0, Number(product.qty) || 1),
+          unit: String(product.unit || '').trim(),
+          baseUnit: String(baseUnit || '').trim(),
+          price: rateForUnit(product.price, product.unit, baseUnit)
+        };
+      });
       await client.put(`/api/customers/${customer.id}`, payload);
       setMessage(LANG === 'ur' ? 'محفوظ ہو گیا۔' : 'Saved.');
       await refresh();
@@ -2875,13 +3040,25 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
 
   const productPicker = h('div', { className: 'product-picker' },
     productSelected && h('div', { className: 'selected-product' },
-      h('div', { className: 'product-chip-list' }, form.products.map((prod, index) =>
-        h('span', { className: 'chip-item', key: `${prod.id || 'manual'}-${index}` },
+      h('div', { className: 'product-chip-list' }, form.products.map((prod, index) => {
+        const rowRate = rateForUnit(prod.price, prod.unit, prod.baseUnit || prod.unit);
+        return h('span', { className: 'chip-item', key: `${prod.id || 'manual'}-${index}` },
           h('span', { className: `product-chip${prod.manual ? ' manual' : ''}` },
             `${prod.name}${productQtyLabel(prod)}`,
             h('input', { type: 'number', min: '1', step: 'any', className: 'chip-qty', value: Number(prod.qty || 1), onChange: e => setProductQty(index, e.target.value) }),
-            h('select', { className: 'chip-unit', value: prod.unit || '', onChange: e => setProductUnit(index, e.target.value) }, UNITS.map(unit => h('option', { value: unit.value, key: unit.value }, unitLabel(unit.value))))),
-          h('button', { type: 'button', className: 'chip-remove', title: t('clearProduct'), onClick: () => removeProduct(index) }, '×'))))),
+            h('select', { className: 'chip-unit', value: prod.unit || '', onChange: e => setProductUnit(index, e.target.value) },
+              !UNITS.some(unit => unit.value === prod.unit) && prod.unit
+                ? h('option', { value: prod.unit, key: 'custom' }, prod.unit)
+                : null,
+              unitsForBase(prod.baseUnit).map(unit => h('option', { value: unit.value, key: unit.value }, unitLabel(unit.value)))),
+            Number(prod.price) > 0
+              ? h('span', { className: 'chip-amount' }, `${moneyRate(rowRate * (Number(prod.qty) || 0))}`)
+              : null),
+          h('button', { type: 'button', className: 'chip-remove', title: t('clearProduct'), onClick: () => removeProduct(index) }, '×'));
+      })),
+      Number(productsTotal) > 0
+        ? h('p', { className: 'hint chip-total' }, `${t('productLabel')}: ${moneyRate(productsTotal)}`)
+        : null),
     !form.manualMode && h('input', {
       key: 'search',
       className: 'product-search',
