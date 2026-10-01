@@ -488,7 +488,11 @@ function calculateReport(db, period = 'day') {
     discounts: money(totals.discount),
     tax: money(totals.tax),
     grossProfit: money(totals.revenue - totals.cost - totals.discount),
-    netSales: Math.max(0, money(totals.total - refundTotal)),
+    // The headline figure is what the counter actually sold in the period. Returns are a separate
+    // number the shop owner can see on their own line, because netting them off here made a day with
+    // more returns than sales report zero sales and look like nothing had been sold at all.
+    netSales: money(totals.total),
+    netAfterReturns: money(totals.total - refundTotal),
     cashSales: money(totals.collected),
     cashCount: periodSales.length - creditBills.length,
     collected: money(totals.collected),

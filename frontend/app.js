@@ -167,7 +167,7 @@ const STRINGS = {
     signIn: 'Sign in', offlineModeNotice: 'Offline mode - using cached data',
     loginNoServer: 'Cannot reach the POS server from this device. Check that you are on the same Wi-Fi as the shop computer (or use the website address), then try again. First-time login needs internet.',
     liveStoreOverview: 'LIVE STORE OVERVIEW', dashSubtitle: 'Sales, stock, credit and low-stock alerts from persisted data.', newSale: 'New sale',
-    netSalesToday: 'Net sales today', invoicesCount: 'invoices', grossProfit: 'Gross profit', grossProfitNote: 'After product cost and discounts',
+    netSalesToday: 'Sales today', invoicesCount: 'invoices', grossProfit: 'Gross profit', grossProfitNote: 'After product cost and discounts',
     creditSales: 'Credit sales', creditSalesNote: 'Added to Udhar balances', lowStockItems: 'Low stock items', lowStockNote: 'At or below reorder level',
     recentInvoices: 'Recent invoices', latestSales: 'Latest persisted sales', lowStockAlert: 'Low stock alert', needsRestock: 'Products needing replenishment',
     remainingReorder: 'remaining, reorder at', noLowStock: 'No low stock items.',
@@ -296,7 +296,7 @@ const STRINGS = {
     signIn: 'سائن ان', offlineModeNotice: 'آف لائن موڈ - محفوظ شدہ پرانا ڈیٹا',
     loginNoServer: 'اس ڈیوائس سے پی او ایس سرور تک رسائی نہیں مل رہی۔ چیک کریں کہ آپ دکان کے کمپیوٹر والے وائی فائی پر ہیں (یا ویب سائٹ کا پتہ استعمال کریں) پھر دوبارہ کوشش کریں۔ پہلی بار لاگ ان کے لیے انٹرنیٹ ضروری ہے۔',
     liveStoreOverview: 'لائیو اسٹور', dashSubtitle: 'فروخت، اسٹاک، اُدھار اور کم اسٹاک کی اطلاعات۔', newSale: 'نئی سیل',
-    netSalesToday: 'آج کی خالص فروخت', invoicesCount: 'بل', grossProfit: 'کل منافع', grossProfitNote: 'لاگت اور رعایت کے بعد',
+    netSalesToday: 'آج کی کل فروخت', invoicesCount: 'بل', grossProfit: 'کل منافع', grossProfitNote: 'لاگت اور رعایت کے بعد',
     creditSales: 'اُدھار فروخت', creditSalesNote: 'گاہکوں کے اُدھار میں شامل', lowStockItems: 'کم اسٹاک اشیاء', lowStockNote: 'دوبارہ آرڈر کی سطح پر یا اس سے کم',
     recentInvoices: 'حالیہ بل', latestSales: 'تازہ ترین فروخت', lowStockAlert: 'کم اسٹاک الرٹ', needsRestock: 'جو اشیاء دوبارہ منگوانی ہیں',
     remainingReorder: 'باقی، دوبارہ آرڈر پر', noLowStock: 'کوئی کم اسٹاک چیز نہیں۔',
@@ -709,8 +709,8 @@ function Login({ onLogin, langTick, bumpLang }) {
         h('p', { className: 'login-hint' }, LANG === 'ur' ? 'مینیجر: akmal@faislabadi.pk یا 03024503010' : 'Manager: akmal@faislabadi.pk or 03024503010'))));
 }
 
-function Metric({ title, value, note, tone }) {
-  return h('article', { className: 'metric-card' + (tone ? ' ' + tone : '') }, h('p', null, title), h('h3', null, value), note ? h('small', null, note) : null);
+function Metric({ title, value, note, sub, tone }) {
+  return h('article', { className: 'metric-card' + (tone ? ' ' + tone : '') }, h('p', null, title), h('h3', null, value), note ? h('small', null, note) : null, sub ? h('small', { className: 'metric-sub' }, sub) : null);
 }
 
 const LOW_STOCK_PAGE = 15;
@@ -934,7 +934,7 @@ function Dashboard({ data, go, client, refresh }) {
   return h('div', { className: 'page dashboard' },
     h('div', { className: 'page-title' }, h('div', null, h('p', { className: 'eyebrow' }, t('liveStoreOverview')), h('h1', null, t('nav_dashboard')), h('p', { className: 'subtitle' }, t('dashSubtitle'))), h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } }, h('button', { className: 'primary', onClick: () => go('pos') }, t('newSale')), h('button', { className: 'secondary', onClick: () => client.exportCsv('/api/reports/export.csv', 'sales-report.csv') }, 'Export CSV'))),
     h('section', { className: 'metrics' },
-      h(Metric, { title: t('netSalesToday'), value: money(report.netSales), note: `${report.salesCount || 0} ${t('invoicesCount')}` }),
+      h(Metric, { title: t('netSalesToday'), value: money(report.netSales), note: `${report.salesCount || 0} ${t('invoicesCount')}`, sub: (report.refunds || 0) > 0 ? `${t('refundsNote')} ${money(report.refunds)}` : '' }),
       h(Metric, { title: t('totalProductsLabel'), value: totalProducts, note: `${stats.lowStockCount !== undefined ? stats.lowStockCount : allLow.length} ${t('lowBadge')} · ${stats.warehouseItems || 0} ${t('nav_warehouse')}` }),
       h(Metric, { title: t('totalUdharLabel'), value: money(stats.totalUdhar || 0), note: `${stats.udharCustomers || 0} ${t('udharCustomersLabel')}`, tone: (stats.totalUdhar || 0) > 0 ? 'warn' : '' }),
       h(Metric, { title: t('lowStockItems'), value: allLow.length, note: `${lowStockTotal} ${t('hStock').toLowerCase()} ${t('remainingReorder')}` })),
@@ -1118,6 +1118,31 @@ function drawBillImage(sale, settings, customer, labels) {
       ctx.fillText(value, BILL_WIDTH / 2, y);
       ctx.textAlign = 'left';
     };
+    // Centred text that is wider than the paper is split into several lines instead of running off
+    // the edge, and each line steps down the page so the lines cannot sit on top of one another.
+    const centredLines = (value, size, weight, colour, lineStep) => {
+      const step = lineStep || Math.round((size || 17) * 1.45);
+      ctx.font = `${weight || '400'} ${size || 17}px "Segoe UI", system-ui, sans-serif`;
+      const maxWidth = rightMargin;
+      const lines = [];
+      for (const paragraph of String(value == null ? '' : value).split('\n')) {
+        let current = '';
+        for (const word of paragraph.split(/\s+/).filter(Boolean)) {
+          const next = current ? current + ' ' + word : word;
+          if (current && ctx.measureText(next).width > maxWidth) {
+            lines.push(current);
+            current = word;
+          } else {
+            current = next;
+          }
+        }
+        lines.push(current);
+      }
+      for (const line of lines) {
+        if (line) centred(line, size, weight, colour);
+        y += step;
+      }
+    };
     const divider = () => {
       ctx.strokeStyle = '#d8d8d8';
       ctx.lineWidth = 1;
@@ -1136,10 +1161,9 @@ function drawBillImage(sale, settings, customer, labels) {
     };
 
     // Header
-    centred(storeName, 27, '700');
-    y += 30;
-    if (storeAddress) centred(storeAddress, 15, '400', '#444');
-    if (storePhone) centred(storePhone, 15, '400', '#444');
+    centredLines(storeName, 27, '700', '#111', 34);
+    if (storeAddress) centredLines(storeAddress, 15, '400', '#444', 21);
+    if (storePhone) centredLines(storePhone, 15, '400', '#444', 21);
     y += 12;
     divider();
 

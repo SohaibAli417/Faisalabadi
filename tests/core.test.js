@@ -215,7 +215,10 @@ test('profit and loss report calculates sales, tax, profit, credit and refunds',
   assert.equal(report.tax, 162);
   assert.equal(report.grossProfit, 300 + 200);
   assert.equal(report.refunds, 200);
-  assert.equal(report.netSales, 1062 + 500 - 200);
+  // The headline figure is what was actually sold in the day. Returns are reported on their own so
+  // they can never quietly hide the day's takings.
+  assert.equal(report.netSales, 1062 + 500);
+  assert.equal(report.netAfterReturns, 1062 + 500 - 200);
   // Only the cash bill counts as money actually in the drawer.
   assert.equal(report.cashSales, 1062);
   assert.equal(report.cashCount, 1);
@@ -297,7 +300,7 @@ test('a cash bill and an udhar bill both show in the daily sale, cash split corr
   assert.equal(report.creditOutstanding, 700);
 });
 
-test('refunds larger than the daily sale never push net sales below zero', () => {
+test('a day with more returns than sales still shows the day\'s takings', () => {
   const db = seedData();
   db.sales.push({
     id: 'sale_small',
@@ -311,7 +314,12 @@ test('refunds larger than the daily sale never push net sales below zero', () =>
     items: [{ name: 'Item', qty: 1, price: 100, cost: 60 }]
   });
   db.returns.push({ id: 'return_big', createdAt: new Date().toISOString(), total: 400 });
-  assert.equal(calculateReport(db, 'day').netSales, 0);
+  const report = calculateReport(db, 'day');
+  // Reporting zero sales here is what made the dashboard look empty on a day when the counter had
+  // in fact sold, so the sale total stands on its own and the shortfall is reported next to it.
+  assert.equal(report.netSales, 100);
+  assert.equal(report.refunds, 400);
+  assert.equal(report.netAfterReturns, -300);
 });
 
 test('convertPackQty turns boree and carton packs into sellable units', () => {
