@@ -1391,8 +1391,6 @@ async function handleApi(request, response) {
       return json(response, 200, { token, user: sanitizeUser(user), permissions: permissions[user.role] || [] });
     }
 
-    if (method === 'GET' && url.pathname === '/api/health') return json(response, 200, { ok: true, at: now() });
-
     const actor = requireActor(request, response, db);
     if (!actor) return;
 
@@ -1406,19 +1404,6 @@ async function handleApi(request, response) {
       audit(db, actor, 'logout', 'user', actor.id);
       await saveDb(db);
       return json(response, 200, { ok: true });
-    }
-
-    if (method === 'GET' && url.pathname === '/api/sync-status') {
-      return json(response, 200, {
-        mode: MODE,
-        cloudConfigured: useSupabase,
-        enabled: cloudSync.enabled,
-        intervalMs: SYNC_INTERVAL_MS,
-        running: cloudSync.running,
-        lastAttemptAt: cloudSync.lastAttemptAt,
-        lastSuccessAt: cloudSync.lastSuccessAt,
-        lastError: cloudSync.lastError
-      });
     }
 
     if (method === 'GET' && url.pathname === '/api/bootstrap') {
@@ -1896,9 +1881,26 @@ async function handleApi(request, response) {
 
     if (method === 'POST' && url.pathname === '/api/sales') {
       if (!can(actor, 'pos')) return json(response, 403, { error: 'Permission denied' });
-      const sale = createSale(db, await parseBody(request), actor, 'online');
+      const body = await parseBody(request);
+      // A slow connection can make the cashier press Complete Bill again while the first request is
+      // still in flight, or the client can retry one the server already recorded. The clientId is
+      // the same on every attempt for one cart, so the retry returns the original bill instead of
+      // billing the customer twice. createSale also writes the invoice, its payment, the stock
+      // movement and the customer's new balance together in one db, saved in one write below - so a
+      // failed write leaves nothing behind rather than a bill with no khata entry.
+      const clientId = String((body && body.clientId) || '').trim();
+      if (clientId) {
+        const existing = (db.sales || []).find(row => row.clientId === clientId);
+        if (existing) return json(response, 200, existing);
+      }
+      const sale = createSale(db, body, actor, 'online');
       await saveDb(db);
-      return json(response, 201, sale);
+      // The cashier's screen is updated from this response instead of fetching the whole store
+      // again, so the customer's new balance and totals come from the same rules the ledger uses -
+      // including the recorded-total legacy customers - rather than being recalculated here.
+      const totalsMap = customerTotals(db);
+      const billed = db.customers.find(row => row.id === sale.customerId);
+      return json(response, 201, { ...sale, customer: billed ? decorateCustomer(db, billed, totalsMap) : null });
     }
 
     if (method === 'GET' && url.pathname === '/api/drafts') {
@@ -2328,8 +2330,27 @@ function serveStatic(request, response) {
   });
 }
 
+// Answered before the database lock and without touching the store data. The client polls
+// sync-status every 20s; making it queue behind the lock and read the whole database blob meant a
+// status check could sit in front of a cashier pressing Complete Bill.
 function requestHandler(request, response) {
-  if (request.url.startsWith('/api/')) return withDbLock(() => handleApi(request, response));
+  if (request.url.startsWith('/api/')) {
+    const { pathname } = new URL(request.url, `http://${request.headers.host || 'localhost'}`);
+    if (request.method === 'GET' && pathname === '/api/health') return json(response, 200, { ok: true, at: now() });
+    if (request.method === 'GET' && pathname === '/api/sync-status') {
+      return json(response, 200, {
+        mode: MODE,
+        cloudConfigured: useSupabase,
+        enabled: cloudSync.enabled,
+        intervalMs: SYNC_INTERVAL_MS,
+        running: cloudSync.running,
+        lastAttemptAt: cloudSync.lastAttemptAt,
+        lastSuccessAt: cloudSync.lastSuccessAt,
+        lastError: cloudSync.lastError
+      });
+    }
+    return withDbLock(() => handleApi(request, response));
+  }
   return serveStatic(request, response);
 }
 

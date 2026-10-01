@@ -1513,7 +1513,7 @@ function DraftsModal({ drafts, customers, onLoad, onDelete, onClose }) {
     document.body);
 }
 
-function POS({ client, data, refresh, online, setOnline, go }) {
+function POS({ client, data, refresh, applySale, online, setOnline, go }) {
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchIndex, setSearchIndex] = useState(-1);
@@ -1800,7 +1800,10 @@ function POS({ client, data, refresh, online, setOnline, go }) {
 
   function buildPayload() {
     const payload = {
-      clientId: `client_${Date.now()}`,
+      // Built once per cart and reused by any retry of that same cart, so the server can recognise a
+      // repeat and answer with the bill it already saved. The random tail keeps two bills completed
+      // in the same millisecond from being mistaken for one.
+      clientId: `client_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
       customerId,
       paymentType: paymentType === 'Partial' ? 'Credit' : paymentType,
       discount: mainD,
@@ -1878,7 +1881,10 @@ function POS({ client, data, refresh, online, setOnline, go }) {
     chargingRef.current = true;
     setCharging(true);
     try {
-      const sale = await client.post('/api/sales', payload);
+      const response = await client.post('/api/sales', payload);
+      // The response carries the saved invoice plus the customer's recalculated row. The receipt and
+      // the khata only need the invoice, so the extra row is kept out of the stored sale.
+      const sale = response.customer ? { ...response, customer: undefined } : response;
       // Snapshot the balance from before the bill, so the invoice and the WhatsApp bill can show
       // previous balance / new balance without any extra request.
       const prevBalance = Number((selectedCustomer && selectedCustomer.balance) || 0);
@@ -1895,7 +1901,10 @@ function POS({ client, data, refresh, online, setOnline, go }) {
         // Fire and forget: clearing the draft must not hold up the receipt.
         client.del(`/api/drafts/${draftId}`).catch(() => {});
       }
-      refresh();
+      // The save response already carries the saved invoice, so the screen is patched from it here
+      // rather than pulling the whole store down again. A full /api/bootstrap fetch after every bill
+      // was a second round trip the cashier waited through before the next one could start.
+      applySale(response);
       if (keepCustomerId) setProfileTick(n => n + 1);
     } catch (err) {
       if (!navigator.onLine || /fetch/i.test(err.message)) {
@@ -4351,6 +4360,40 @@ function App() {
     }
   }
 
+  // Fold a just-saved bill into the data already on screen: the invoice goes onto the sale list,
+  // the customer's balance and udhar totals move, and the billed stock comes off the shelves. The
+  // server has already stored all of it, so nothing is invented here - this only spares the cashier
+  // a second full reload before starting the next bill.
+  function applySale(sale) {
+    setData(current => {
+      if (!current) return current;
+      const items = sale.items || [];
+      const billedByProduct = {};
+      for (const item of items) {
+        if (!item.productId) continue;
+        // Stock is stored in the product's own unit, so decrement by the converted base quantity
+        // the server already worked out - not by the number the cashier typed.
+        const baseQty = Number(item.baseQty !== undefined ? item.baseQty : item.qty) || 0;
+        billedByProduct[item.productId] = (billedByProduct[item.productId] || 0) + baseQty;
+      }
+      const products = (current.products || []).map(product => {
+        const taken = billedByProduct[product.id];
+        return taken ? { ...product, stock: round3(Number(product.stock || 0) - taken) } : product;
+      });
+      // The server sends the customer's already-recalculated row with the sale, so the balance, udhar
+      // totals and last-payment date on screen are the server's own numbers.
+      const customers = sale.customer
+        ? (current.customers || []).map(customer => (customer.id === sale.customerId ? sale.customer : customer))
+        : current.customers;
+      return {
+        ...current,
+        products,
+        customers,
+        sales: [sale, ...(current.sales || [])].slice(0, 50)
+      };
+    });
+  }
+
   useEffect(() => { refresh(); }, [session?.token]);
   useEffect(() => {
     const onOnline = () => { setOnline(true); refresh(); };
@@ -4391,7 +4434,7 @@ function App() {
     h('aside', { className: 'sidebar' + (navOpen ? ' open' : '') }, h('div', { className: 'brand' }, h('img', { className: 'brand-logo', src: 'logo.png?v=27', alt: '' }), h('div', null, h('strong', null, 'Faislabadi'), h('small', null, 'GENERAL STORE'))), h('nav', null, visiblePages.map(([id]) => h('button', { key: id, className: activePage === id ? 'nav-item active' : 'nav-item', onClick: () => { setPage(id); setNavOpen(false); } }, h('span', null, t('nav_' + id)))), h(LangToggle, { tick: bumpLang })), h('div', { className: 'sidebar-footer' }, h('div', { className: 'avatar' }, data.user.name.split(' ').map(part => part[0]).join('').slice(0, 2)), h('div', null, h('strong', null, data.user.name), h('small', null, role)), h('button', { className: 'more', onClick: () => { try { client.post('/api/auth/logout', {}).catch(() => {}); } catch (_) {} localStorage.removeItem(stateKey); setSession(null); } }, t('logout')))),
     h('section', { className: 'main-area' }, h('header', { className: 'topbar' }, activePage === 'pos' && h('button', { className: 'menu-btn', 'aria-label': LANG === 'ur' ? 'مینو کھولیں' : 'Open menu', onClick: () => setNavOpen(!navOpen) }, h('span', { className: 'menu-btn-icon' }, '☰')), h('div', { className: 'crumb' }, 'Faislabadi General Store / ', h('strong', null, t('nav_' + activePage))), h('div', { className: 'top-actions' },
       cloudSync && cloudSync.enabled && h('span', { className: cloudSync.lastError ? 'sync-status offline' : 'sync-status', title: cloudSync.lastSuccessAt ? `${t('cloudSyncedAt')} ${new Date(cloudSync.lastSuccessAt).toLocaleTimeString()}` : t('waitingFirstSync') }, cloudSync.lastError ? t('cloudPending') : (cloudSync.lastSuccessAt ? t('cloudSynced') : t('cloudConnecting'))),
-      h('span', { className: online ? 'sync-status' : 'sync-status offline' }, online ? t('online') : t('offline')), pendingActions > 0 && h('span', { className: 'sync-status offline', title: LANG === 'ur' ? 'انترنت آنے پر یہ خودکار طور پر سنک ہوں گے' : 'These will sync automatically when the internet returns' }, LANG === 'ur' ? `${pendingActions} سنک باقی` : `${pendingActions} waiting to sync`), h('button', { className: 'secondary', onClick: refresh }, t('refresh')), h(LangToggle, { tick: bumpLang }))), dataWarning && h('div', { className: 'notice danger', style: { margin: '12px 20px 0' } }, dataWarning), syncNotice && h('div', { className: 'notice warning', style: { margin: '12px 20px 0' } }, syncNotice), storageNotice && h('div', { className: 'notice warning', style: { margin: '12px 20px 0' } }, storageNotice),     activePage === 'dashboard' ? h(Dashboard, { data, go: setPage, client, refresh }) : activePage === 'pos' ? h(POS, { client, data, refresh, online, setOnline, go: setPage }) : activePage === 'users' ? h(UsersAdmin, { client }) : activePage === 'returns' ? h(ReturnsPage, { data, client, refresh }) : activePage === 'reports' ? h(Reports, { data, client }) : activePage === 'purchases' ? h(Purchases, { data, client, refresh }) : activePage === 'settings' ? h(Settings, { data, client }) : activePage === 'warehouse' ? h(WarehousePage, { data, client, refresh }) : h(DataPage, { page: activePage, data, client, refresh })));
+      h('span', { className: online ? 'sync-status' : 'sync-status offline' }, online ? t('online') : t('offline')), pendingActions > 0 && h('span', { className: 'sync-status offline', title: LANG === 'ur' ? 'انترنت آنے پر یہ خودکار طور پر سنک ہوں گے' : 'These will sync automatically when the internet returns' }, LANG === 'ur' ? `${pendingActions} سنک باقی` : `${pendingActions} waiting to sync`), h('button', { className: 'secondary', onClick: refresh }, t('refresh')), h(LangToggle, { tick: bumpLang }))), dataWarning && h('div', { className: 'notice danger', style: { margin: '12px 20px 0' } }, dataWarning), syncNotice && h('div', { className: 'notice warning', style: { margin: '12px 20px 0' } }, syncNotice), storageNotice && h('div', { className: 'notice warning', style: { margin: '12px 20px 0' } }, storageNotice),     activePage === 'dashboard' ? h(Dashboard, { data, go: setPage, client, refresh }) : activePage === 'pos' ? h(POS, { client, data, refresh, applySale, online, setOnline, go: setPage }) : activePage === 'users' ? h(UsersAdmin, { client }) : activePage === 'returns' ? h(ReturnsPage, { data, client, refresh }) : activePage === 'reports' ? h(Reports, { data, client }) : activePage === 'purchases' ? h(Purchases, { data, client, refresh }) : activePage === 'settings' ? h(Settings, { data, client }) : activePage === 'warehouse' ? h(WarehousePage, { data, client, refresh }) : h(DataPage, { page: activePage, data, client, refresh })));
     navOpen && h('div', { className: 'menu-backdrop', onClick: () => setNavOpen(false) });
 }
 

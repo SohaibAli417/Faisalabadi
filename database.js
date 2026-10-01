@@ -182,15 +182,30 @@ async function readAuthData() {
   return auth;
 }
 
-async function writeAuthData(db) {
+// Signature of the auth table as it was last written. Billing a sale does not touch users,
+// sessions or settings, so the second table does not need rewriting on every save - and that write
+// sat in the same await chain as the real one, so it was pure added latency per bill.
+let lastAuthSignature = null;
+
+function authSignature(db) {
+  return JSON.stringify([db.users || [], db.sessions || {}, db.settings || {}]);
+}
+
+async function writeAuthData(db, options = {}) {
   if (!useSupabase) return;
+  const signature = authSignature(db);
+  if (!options.force && signature === lastAuthSignature) return;
   const payload = { id: 'main', users: db.users, sessions: db.sessions || {}, settings: db.settings || {}, updated_at: new Date().toISOString() };
   await withRetry(() => withTimeout(
     supabase.from('pos_auth').upsert(payload, { onConflict: 'id' }).then(({ error }) => { if (error) throw new Error(error.message); }),
     8000,
     'Auth write'
   ), 'Auth write', 1);
+  lastAuthSignature = signature;
 }
+
+// A fresh instance starts with a null signature, so its first save always rewrites pos_auth - a
+// password changed on another instance can never be left stranded in that instance's memory only.
 
 async function writeCloudDb(db) {
   if (!useSupabase) throw new Error('Cloud database is not configured');
@@ -244,11 +259,13 @@ async function readDb() {
   return readLocalDb();
 }
 
-async function writeDb(db) {
+async function writeDb(db, options = {}) {
   db.meta.updatedAt = new Date().toISOString();
   if (MODE === 'cloud' && useSupabase) {
     await writeCloudDb(db);
-    try { await writeAuthData(db); } catch (_) {}
+    // Skipped automatically when users/sessions/settings are byte-for-byte what pos_auth already
+    // holds, so billing a bill costs one write instead of two.
+    try { await writeAuthData(db, options); } catch (_) {}
     return;
   }
   writeLocalDb(db);

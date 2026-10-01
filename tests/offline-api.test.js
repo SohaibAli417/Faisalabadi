@@ -46,13 +46,33 @@ test.after(() => {
   fs.rmSync(dataDir, { recursive: true, force: true });
 });
 
+// Tokens are cached per user: the login endpoint rate limits by client, and these tests share one
+// connection, so re-authenticating for every test would trip the limit rather than test anything.
+const tokenCache = new Map();
+
 async function loginAs(who) {
+  if (tokenCache.has(who)) return tokenCache.get(who);
   const call = api(null);
   const email = who === 'cashier' ? 'cashier@faislabadi.pk' : 'sohaib@faislabadi.pk';
   const password = who === 'cashier' ? 'cashier-test-pass' : ADMIN_PASS;
   const res = await call('POST', '/api/auth/login', { login: email, password });
   assert.equal(res.status, 200, `login failed for ${who}: ${JSON.stringify(res.body)}`);
+  tokenCache.set(who, res.body.token);
   return res.body.token;
+}
+
+// A customer of the test's own, so a billing test starts from a known balance and does not lean on
+// whatever the earlier tests left behind on the seeded customers.
+async function freshCustomer(token, name, udhar = 0) {
+  const call = api(token);
+  const created = await call('POST', '/api/customers', { name, creditLimit: 0 });
+  assert.equal(created.status, 201, `customer create failed: ${JSON.stringify(created.body)}`);
+  const id = created.body.id;
+  if (udhar > 0) {
+    const edit = await call('PUT', `/api/customers/${id}`, { udhaarTotal: udhar, udhaarPaid: 0 });
+    assert.equal(edit.status, 200);
+  }
+  return id;
 }
 
 // Gives the customer a known udhar balance to work against.
@@ -158,6 +178,129 @@ test('one refused entry is reported on its own and the rest of the batch still g
   assert.equal(byId.get('offline_good_1').status, 'created');
   const customer = (await call('GET', '/api/customers')).body.find(item => item.id === 'cus_2');
   assert.equal(customer.balance, 900);
+});
+
+// The Complete Bill path: one click must produce one invoice, one payment, one khata entry and a
+// balance the khata agrees with. These go through the real HTTP endpoint the cashier's button hits.
+test('completing a bill returns the saved invoice and the customer row already recalculated', async () => {
+  const token = await loginAs('admin');
+  const call = api(token);
+  // The exact shop scenario: a customer already carrying 10,000 of udhar, then a 5,000 bill of which
+// 2,000 is paid. The starting balance is built with a real credit bill so the customer runs off its
+// summed ledger - the same way a normal counter customer does - rather than a typed-in total.
+const customerId = await freshCustomer(token, 'Khata Speed Test');
+  const opening = await call('POST', '/api/sales', {
+    clientId: 'opening_balance_1',
+    customerId,
+    paymentType: 'Credit',
+    taxRate: 0,
+    items: [{ productId: 'prd_3', qty: 4, price: 2500 }]
+  });
+  assert.equal(opening.status, 201);
+  const before = (await call('GET', '/api/bootstrap')).body.customers.find(item => item.id === customerId);
+  assert.equal(before.balance, 10000, 'the customer starts at 10,000 udhar');
+
+  const res = await call('POST', '/api/sales', {
+    clientId: 'khata_speed_1',
+    customerId,
+    paymentType: 'Partial',
+    paidAmount: 2000,
+    taxRate: 0,
+    items: [{ productId: 'prd_3', qty: 2, price: 2500 }]
+  });
+  assert.equal(res.status, 201);
+  const sale = res.body;
+  // The invoice comes back saved, not as a request echo.
+  assert.ok(sale.id, 'the saved invoice id is returned');
+  assert.match(sale.invoiceNo, /^FS-\d+$/);
+  assert.equal(sale.customerId, customerId, 'the customer stays attached to the saved invoice');
+  assert.equal(sale.total, 5000);
+  assert.equal(sale.paidAmount, 2000);
+  assert.equal(sale.dueAmount, 3000);
+
+  // 10,000 previous + 3,000 new udhar = 13,000. Previous balance is untouched.
+  assert.equal(sale.customer.balance, 13000);
+  assert.equal(sale.customer.creditPurchases, 15000);
+  assert.equal(sale.customer.totalPaid, 2000);
+
+  // The same numbers, read back from the khata itself - no reload in between.
+  const ledger = await call('GET', `/api/customers/${customerId}/ledger`);
+  const entry = ledger.body.entries.find(row => row.id === sale.id);
+  assert.ok(entry, 'the new bill is in the khata straight away');
+  assert.equal(entry.type, 'sale');
+  assert.equal(entry.amount, 5000);
+  assert.equal(entry.paidAtBilling, 2000);
+  assert.equal(ledger.body.balanceAfter[sale.id], 13000);
+  assert.equal(before.balance, 10000, 'the previous balance was left alone');
+});
+
+test('a second Complete Bill with the same clientId does not bill the customer twice', async () => {
+  const token = await loginAs('admin');
+  const call = api(token);
+  const customerId = await freshCustomer(token, 'Double Tap Test');
+  const payload = {
+    clientId: 'double_tap_guard_1',
+    customerId,
+    paymentType: 'Credit',
+    taxRate: 0,
+    items: [{ productId: 'prd_3', qty: 1, price: 1000 }]
+  };
+  const first = await call('POST', '/api/sales', payload);
+  assert.equal(first.status, 201);
+  const second = await call('POST', '/api/sales', payload);
+  const third = await call('POST', '/api/sales', payload);
+
+  // The retry is recognised and answered with the bill that already exists.
+  assert.equal(second.status, 200);
+  assert.equal(second.body.id, first.body.id);
+  assert.equal(second.body.invoiceNo, first.body.invoiceNo);
+  assert.equal(third.body.id, first.body.id);
+
+  const after = (await call('GET', '/api/bootstrap')).body;
+  const matching = after.sales.filter(row => row.id === first.body.id);
+  assert.equal(matching.length, 1, 'exactly one invoice was created');
+  const ledger = await call('GET', `/api/customers/${customerId}/ledger`);
+  const entries = ledger.body.entries.filter(row => row.id === first.body.id);
+  assert.equal(entries.length, 1, 'exactly one khata entry was created');
+  assert.equal(ledger.body.balanceAfter[first.body.id], Number(after.customers.find(c => c.id === customerId).balance));
+});
+
+test('a payment on the bill and the udhar entry are both recorded in one save', async () => {
+  const token = await loginAs('admin');
+  const call = api(token);
+  const customerId = await freshCustomer(token, 'Part Payment Test');
+  const res = await call('POST', '/api/sales', {
+    clientId: 'partial_split_1',
+    customerId,
+    paymentType: 'Partial',
+    paidAmount: 750,
+    taxRate: 0,
+    items: [{ productId: 'prd_3', qty: 1, price: 1000 }]
+  });
+  assert.equal(res.status, 201);
+  assert.equal(res.body.total, 1000);
+  assert.equal(res.body.dueAmount, 250);
+  const after = (await call('GET', '/api/bootstrap')).body;
+  const saved = after.sales.find(row => row.id === res.body.id);
+  assert.ok(saved, 'the invoice is on the sale list');
+  const ledger = await call('GET', `/api/customers/${customerId}/ledger`);
+  const paid = ledger.body.entries.filter(row => row.type === 'payment' && row.note.includes(saved.invoiceNo));
+  assert.equal(paid.length, 1, 'the part payment was recorded against this invoice');
+  assert.equal(paid[0].amount, 750);
+  const customer = after.customers.find(item => item.id === customerId);
+  assert.equal(ledger.body.balanceAfter[res.body.id], customer.balance);
+});
+
+test('health and sync-status answer without waiting on the store database', async () => {
+  const call = api(null);
+  const started = Date.now();
+  const health = await call('GET', '/api/health');
+  const status = await call('GET', '/api/sync-status');
+  assert.equal(health.status, 200);
+  assert.equal(health.body.ok, true);
+  assert.equal(status.status, 200);
+  // Both used to read the whole database and queue behind the same lock a sale takes.
+  assert.equal(Date.now() - started < 1500, true, 'status checks return without a full database read');
 });
 
 test('a cashier cannot replay udhar amounts through the sync endpoint', async () => {
