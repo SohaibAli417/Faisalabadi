@@ -635,7 +635,11 @@ function createSale(db, payload, actor, source = 'online') {
       }
       const baseQty = qtyToBase(qty, unit, product.unit);
       if (baseQty <= 0) throw new Error('Quantity must be positive');
-      if (Number(product.stock) < baseQty) {
+      // A product that was never given a stock figure reads as 0, and most of this shop's products
+      // are in that state. Refusing those outright stopped the counter from selling anything at all,
+      // so the check only bites once there is a real number on record to compare against.
+      const onHand = Number(product.stock);
+      if (onHand > 0 && onHand < baseQty) {
         throw new Error(`${product.name} has insufficient stock (available: ${round3(product.stock)} ${product.unit})`);
       }
       return { productId: product.id, name: product.name, sku: product.sku, unit, qty, baseQty, price: safeRate(item.price, product.price), cost: money(product.cost), manual: false };

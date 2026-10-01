@@ -1868,6 +1868,7 @@ function POS({ client, data, refresh, applySale, online, setOnline, go }) {
       setMessage(t('cashNeedsFull'));
       return;
     }
+    let warnNoStock = false;
     for (const item of cart) {
       if (item.manual || !item.productId) continue;
       const product = activeProducts.find(p => p.id === item.productId);
@@ -1875,10 +1876,15 @@ function POS({ client, data, refresh, applySale, online, setOnline, go }) {
       // Compare in the product's base unit, because that is how stock is stored. Billing 2000 gram
       // against a 0.5 kg product must not be read as 2000 kg.
       const baseQty = round3(Number(item.qty) * unitToBase(item.unit, product.unit));
-      if (baseQty > Number(product.stock || 0) + 1e-9) {
+      // Only enforce the limit when a real stock figure was entered. Most products here have never
+      // been given one and read as 0, and treating that as "none left" made Complete & Print refuse
+      // the whole bill, so the counter simply could not sell.
+      const onHand = Number(product.stock || 0);
+      if (onHand > 0 && baseQty > onHand + 1e-9) {
         setMessage(t('quantityTooHigh').replace('{stock}', String(round3(product.stock))).replace('{unit}', unitLabel(product.unit)).replace('{name}', product.name));
         return;
       }
+      if (onHand <= 0) warnNoStock = true;
     }
     const payload = buildPayload();
     chargingRef.current = true;
@@ -1900,7 +1906,11 @@ function POS({ client, data, refresh, applySale, online, setOnline, go }) {
       if (keepCustomerId) showSaleInProfile(sale, prevBalance);
       if (keepCustomerId) setKhataAfterReceipt(true);
       resetSale({ keepCustomerId });
-      setMessage(t('saleCompleteMessage'));
+      setMessage(warnNoStock
+        ? t('saleCompleteMessage') + ' — ' + (LANG === 'ur'
+          ? 'ان چیزوں کا stock درج نہیں تھا۔ Settings → Stock سے stock لگا لیں۔'
+          : 'Stock was not set for some items. Please enter their stock in Settings -> Stock.')
+        : t('saleCompleteMessage'));
       // Print as soon as the receipt is on screen (next painted frame) instead of waiting on the
       // background refresh - no artificial delay, and still never before the receipt is rendered.
       if (printAfter || printerCfg.autoPrint) schedulePrint();
