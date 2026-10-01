@@ -105,8 +105,9 @@ async function withRetry(operation, label, attempts = 3) {
 const cloudCacheFile = path.join(dbDir, 'cloud-cache.json');
 
 function rememberCloud(db) {
+  lastGoodCloud = db;
+  if (MODE === 'cloud') return;
   try {
-    lastGoodCloud = db;
     ensureDir(dbDir);
     const tmpFile = `${cloudCacheFile}.tmp`;
     fs.writeFileSync(tmpFile, JSON.stringify(db));
