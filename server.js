@@ -1235,8 +1235,8 @@ function deleteSupplier(db, id, actor) {
 function deleteCustomer(db, id, actor) {
   const customer = db.customers.find(item => item.id === id);
   if (!customer) throw new Error('Customer not found');
-  const hasSales = (db.sales || []).some(sale => sale.customerId === id);
-  const hasPayments = (db.payments || []).some(payment => payment.customerId === id);
+  const hasSales = (db.sales || []).some(sale => sale.customerId === id && !sale.voided);
+  const hasPayments = (db.payments || []).some(payment => payment.customerId === id && !payment.voided);
   const hasBalance = Number(customer.balance || 0) > 0;
   if (hasSales || hasPayments || hasBalance) {
     throw new Error('This customer has billing or udhaar history and cannot be deleted');
