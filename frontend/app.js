@@ -1178,20 +1178,36 @@ function drawBillImage(sale, settings, customer, labels) {
     const priceX = BILL_PAD + 430;
     const totalX = BILL_WIDTH - BILL_PAD;
     y += 20;
-    text(t('hProduct'), 15, '700', '#333');
-    text(t('qtyShort'), 15, '700', '#333', qtyX - nameX, 'right');
-    text(t('rateLabel'), 15, '700', '#333', priceX - nameX, 'right');
-    text(t('totalWord'), 15, '700', '#333', totalX - nameX, 'right');
-    y += 4;
-    divider();
-    for (const item of items) {
-      y += 24;
-      text(ellipsize(ctx, item.name, 320), 17, '400');
-      text(`${item.qty} ${item.unit}`, 17, '400', '#333', qtyX - nameX, 'right');
-      text(moneyRate(item.price), 17, '400', '#333', priceX - nameX, 'right');
-      text(moneyRate(item.line), 17, '600', '#111', totalX - nameX, 'right');
-      // A long name is given its own line rather than being squeezed into the columns.
-      if (ctx.measureText(String(item.name)).width > 320) y += 21;
+    if (sale.summaryOnly) {
+      // A khata entry only knows the bill as one figure, so no per-line rate or line total is invented
+      // here - the products are listed and the real total comes from the totals block below.
+      text(t('hProduct'), 15, '700', '#333');
+      y += 4;
+      divider();
+      for (const item of items) {
+        y += 24;
+        text(ellipsize(ctx, item.name, 470), 17, '400');
+        if (item.qty) {
+          text(`${item.qty} ${item.unit}`.trim(), 17, '400', '#333', totalX - nameX, 'right');
+        }
+        if (ctx.measureText(String(item.name)).width > 470) y += 21;
+      }
+    } else {
+      text(t('hProduct'), 15, '700', '#333');
+      text(t('qtyShort'), 15, '700', '#333', qtyX - nameX, 'right');
+      text(t('rateLabel'), 15, '700', '#333', priceX - nameX, 'right');
+      text(t('totalWord'), 15, '700', '#333', totalX - nameX, 'right');
+      y += 4;
+      divider();
+      for (const item of items) {
+        y += 24;
+        text(ellipsize(ctx, item.name, 320), 17, '400');
+        text(`${item.qty} ${item.unit}`, 17, '400', '#333', qtyX - nameX, 'right');
+        text(moneyRate(item.price), 17, '400', '#333', priceX - nameX, 'right');
+        text(moneyRate(item.line), 17, '600', '#111', totalX - nameX, 'right');
+        // A long name is given its own line rather than being squeezed into the columns.
+        if (ctx.measureText(String(item.name)).width > 320) y += 21;
+      }
     }
     y += 8;
     divider();
@@ -1316,6 +1332,53 @@ const plain = value => String(value == null ? '' : value).replace(/[*_`#]/g, '')
 const withPrevBalance = entry => (entry && Number.isFinite(Number(entry.balanceBefore))
   ? { ...entry, previousBalance: Number(entry.balanceBefore) }
   : entry);
+
+// What the khata keeps is a ledger entry, not a full bill: it has the amount and a product summary but
+// none of the invoice fields the bill picture is drawn from. Passing one straight to the renderer
+// produced a bill with an empty item table and no total at all, so the entry is reshaped into a real
+// bill first - the amount becomes the bill total, and the product summary becomes the item list.
+const ledgerEntryToBill = (entry, customer) => {
+  const amount = Number(entry.amount || 0);
+  const settled = entry.type === 'payment' || entry.paidInFull || entry.paidAtBilling;
+  // The khata carries the per-line detail for most bills, so the picture can show a real itemised
+  // receipt. Older entries only kept a "name x2, name x1" summary, which is parsed as a fallback.
+  const source = Array.isArray(entry.items) && entry.items.length
+    ? entry.items
+    : String(entry.products || '')
+      .split(',')
+      .map(part => part.trim())
+      .filter(Boolean)
+      .map(part => {
+        const match = part.match(/^(.*?)\s*x\s*(\d+(?:\.\d+)?)\s*([A-Za-z]*)\s*$/);
+        return { name: match ? match[1].trim() : part, qty: match ? Number(match[2]) : 1, unit: match && match[3] ? match[3] : '' };
+      });
+  const items = source.map(item => {
+    const price = Number(item.price || 0);
+    const qty = Number(item.qty || 0);
+    const line = Number(item.amount != null ? item.amount : (price ? price * qty : 0));
+    return { name: item.name || '', sku: item.sku || '', qty, unit: item.unit || '', price, line, cost: 0, manual: true };
+  });
+  return {
+    invoiceNo: entry.invoiceNo || '',
+    createdAt: entry.at || new Date().toISOString(),
+    createdBy: entry.createdBy || '',
+    customerId: (customer && customer.id) || '',
+    paymentType: settled ? 'Cash' : 'Credit',
+    paidAmount: settled ? amount : 0,
+    receivedAmount: settled ? amount : 0,
+    dueAmount: settled ? 0 : amount,
+    previousBalance: entry.balanceBefore,
+    discount: 0,
+    additionalDiscount: 0,
+    tax: 0,
+    subtotal: amount,
+    total: amount,
+    // Only the summary fallback has no per-line rate to show, and there the columns are left out
+    // rather than filled with a figure that was never recorded.
+    summaryOnly: !Array.isArray(entry.items) || !entry.items.length,
+    items
+  };
+};
 
 function waHeader(settings) {
   const storeName = plain((settings && settings.storeName) || 'Faislabadi General Store');
@@ -3355,7 +3418,7 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
                      h('span', { className: 'entry-balance' }, `${t('balanceForCustomer')} ${money(balanceAfter[entry.id] ?? balance)}`)),
                   h('div', { className: 'entry-actions' },
     entry.type === 'sale' && customer.phone
-      ? h('button', { className: 'wa-btn entry-wa', onClick: () => shareBillAsImage(withPrevBalance(entry), settings, customer, setMessage) }, t('whatsappBill'))
+      ? h('button', { className: 'wa-btn entry-wa', onClick: () => shareBillAsImage(withPrevBalance(ledgerEntryToBill(entry, customer)), settings, customer, setMessage) }, t('whatsappBill'))
                       : null,
                      canReverse && entry.type !== 'udhar'
                        ? h('button', { className: 'danger-btn small entry-reverse', disabled: busy, onClick: () => reverseEntry(entry) },
