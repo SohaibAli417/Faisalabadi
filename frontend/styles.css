@@ -1746,55 +1746,65 @@ td {
     overflow: visible !important;
   }
 
-  body > *:not(.modal) {
+  /* The receipt is copied into #print-root first, so printing hides the entire app - including the
+     receipt modal and its portal - and prints that copy on its own. Printing the live modal instead
+     is what left the paper blank on phones. */
+  body > *:not(#print-root) {
     display: none !important;
   }
 
-  .modal {
+  #print-root {
     display: block !important;
     position: static !important;
-    inset: auto !important;
-    background: none !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    backdrop-filter: none !important;
-    z-index: auto !important;
-    width: auto !important;
-    max-width: none !important;
-    min-height: 0 !important;
-    border-radius: 0 !important;
-    box-shadow: none !important;
   }
 
-  .receipt {
+  #print-root .receipt {
     box-shadow: none !important;
     border-radius: 0 !important;
-    padding: 8mm 5mm !important;
-    width: 72mm !important;
-    max-width: 72mm !important;
-    margin: 0 auto !important;
+    padding: 0 !important;
+    width: auto !important;
+    max-width: none !important;
+    margin: 0 !important;
     font-size: 11px !important;
     overflow: visible !important;
     border: none !important;
     max-height: none !important;
   }
 
-  .receipt::before { background: #000 !important; height: 2px !important; }
-  .receipt h2 { font-size: 14px !important; }
-  .receipt-info { font-size: 10px !important; }
-  .receipt-divider { border-color: #000 !important; border-top-width: 1px !important; }
-  .receipt-row { font-size: 10px !important; }
-  .receipt-items-header, .receipt-item { font-size: 9px !important; }
-  .receipt-grand { font-size: 13px !important; }
-  .receipt-grand span:last-child { font-size: 14px !important; }
-  .receipt-badge { border: 1px solid #000 !important; background: #fff !important; color: #000 !important; }
-  .receipt-footer p { font-size: 10px !important; }
-  .receipt-footer p:first-child { font-size: 11px !important; color: #000 !important; }
-  .receipt-credit { border-top-color: #000 !important; }
-  .receipt-credit .credit-title { font-size: 8px !important; color: #444 !important; }
-  .receipt-credit .credit-name { font-size: 11px !important; color: #000 !important; }
-  .receipt-credit .credit-phone { font-size: 9.5px !important; color: #000 !important; background: none !important; border: 1px solid #000 !important; border-radius: 0 !important; }
-  .no-print { display: none !important; }
+  #print-root .receipt.paper-58 { width: 58mm !important; max-width: 58mm !important; padding: 5mm 3mm !important; font-size: 9px !important; }
+  #print-root .receipt.paper-58 h2 { font-size: 12px !important; }
+  #print-root .receipt.paper-58 .receipt-row { font-size: 8px !important; }
+  #print-root .receipt.paper-58 .receipt-items-header, #print-root .receipt.paper-58 .receipt-item { font-size: 8px !important; }
+  #print-root .receipt.paper-58 .receipt-grand { font-size: 11px !important; }
+  #print-root .receipt.paper-80 { width: 80mm !important; max-width: 80mm !important; padding: 8mm 5mm !important; }
+  #print-root .receipt.paper-a4 { width: 100% !important; max-width: 210mm !important; padding: 15mm !important; font-size: 12px !important; }
+  #print-root .receipt.paper-a4 h2 { font-size: 18px !important; }
+  #print-root .receipt.paper-a4 .receipt-row { font-size: 12px !important; }
+  #print-root .receipt.paper-a4 .receipt-items-header, #print-root .receipt.paper-a4 .receipt-item { font-size: 11px !important; }
+  #print-root .receipt.paper-a4 .receipt-grand { font-size: 16px !important; }
+}
+
+/* Off screen until the moment the browser is asked to print. */
+#print-root { display: none; }
+
+@media print {
+  #print-root .receipt::before { background: #000 !important; height: 2px !important; }
+
+  #print-root .receipt h2 { font-size: 14px !important; }
+  #print-root .receipt-info { font-size: 10px !important; }
+  #print-root .receipt-divider { border-color: #000 !important; border-top-width: 1px !important; }
+  #print-root .receipt-row { font-size: 10px !important; }
+  #print-root .receipt-items-header, #print-root .receipt-item { font-size: 9px !important; }
+  #print-root .receipt-grand { font-size: 13px !important; }
+  #print-root .receipt-grand span:last-child { font-size: 14px !important; }
+  #print-root .receipt-badge { border: 1px solid #000 !important; background: #fff !important; color: #000 !important; }
+  #print-root .receipt-footer p { font-size: 10px !important; }
+  #print-root .receipt-footer p:first-child { font-size: 11px !important; color: #000 !important; }
+  #print-root .receipt-credit { border-top-color: #000 !important; }
+  #print-root .receipt-credit .credit-title { font-size: 8px !important; color: #444 !important; }
+  #print-root .receipt-credit .credit-name { font-size: 11px !important; color: #000 !important; }
+  #print-root .receipt-credit .credit-phone { font-size: 9.5px !important; color: #000 !important; background: none !important; border: 1px solid #000 !important; border-radius: 0 !important; }
+  #print-root .no-print { display: none !important; }
 }
 
 /* --- v9: Udhar totals, partial payments, returns, users --- */
@@ -1869,20 +1879,7 @@ html[dir='rtl'] .metric-card p, html[dir='rtl'] .metric-card h3, html[dir='rtl']
 .scan-info { display: flex; align-items: center; gap: 8px; }
 .scan-info small { color: #64748b; font-size: 12px; }
 
-/* Paper size variants for receipt printing */
-@media print {
-  .receipt.paper-58 { width: 58mm !important; max-width: 58mm !important; padding: 5mm 3mm !important; font-size: 9px !important; }
-  .receipt.paper-58 h2 { font-size: 12px !important; }
-  .receipt.paper-58 .receipt-row { font-size: 8px !important; }
-  .receipt.paper-58 .receipt-items-header, .receipt.paper-58 .receipt-item { font-size: 8px !important; }
-  .receipt.paper-58 .receipt-grand { font-size: 11px !important; }
-  .receipt.paper-80 { width: 80mm !important; max-width: 80mm !important; padding: 8mm 5mm !important; }
-  .receipt.paper-a4 { width: 100% !important; max-width: 210mm !important; padding: 15mm !important; font-size: 12px !important; }
-  .receipt.paper-a4 h2 { font-size: 18px !important; }
-  .receipt.paper-a4 .receipt-row { font-size: 12px !important; }
-  .receipt.paper-a4 .receipt-items-header, .receipt.paper-a4 .receipt-item { font-size: 11px !important; }
-  .receipt.paper-a4 .receipt-grand { font-size: 16px !important; }
-}
+/* Paper size variants live in the print block above, scoped to #print-root. */
 
 /* EDITABLE TABLES + EDIT MODALS */
 .muted { color: var(--muted); }
@@ -1928,3 +1925,72 @@ html[dir='rtl'] .metric-card p, html[dir='rtl'] .metric-card h3, html[dir='rtl']
 .edit-form .hint { font-size: 11px; color: var(--muted); }
 .form-actions { display: flex; gap: 10px; margin-top: 10px; }
 .form-actions .primary { flex: 1; }
+
+/* ============================================================
+   v40 - phones and tablets: the POS has to be usable with a
+   thumb, and anything wider than the screen gets a slider
+   instead of being squashed or cut off.
+   ============================================================ */
+
+/* Wide content scrolls sideways rather than overflowing the page. */
+.scroll-x {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+.scroll-x::-webkit-scrollbar { height: 6px; }
+.scroll-x::-webkit-scrollbar-thumb { background: #9fb8ad; border-radius: 3px; }
+.scroll-x::-webkit-scrollbar-track { background: #eef4f1; }
+
+/* Tables keep their columns; the wrapper gives them the slider. */
+.table-scroll, .table-wrap { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.table-scroll table, .table-wrap table { min-width: 620px; }
+.table-scroll::-webkit-scrollbar, .table-wrap::-webkit-scrollbar { height: 6px; }
+.table-scroll::-webkit-scrollbar-thumb, .table-wrap::-webkit-scrollbar-thumb { background: #9fb8ad; border-radius: 3px; }
+.table-scroll::-webkit-scrollbar-track, .table-wrap::-webkit-scrollbar-track { background: #eef4f1; }
+
+/* Anything that would otherwise push the page wide stays inside its own box. */
+img, table, .receipt, .modal-content { max-width: 100%; }
+
+@media (max-width: 760px) {
+  .page, .pos-page { padding-left: 10px !important; padding-right: 10px !important; }
+
+  /* The bill list is the part a cashier scrolls most, so it gets its own height. */
+  .bill-scroller { max-height: 46vh !important; -webkit-overflow-scrolling: touch; }
+
+  .pos-panel { padding: 12px !important; border-radius: 12px !important; }
+
+  /* Touch targets: nothing smaller than a thumb. */
+  .pos-page button,
+  .pos-page input,
+  .pos-page select { font-size: 15px !important; min-height: 42px !important; }
+
+  .actions-left, .actions-right { grid-template-columns: 1fr 1fr !important; }
+  .actions-section button { width: 100% !important; }
+
+  /* Buttons that sit side by side across the whole row stack cleanly. */
+  .customer-balance { display: flex !important; flex-wrap: wrap !important; gap: 8px !important; }
+  .customer-balance > * { flex: 1 1 46%; min-width: 0 !important; }
+  .customer-balance .pos-khata-btn,
+  .customer-balance .pos-khata-wa { margin-inline-start: 0 !important; width: 100% !important; }
+
+  /* Ledger and khata rows: allow the amount column to keep its own space. */
+  .ledger-entry { flex-wrap: wrap !important; }
+  .ledger-entry .entry-amounts { margin-inline-start: auto !important; }
+
+/* Wide tables scroll instead of stretching the page. */
+  .table-scroll table, .table-wrap table { min-width: 560px; }
+
+  /* Modals use the full width on a phone. */
+  .modal { padding: 10px !important; }
+  .modal > section, .modal > div { max-width: 100% !important; }
+
+  /* Keep long names and invoice numbers from forcing the layout wider. */
+  .pos-page h1, .pos-page h2, .pos-page h3 { word-break: break-word; }
+  .inv-no, .invoice-no, .mono { word-break: break-all; }
+}
+
+@media (max-width: 400px) {
+  .pos-page button { font-size: 14px !important; min-height: 40px !important; }
+  .actions-left, .actions-right { grid-template-columns: 1fr !important; }
+}

@@ -1545,6 +1545,9 @@ function POS({ client, data, refresh, applySale, online, setOnline, go }) {
   const [cameraOpen, setCameraOpen] = useState(false);
   const [draftsModal, setDraftsModal] = useState(false);
   const [khataOpen, setKhataOpen] = useState(false);
+  // When a bill is completed for a named customer, their khata is the natural next screen. It is opened
+  // once the receipt is dismissed so the printed bill is the last thing on screen while it prints.
+  const [khataAfterReceipt, setKhataAfterReceipt] = useState(false);
   const [message, setMessage] = useState('');
   const [profile, setProfile] = useState(null);
   const [profileTick, setProfileTick] = useState(0);
@@ -1895,6 +1898,7 @@ function POS({ client, data, refresh, applySale, online, setOnline, go }) {
       // Every bill for a named customer lands on their khata straight away, product names included,
       // instead of only the ones that left udhar.
       if (keepCustomerId) showSaleInProfile(sale, prevBalance);
+      if (keepCustomerId) setKhataAfterReceipt(true);
       resetSale({ keepCustomerId });
       setMessage(t('saleCompleteMessage'));
       // Print as soon as the receipt is on screen (next painted frame) instead of waiting on the
@@ -1955,16 +1959,30 @@ function POS({ client, data, refresh, applySale, online, setOnline, go }) {
   const chargeRef = React.useRef(null);
   chargeRef.current = () => charge(false);
 
-  // The printer can only print what is already in the document, so wait for the receipt to actually
-  // be in the DOM and for one more painted frame before opening the dialog. Two rAFs on their own were
-  // not enough: the modal could still be unmounted when the print dialog snapshotted the page, which
-  // is why "Complete & Print" sometimes fed the printer a blank sheet.
+  // Printing the receipt modal where it sits was the reason the printer kept getting a blank sheet: the
+  // modal is a portal inside a fixed, scrollable overlay, and phones and tablets snapshot the page
+  // before it is laid out. So the finished receipt is copied into a dedicated #print-root that sits
+  // outside the app, the copy is what gets printed, and the on-screen modal is left alone.
   function schedulePrint() {
     let waited = 0;
     (function printWhenReady() {
-      const ready = document.querySelector('.receipt-modal .receipt');
-      if (ready || waited >= 40) {
-        requestAnimationFrame(() => requestAnimationFrame(() => window.print()));
+      const node = document.querySelector('.receipt-modal .receipt');
+      const printRoot = document.getElementById('print-root');
+      if (node && printRoot) {
+        printRoot.innerHTML = '';
+        const copy = node.cloneNode(true);
+        copy.removeAttribute('style');
+        printRoot.appendChild(copy);
+        // Give the browser one paint with the copy in place, then hand over to the print dialog.
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          window.print();
+          // Clean up after the dialog closes so the next bill starts from a clean page.
+          setTimeout(() => { printRoot.innerHTML = ''; }, 1000);
+        }));
+        return;
+      }
+      if (waited >= 60) {
+        window.print();
         return;
       }
       waited += 1;
@@ -2476,7 +2494,13 @@ function POS({ client, data, refresh, applySale, online, setOnline, go }) {
       deliverySection,
       checkoutSection,
       actionsSection),
-    receipt && h(ReceiptModal, { sale: receipt, customers: data.customers, settings: data.settings, onClose: () => setReceipt(null) }),
+    receipt && h(ReceiptModal, { sale: receipt, customers: data.customers, settings: data.settings, onClose: () => {
+      setReceipt(null);
+      if (khataAfterReceipt) {
+        setKhataAfterReceipt(false);
+        setKhataOpen(true);
+      }
+    } }),
     cameraOpen && h(ScanCamera, { onCode: onScanCode, onClose: () => setCameraOpen(false) }),
     newCustomerOpen && h(QuickAddCustomerModal, {
       name: typedName,
@@ -2490,7 +2514,7 @@ function POS({ client, data, refresh, applySale, online, setOnline, go }) {
       },
       onClose: () => setNewCustomerOpen(false)
     }),
-    khataOpen && selectedCustomer && h(KhataModal, { customer: selectedCustomer, client, settings: data.settings, user: data.user, refresh, onClose: () => setKhataOpen(false) }),
+    khataOpen && selectedCustomer && h(KhataModal, { customer: profile && profile.customer && profile.customer.id === selectedCustomer.id && Object.keys(profile.customer).length > 1 ? { ...selectedCustomer, ...profile.customer } : selectedCustomer, client, settings: data.settings, user: data.user, refresh, onClose: () => setKhataOpen(false) }),
     draftsModal && h(DraftsModal, { drafts: data.drafts || [], customers: data.customers, onLoad: loadDraft, onDelete: deleteDraft, onClose: () => setDraftsModal(false) }));
 }
 

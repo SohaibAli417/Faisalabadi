@@ -1,4 +1,4 @@
-const CACHE_NAME = 'faislabadi-pos-v39';
+const CACHE_NAME = 'faislabadi-pos-v40';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
