@@ -237,6 +237,10 @@ const STRINGS = {
     productPickHint: 'Only saved on this customer - it does not create a new product in the Products tab.',
     voucherNo: 'Voucher No', pendingInvoice: 'Pending - assigned on save', dateLabel: 'Date', paymentTerms: 'Payment Terms',
     referenceLabel: 'Reference', customerLabelShort: 'Customer', selectCustomerPh: 'Search customer by name or phone...',
+    addNewCustomer: 'Add new customer', addCustomerHelp: 'Tap to create and use straight away',
+    customerNamePh: 'Customer name', phoneLabel: 'Phone', optionalWord: 'optional',
+    quickAddNote: 'Name and phone only. CNIC, address and credit limit can be added later from the Customers page.',
+    saveAndUse: 'Save & Use', savingWord: 'Saving...',
     scanCamera: 'Scan with camera', amountReceived: 'Amount received', changeLabel: 'Change',
     balanceChangeLabel: 'Balance / Change', additionalDiscount: 'Additional Discount', totalQtyLabel: 'Total Qty',
     totalPacksLabel: 'Total Packs', grandTotalLabel: 'Grand Total', saveDraft: 'Save Draft', draftsLabel: 'Drafts',
@@ -362,6 +366,10 @@ const STRINGS = {
     productPickHint: 'صرف اس گاہک پر محفوظ ہوتا ہے - پروڈکٹس ٹیب میں کوئی نئی پروڈکٹ نہیں بنتی۔',
     voucherNo: 'واؤچر نمبر', pendingInvoice: 'زیرِ التوا - سیل محفوظ ہونے پر ملے گا', dateLabel: 'تاریخ', paymentTerms: 'ادائیگی کی شرائط',
     referenceLabel: 'حوالہ', customerLabelShort: 'گاہک', selectCustomerPh: 'گاہک کا نام یا موبائل تلاش کریں...',
+    addNewCustomer: 'نیا گاہک شامل کریں', addCustomerHelp: 'دبانے کے لیے چھوئیں',
+    customerNamePh: 'گاہک کا نام', phoneLabel: 'موبائل', optionalWord: 'اختیاری',
+    quickAddNote: 'صرف نام اور موبائل۔ شناختی کارڈ، پتہ اور حد اس سے بعد میں گاہک صفحے سے بڑھایا جا سکتا ہے۔',
+    saveAndUse: 'محفوظ اور استعمال', savingWord: 'محفوظ ہو رہا ہے...',
     scanCamera: 'کیمرے سے اسکین', amountReceived: 'موصول شدہ رقم', changeLabel: 'باقی رقم',
     balanceChangeLabel: 'باقی رقم / تبدیلی', additionalDiscount: 'اضافی رعایت', totalQtyLabel: 'کل تعداد',
     totalPacksLabel: 'کل پیک', grandTotalLabel: 'کل رقم', saveDraft: 'ڈرافٹ محفوظ کریں', draftsLabel: 'ڈرافٹس',
@@ -1522,6 +1530,9 @@ function POS({ client, data, refresh, online, setOnline, go }) {
   const [customerIdx, setCustomerIdx] = useState(-1);
   const [customerHover, setCustomerHover] = useState(-1);
   const [customerId, setCustomerId] = useState('cus_walkin');
+  // The name the cashier typed into the customer box that did not match anyone. Offered as a
+  // one-tap "add this customer" so billing never has to stop and go to the customers page.
+  const [newCustomerOpen, setNewCustomerOpen] = useState(false);
   const [paymentType, setPaymentType] = useState('Cash');
   const [receivedInput, setReceivedInput] = useState('');
   const [discount, setDiscount] = useState('');
@@ -1701,6 +1712,15 @@ function POS({ client, data, refresh, online, setOnline, go }) {
     if (!customerQ) return false;
     return `${customer.name || ''} ${customer.phone || ''}`.toLowerCase().includes(customerQ);
   });
+
+  // Only offer to create a customer when the typed text is not already someone in the list. Offering
+  // it next to an exact match is how two accounts for one person end up on the same khata.
+  const typedName = customerSearch.trim();
+  const canAddTypedCustomer = Boolean(typedName) && !customerQExact(typedName);
+  function customerQExact(name) {
+    const q = name.trim().toLowerCase();
+    return (data.customers || []).some(customer => String(customer.name || '').trim().toLowerCase() === q);
+  }
 
   function selectCustomer(customer) {
     setCustomerId(customer.id);
@@ -2147,6 +2167,12 @@ function POS({ client, data, refresh, online, setOnline, go }) {
       if (customerOpen && customerIdx >= 0 && customers[customerIdx]) {
         e.preventDefault();
         selectCustomer(customers[customerIdx]);
+      } else if (customerOpen && canAddTypedCustomer) {
+        // Enter on a name nobody matches means "create this customer", which is what the cashier
+        // typing a new name into the box intends.
+        e.preventDefault();
+        setNewCustomerOpen(true);
+        setCustomerOpen(false);
       }
     } else if (e.key === 'Escape') {
       setCustomerOpen(false);
@@ -2201,7 +2227,15 @@ function POS({ client, data, refresh, online, setOnline, go }) {
           customers.map((customer, index) => h('button', { key: customer.id, className: 'search-item' + (index === customerIdx ? ' active' : '') + (index === customerHover ? ' hover' : ''), onMouseEnter: () => setCustomerHover(index), onClick: () => selectCustomer(customer) },
             h('span', { className: 'search-item-name' }, customer.name),
             h('span', { className: 'search-item-meta' }, customer.phone || ''),
-            Number(customer.balance) > 0 ? h('span', { className: 'search-item-price' }, `${t('udharBadge')} ${money(customer.balance)}`) : null)))),
+            Number(customer.balance) > 0 ? h('span', { className: 'search-item-price' }, `${t('udharBadge')} ${money(customer.balance)}`) : null)),
+          // A customer the shop has never served before is the normal case at the counter, so it is
+          // one tap away instead of a trip to the customers page mid-bill.
+          canAddTypedCustomer && h('button', {
+            className: 'search-item add-customer-item',
+            onClick: () => { setNewCustomerOpen(true); setCustomerOpen(false); }
+          },
+            h('span', { className: 'search-item-name' }, `+ ${t('addNewCustomer')} "${typedName}"`),
+            h('span', { className: 'search-item-meta' }, t('addCustomerHelp'))))),
       customerId !== 'cus_walkin' && selectedCustomer && h('div', { className: 'customer-balance' },
         h('span', null, t('balanceForCustomer')),
         h('strong', { style: Number(selectedCustomer.balance) > 0 ? { color: '#c0392b' } : { color: '#267152' } }, money(selectedCustomer.balance)),
@@ -2419,6 +2453,18 @@ function POS({ client, data, refresh, online, setOnline, go }) {
       actionsSection),
     receipt && h(ReceiptModal, { sale: receipt, customers: data.customers, settings: data.settings, onClose: () => setReceipt(null) }),
     cameraOpen && h(ScanCamera, { onCode: onScanCode, onClose: () => setCameraOpen(false) }),
+    newCustomerOpen && h(QuickAddCustomerModal, {
+      name: typedName,
+      client,
+      onSaved: async created => {
+        setNewCustomerOpen(false);
+        await refresh();
+        // Straight onto the new customer's khata, so the bill in progress is billed to them and the
+        // cashier can carry on counting instead of searching for the name again.
+        selectCustomer(created);
+      },
+      onClose: () => setNewCustomerOpen(false)
+    }),
     khataOpen && selectedCustomer && h(KhataModal, { customer: selectedCustomer, client, settings: data.settings, user: data.user, refresh, onClose: () => setKhataOpen(false) }),
     draftsModal && h(DraftsModal, { drafts: data.drafts || [], customers: data.customers, onLoad: loadDraft, onDelete: deleteDraft, onClose: () => setDraftsModal(false) }));
 }
@@ -3209,6 +3255,53 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
                        : null));
                 }))))),
       h('div', { className: 'success-actions no-print' }, h('button', { className: 'primary', onClick: onClose }, t('close'))))),
+    document.body);
+}
+
+// Two fields is all a counter needs mid-bill: who it is, and a number to send the bill to later.
+// The full customer form stays on the customers page for CNIC, address and credit limit.
+function QuickAddCustomerModal({ name: initialName, client, onSaved, onClose }) {
+  const [name, setName] = useState(initialName || '');
+  const [phone, setPhone] = useState('');
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  const nameRef = useRef(null);
+
+  useEffect(() => {
+    if (nameRef.current) nameRef.current.focus();
+  }, []);
+
+  async function save(event) {
+    if (event) event.preventDefault();
+    const trimmed = name.trim();
+    if (!trimmed) {
+      setMessage(LANG === 'ur' ? 'پہلے نام لکھیں۔' : 'Enter the customer name first.');
+      return;
+    }
+    setBusy(true);
+    setMessage('');
+    try {
+      const created = await client.post('/api/customers', { name: trimmed, phone: phone.trim() });
+      onSaved(created);
+    } catch (err) {
+      setMessage(friendlyError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return ReactDOM.createPortal(h('div', { className: 'modal', onClick: onClose },
+    h('form', { className: 'modal-card quick-add-customer', onClick: function(e) { e.stopPropagation(); }, onSubmit: save },
+      h('h3', null, t('addNewCustomer')),
+      h('label', null, t('customerLabel'),
+        h('input', { ref: nameRef, value: name, onChange: e => setName(e.target.value), placeholder: t('customerNamePh'), autoComplete: 'off' })),
+      h('label', null, `${t('phoneLabel')} (${t('optionalWord')})`,
+        h('input', { value: phone, onChange: e => setPhone(e.target.value), placeholder: '03xx-xxxxxxx', inputMode: 'tel', autoComplete: 'off' })),
+      h('p', { className: 'hint' }, t('quickAddNote')),
+      message && h('div', { className: 'notice danger' }, message),
+      h('div', { className: 'success-actions' },
+        h('button', { type: 'button', className: 'secondary', onClick: onClose }, t('close')),
+        h('button', { type: 'submit', className: 'primary', disabled: busy }, busy ? t('savingWord') : t('saveAndUse'))))),
     document.body);
 }
 
