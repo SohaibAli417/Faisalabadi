@@ -303,6 +303,51 @@ test('health and sync-status answer without waiting on the store database', asyn
   assert.equal(Date.now() - started < 1500, true, 'status checks return without a full database read');
 });
 
+test('every bill for a customer reaches their khata with the product names, and a settled bill moves no balance', async () => {
+  const token = await loginAs('admin');
+  const call = api(token);
+  const customerId = await freshCustomer(token, 'Khata Record Test');
+
+  // Bill one is settled in cash at the counter. It is still this customer's purchase, so it belongs
+  // on the khata - but it must not look like it added udhar.
+  const cash = await call('POST', '/api/sales', {
+    clientId: 'khata_cash_1',
+    customerId,
+    paymentType: 'Cash',
+    taxRate: 0,
+    items: [{ productId: 'prd_3', qty: 2, price: 2500 }]
+  });
+  assert.equal(cash.status, 201);
+
+  const cashLedger = await call('GET', `/api/customers/${customerId}/ledger`);
+  const cashEntry = cashLedger.body.entries.find(entry => entry.id === cash.body.id);
+  assert.ok(cashEntry, 'a cash bill for a named customer is missing from their khata');
+  assert.equal(cashEntry.type, 'sale');
+  assert.equal(cashEntry.paidInFull, true);
+  assert.equal(cashEntry.udharAdded, 0);
+  assert.match(cashEntry.products, new RegExp(String(cash.body.items[0].name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.ok(cashEntry.items.length === 1 && cashEntry.items[0].qty === 2, 'the khata row keeps the billed quantity');
+  assert.equal(cashLedger.body.balanceAfter[cashEntry.id], 0, 'a settled bill must leave the balance alone');
+
+  // Bill two is the same customer on udhar.
+  const credit = await call('POST', '/api/sales', {
+    clientId: 'khata_credit_1',
+    customerId,
+    paymentType: 'Credit',
+    taxRate: 0,
+    items: [{ productId: 'prd_1', qty: 3, price: 500 }]
+  });
+  assert.equal(credit.status, 201);
+
+  const ledger = await call('GET', `/api/customers/${customerId}/ledger`);
+  const ids = ledger.body.entries.filter(entry => entry.type === 'sale').map(entry => entry.id);
+  assert.equal(ids.includes(cash.body.id), true, 'both bills stay on the khata');
+  assert.equal(ids.includes(credit.body.id), true);
+  // Both bills on one statement, but the running balance only counts the unpaid part.
+  assert.equal(ledger.body.balanceAfter[credit.body.id], credit.body.dueAmount);
+  assert.equal(ledger.body.balanceBefore[credit.body.id], 0);
+});
+
 test('a cashier cannot replay udhar amounts through the sync endpoint', async () => {
   const token = await loginAs('cashier');
   const call = api(token);

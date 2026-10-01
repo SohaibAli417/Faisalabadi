@@ -1888,9 +1888,12 @@ function POS({ client, data, refresh, applySale, online, setOnline, go }) {
       // Snapshot the balance from before the bill, so the invoice and the WhatsApp bill can show
       // previous balance / new balance without any extra request.
       const prevBalance = Number((selectedCustomer && selectedCustomer.balance) || 0);
-      const keepCustomerId = sale.dueAmount > 0 && customerId !== 'cus_walkin' ? customerId : null;
+      // Keep the customer on the bill after a completed sale, whether or not udhar was left. Dropping them
+      // back to Walk-in meant the next bill for the same person went nowhere near their khata.
+      const keepCustomerId = customerId !== 'cus_walkin' ? customerId : null;
       setReceipt({ ...sale, previousBalance: prevBalance, customerNameAtBilling: (selectedCustomer && selectedCustomer.name) || '' });
-      // Show the new bill in the customer's khata right away, before any network round trip.
+      // Every bill for a named customer lands on their khata straight away, product names included,
+      // instead of only the ones that left udhar.
       if (keepCustomerId) showSaleInProfile(sale, prevBalance);
       resetSale({ keepCustomerId });
       setMessage(t('saleCompleteMessage'));
@@ -1952,10 +1955,21 @@ function POS({ client, data, refresh, applySale, online, setOnline, go }) {
   const chargeRef = React.useRef(null);
   chargeRef.current = () => charge(false);
 
-  // Print on the first frame the browser can actually paint the receipt, instead of sleeping a fixed
-  // 500ms. Nothing is skipped, the bill just is not held back by an arbitrary wait.
+  // The printer can only print what is already in the document, so wait for the receipt to actually
+  // be in the DOM and for one more painted frame before opening the dialog. Two rAFs on their own were
+  // not enough: the modal could still be unmounted when the print dialog snapshotted the page, which
+  // is why "Complete & Print" sometimes fed the printer a blank sheet.
   function schedulePrint() {
-    requestAnimationFrame(() => requestAnimationFrame(() => window.print()));
+    let waited = 0;
+    (function printWhenReady() {
+      const ready = document.querySelector('.receipt-modal .receipt');
+      if (ready || waited >= 40) {
+        requestAnimationFrame(() => requestAnimationFrame(() => window.print()));
+        return;
+      }
+      waited += 1;
+      setTimeout(printWhenReady, 16);
+    })();
   }
 
   // Put the just-completed bill into the on-screen khata immediately. The ledger is still refetched
@@ -1972,6 +1986,8 @@ function POS({ client, data, refresh, applySale, online, setOnline, go }) {
         invoiceNo: sale.invoiceNo,
         amount: sale.total,
         paidAtBilling: paid,
+        paidInFull: due <= 0,
+        udharAdded: due,
         balanceBefore: prevBalance,
         balanceAfter: prevBalance + due,
         products: (sale.items || []).map(item => `${item.name} x${item.qty}`).join(', '),
@@ -3249,10 +3265,17 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
                        : entry.type === 'udhar'
                          ? `${t('udharEntryLabel')}${entry.note ? ' - ' + entry.note : ''}`
                          : `${t('paymentReceived')}${entry.invoiceNo ? ' (' + entry.invoiceNo + ')' : ''}${entry.note && !entry.invoiceNo ? ' - ' + entry.note : ''}`),
+                     // A bill the customer settled at the counter is on the khata for the record, but
+                     // it added no udhar - saying so keeps the statement from looking like it grew.
+                     entry.type === 'sale' && entry.paidInFull ? h('small', { className: 'entry-settled' }, t('fullyPaid')) : null,
                      entry.products && h('small', null, entry.products),
                      h('small', null, `${when(entry.at)}${entry.createdBy ? ' - ' + entry.createdBy : ''}${entry.reference ? ' - ' + t('refPrefix') + ' ' + entry.reference : ''}${entry.note && entry.invoiceNo ? ' - ' + entry.note : ''}`)),
                    h('div', { className: 'entry-amounts' },
-                     h('b', { className: isCreditEntry ? 'amount-due' : 'amount-paid' }, `${isCreditEntry ? '+' : '-'}${money(entry.amount)}`),
+                     // Money already shown on the bill row as "paid at billing" is listed here for the
+                     // record only, so it must not print a second minus sign against the balance.
+                     (entry.type === 'sale' && entry.paidInFull) || entry.paidAtBilling
+                       ? h('b', { className: 'amount-paid' }, money(entry.amount))
+                       : h('b', { className: isCreditEntry ? 'amount-due' : 'amount-paid' }, `${isCreditEntry ? '+' : '-'}${money(entry.amount)}`),
                      h('span', { className: 'entry-balance' }, `${t('balanceForCustomer')} ${money(balanceAfter[entry.id] ?? balance)}`)),
                   h('div', { className: 'entry-actions' },
     entry.type === 'sale' && customer.phone

@@ -1750,8 +1750,11 @@ async function handleApi(request, response) {
       const id = url.pathname.split('/')[3];
       const customer = db.customers.find(item => item.id === id);
       if (!customer) return json(response, 404, { error: 'Customer not found' });
+      // Every invoice to this customer belongs on their khata, not just the ones that left udhar -
+      // the cashier wants one place that shows what this customer actually bought. A bill settled in
+      // full still shows up, it simply moves the balance by nothing.
       const creditSales = db.sales
-        .filter(sale => sale.customerId === id && isCreditSale(sale) && !sale.voided)
+        .filter(sale => sale.customerId === id && !sale.voided)
         .map(sale => ({
           type: 'sale',
           id: sale.id,
@@ -1759,6 +1762,10 @@ async function handleApi(request, response) {
           invoiceNo: sale.invoiceNo,
           amount: sale.total,
           paidAtBilling: money(sale.paidAmount),
+          paidInFull: money(sale.dueAmount != null ? sale.dueAmount : money(sale.total) - money(sale.paidAmount)) <= 0,
+          // Only the unpaid part changes the outstanding, so a settled bill leaves the running
+          // balance exactly where it was instead of counting twice.
+          udharAdded: money(sale.dueAmount != null ? sale.dueAmount : money(sale.total) - money(sale.paidAmount)),
           products: sale.items.map(item => `${item.name} x${item.qty}`).join(', '),
           items: (sale.items || []).map(item => ({
             name: item.name,
@@ -1770,17 +1777,26 @@ async function handleApi(request, response) {
           })),
           createdBy: sale.createdByName || ''
         }));
+// The money taken at the counter is already carried on the bill's own row as "paid at billing", so
+      // counting its payment row again in the running balance used to subtract the same rupees twice
+      // and left the statement reading lower than what the customer actually owes. The row stays on
+      // the khata for the record - it is flagged and simply does not move the balance.
       const payments = (db.payments || [])
         .filter(payment => payment.customerId === id && !payment.voided)
-        .map(payment => ({
-          type: 'payment',
-          id: payment.id,
-          at: payment.at,
-          amount: payment.amount,
-          invoiceNo: payment.saleId ? ((db.sales.find(item => item.id === payment.saleId) || {}).invoiceNo || '') : '',
-          note: payment.note || '',
-          createdBy: payment.createdBy || ''
-        }));
+        .map(payment => {
+          const bill = payment.saleId ? db.sales.find(item => item.id === payment.saleId) : null;
+          const paidAtBilling = !!bill && payment.at === bill.createdAt;
+          return {
+            type: 'payment',
+            id: payment.id,
+            at: payment.at,
+            amount: payment.amount,
+            paidAtBilling,
+            invoiceNo: bill ? (bill.invoiceNo || '') : '',
+            note: payment.note || '',
+            createdBy: payment.createdBy || ''
+          };
+});
       const udharEntries = (db.udharEntries || [])
         .filter(entry => entry.customerId === id && !entry.voided)
         .map(entry => ({
@@ -1799,8 +1815,8 @@ async function handleApi(request, response) {
       const balanceBefore = {};
       for (const entry of allEntries) {
         balanceBefore[entry.id] = money(running);
-        if (entry.type === 'sale') running += money(entry.amount) - money(entry.paidAtBilling);
-        else if (entry.type === 'payment') running -= money(entry.amount);
+        if (entry.type === 'sale') running += money(entry.udharAdded);
+        else if (entry.type === 'payment') { if (!entry.paidAtBilling) running -= money(entry.amount); }
         else running += money(entry.amount);
         balanceAfter[entry.id] = money(running);
       }
