@@ -902,6 +902,15 @@ function Dashboard({ data, go, client, refresh }) {
   const [stockProduct, setStockProduct] = useState(null);
   const [stockMessage, setStockMessage] = useState('');
 
+  // The daily figures, udhar totals and low-stock list all come from the server's own totals, and a
+  // completed bill only patches the products, customers and sale list on screen. Without pulling
+  // fresh data when the dashboard is actually opened, "sales today" kept showing the numbers from
+  // before the last bill - walk-in bills included. Fetching here instead of after every sale keeps
+  // the counter quick and still shows the true day so far.
+  useEffect(() => {
+    if (refresh) refresh();
+  }, []);
+
   const allSales = data.sales || [];
   const billQ = billQuery.trim().toLowerCase();
   const filteredSales = billQ
@@ -1923,6 +1932,10 @@ function POS({ client, data, refresh, applySale, online, setOnline, go }) {
       // was a second round trip the cashier waited through before the next one could start.
       applySale(response);
       if (keepCustomerId) setProfileTick(n => n + 1);
+      // The low-stock list and the day's totals are not part of the save response, so pull them in the
+      // background a moment later. It is deliberately not awaited: the cashier already has the receipt
+      // and can start the next bill while this runs, and the dashboards reload themselves on open.
+      setTimeout(() => { if (typeof refresh === 'function') refresh(); }, 1200);
     } catch (err) {
       if (!navigator.onLine || /fetch/i.test(err.message)) {
         const queued = loadJson(queueKey, []);
@@ -2634,6 +2647,11 @@ function DataPage({ page, data, client, refresh }) {
   const [search, setSearch] = useState('');
   const [editCustomer, setEditCustomer] = useState(null);
   const [editProduct, setEditProduct] = useState(null);
+  // Balances and stock shown here also come from the server, so reload when the list is opened rather
+  // than relying on whatever was last pulled.
+  useEffect(() => {
+    if (refresh) refresh();
+  }, [page]);
   const title = pages.find(item => item[0] === page)?.[1] || page;
   const allRows = page === 'customers' ? data.customers : data.products;
   const searchTerm = search.trim().toLowerCase();
@@ -2667,7 +2685,7 @@ function DataPage({ page, data, client, refresh }) {
       setMessage(friendlyError(err));
     }
   }
-  if (page === 'reports') return h(Reports, { data, client });
+  if (page === 'reports') return h(Reports, { data, client, refresh });
   if (page === 'purchases') return h(Purchases, { data, client, refresh });
   if (page === 'users') return h(UsersAdmin, { client });
   if (page === 'returns') return h(ReturnsPage, { data, client, refresh });
@@ -4212,7 +4230,12 @@ function Purchases({ data, client, refresh }) {
     editSupplier && h(SupplierEditModal, { supplier: editSupplier, client, refresh, onClose: () => setEditSupplier(null) }));
 }
 
-function Reports({ data, client }) {
+function Reports({ data, client, refresh }) {
+  // The day, month and year totals are worked out on the server, so they have to be re-pulled when the
+  // page is opened or they stay stuck on whatever the last full load happened to show.
+  useEffect(() => {
+    if (refresh) refresh();
+  }, []);
   return h('div', { className: 'page' }, h('div', { className: 'page-title' }, h('div', null, h('p', { className: 'eyebrow' }, t('pnlEyebrow')), h('h1', null, t('nav_reports'))), h('button', { className: 'secondary', onClick: () => client.exportCsv('/api/reports/export.csv', 'sales-report.csv') }, 'Export CSV')),
     h('section', { className: 'metrics' }, ['day', 'month', 'year'].map(period => {
       const report = data.reports[period] || {};
