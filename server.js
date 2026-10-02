@@ -572,6 +572,16 @@ const UNIT_DIMENSIONS = {
   dozen: 'count',
   boree: 'count'
 };
+// How big each unit is relative to the others, used only to read the direction of a custom
+// "how many" number. A box is bigger than a pack and a pack is bigger than a piece, so the same
+// number 6 means "1 box = 6 packs" when a box is the base and "1 pack = 6 pcs" when a piece is.
+// Measured units already have fixed factors, so they only need to order correctly here.
+const UNIT_ORDER = {
+  gram: 1, kg: 2,
+  litre: 1,
+  meter: 1,
+  pcs: 1, dozen: 2, pack: 3, box: 4, boree: 5
+};
 const unitFactor = unit => {
   const key = String(unit == null ? '' : unit).trim().toLowerCase();
   return Object.prototype.hasOwnProperty.call(UNIT_FACTORS, key) ? UNIT_FACTORS[key] : null;
@@ -580,6 +590,18 @@ const unitDimension = unit => {
   const key = String(unit == null ? '' : unit).trim().toLowerCase();
   return Object.prototype.hasOwnProperty.call(UNIT_DIMENSIONS, key) ? UNIT_DIMENSIONS[key] : null;
 };
+const unitOrder = unit => {
+  const key = String(unit == null ? '' : unit).trim().toLowerCase();
+  return Object.prototype.hasOwnProperty.call(UNIT_ORDER, key) ? UNIT_ORDER[key] : null;
+};
+// True when `unit` is the bigger of the two. Unknown units read as smaller, which keeps the old
+// "qty is base units per unit" meaning for anything outside the shared list.
+const unitIsBigger = (unit, other) => {
+  const a = unitOrder(unit);
+  const b = unitOrder(other);
+  if (a == null || b == null) return false;
+  return a > b;
+};
 // --- Per-product units of measure -------------------------------------------------------------
 // A product may be sold in more than one unit, and each unit can hold a different number of base
 // units and carry its own price. A biscuit sold as a pack of 12 at Rs 240, where the base unit is
@@ -587,9 +609,11 @@ const unitDimension = unit => {
 //
 //   uom: [{ unit: 'pack', qty: 12, price: 240 }]
 //
-// `qty` is always counted in the product's OWN base unit (product.unit) and `price` is the rate for
-// one of that unit, left out when the pack is simply base price x qty. A product with no `uom` keeps
-// the shared table above, so every product already in the shop bills exactly as it always has.
+// `qty` is the gap between the two units: how many of the smaller unit make one of the bigger unit.
+// Twelve therefore reads as "1 pack = 12 pcs" on a piece-based product and "1 box = 12 packs" on a
+// box-based product. `price` is the rate for one of that unit and is left out when the rate is just
+// the base rate scaled by that gap. A product with no `uom` keeps the shared table above, so every
+// product already in the shop bills exactly as it always has.
 const productUom = (product, unit) => {
   const list = product && Array.isArray(product.uom) ? product.uom : [];
   const key = String(unit == null ? '' : unit).trim().toLowerCase();
@@ -641,7 +665,13 @@ const unitsCompatible = (unit, baseUnit, product) => {
 // custom unit never turns a sale into zero.
 const unitToBase = (unit, baseUnit, product) => {
   const own = productUom(product, unit);
-  if (own) return Number(own.qty);
+  if (own) {
+    // "How many in 1" is stored as the plain gap between the two units, not its direction. Six means
+    // "1 pack = 6 pcs" when the base is a piece, but "1 box = 6 packs" when the base is a box. The
+    // bigger unit decides the direction, so a pack under a box comes out as 1/6 of a box and its
+    // price lands below the box, never above it.
+    return unitIsBigger(unit, baseUnit) ? Number(own.qty) : 1 / Number(own.qty);
+  }
   const from = unitFactor(unit);
   const to = unitFactor(baseUnit);
   if (!from || !to) return 1;

@@ -100,9 +100,24 @@ const UNIT_FACTORS = { kg: 1, gram: 0.001, litre: 1, meter: 1, pcs: 1, pack: 1, 
 // Same grouping as the server. Only units of the same kind have a known conversion, so the UOM
 // dropdown can hide units that would otherwise be silently treated as 1:1.
 const UNIT_DIMENSIONS = { kg: 'weight', gram: 'weight', litre: 'volume', meter: 'length', pcs: 'count', pack: 'count', box: 'count', dozen: 'count', boree: 'count' };
+// Relative size of each unit, matching the server. It only decides which way a custom "how many"
+// number points: a box is bigger than a pack, a pack is bigger than a piece.
+const UNIT_ORDER = { gram: 1, kg: 2, litre: 1, meter: 1, pcs: 1, dozen: 2, pack: 3, box: 4, boree: 5 };
 const unitDimension = unit => {
   const key = String(unit == null ? '' : unit).trim().toLowerCase();
   return Object.prototype.hasOwnProperty.call(UNIT_DIMENSIONS, key) ? UNIT_DIMENSIONS[key] : null;
+};
+const unitOrder = unit => {
+  const key = String(unit == null ? '' : unit).trim().toLowerCase();
+  return Object.prototype.hasOwnProperty.call(UNIT_ORDER, key) ? UNIT_ORDER[key] : null;
+};
+// True when `unit` is the bigger of the two. Unknown units read as smaller, keeping the old
+// "qty is base units per unit" meaning for anything outside the shared list.
+const unitIsBigger = (unit, other) => {
+  const a = unitOrder(unit);
+  const b = unitOrder(other);
+  if (a == null || b == null) return false;
+  return a > b;
 };
 // Units the cashier may pick for something kept in `baseUnit`. A line with no product unit (manual
 // entry) can use any unit. A product that declares its own units offers exactly those alongside its
@@ -122,10 +137,11 @@ const unitsForBase = (baseUnit, product) => {
   // A product in an odd unit must still be able to keep its own unit in the list.
   return allowed.some(unit => unit.value === baseUnit) ? allowed : UNITS;
 };
-// A product can declare its own units of measure: `{ unit: 'pack', qty: 12, price: 240 }` means one
-// pack holds 12 of the product's base unit and is sold at Rs 240. This is what makes a pack of 12
-// biscuits mean 12 biscuits of stock and Rs 240 on the bill instead of 1 and Rs 20. A product with no
-// list of its own falls back to the shared table above, so nothing already in the shop changes.
+// A product can declare its own units of measure: `{ unit: 'pack', qty: 12 }` means 12 of the
+// smaller unit make one pack. On a piece-based product that is 1 pack = 12 pcs at 12x the piece
+// rate; on a box-based product the same 12 reads as 1 box = 12 packs at a twelfth of the box rate.
+// The bigger unit decides which way the number points. A product with no list of its own falls back
+// to the shared table above, so nothing already in the shop changes.
 const productUom = (product, unit) => {
   const list = (product && Array.isArray(product.uom)) ? product.uom : [];
   const key = String(unit == null ? '' : unit).trim().toLowerCase();
@@ -139,15 +155,26 @@ const productUom = (product, unit) => {
 const rateBasisLabel = (item, product) => {
   const unit = (item && item.unit) || '';
   const own = productUom(product, unit);
-  const size = own ? Number(own.qty) : 0;
-  if (size > 1) return `${unitLabel(unit)} (${size})`;
+  if (!own) return unitLabel(unit);
+  const baseUnit = (product && product.unit) || '';
+  // Only a unit bigger than the base can be described as "holds N of the base". A smaller unit would
+  // read backwards, so it is just named.
+  if (unitIsBigger(unit, baseUnit)) {
+    const size = Number(own.qty);
+    return size > 1 ? `${unitLabel(unit)} (${size} ${unitLabel(baseUnit)})` : unitLabel(unit);
+  }
   return unitLabel(unit);
 };
 // What one `unit` holds, in the product's own base unit. The product's own declaration wins over the
 // shared table, because only the product knows how many of its items make up a pack.
 const unitToBase = (unit, baseUnit, product) => {
   const own = productUom(product, unit);
-  if (own) return Number(own.qty);
+  if (own) {
+    // The stored number is the plain gap between the units, not its direction: 6 means 1 pack = 6
+    // pcs when a piece is the base, but 1 box = 6 packs when a box is. The bigger unit decides, so a
+    // pack under a box becomes 1/6 of a box and its rate stays below the box rate.
+    return unitIsBigger(unit, baseUnit) ? Number(own.qty) : 1 / Number(own.qty);
+  }
   const from = UNIT_FACTORS[String(unit == null ? '' : unit).trim().toLowerCase()];
   const to = UNIT_FACTORS[String(baseUnit == null ? '' : baseUnit).trim().toLowerCase()];
   if (!from || !to) return 1;
@@ -320,9 +347,9 @@ const STRINGS = {
     whConvertNote: 'Add bores from the warehouse - it comes off the warehouse and goes into product + inventory.',
     whNoLink: 'Link a product first', kgPerBoreePh: 'Kg in 1 boree', pcsPerCartonPh: 'Pcs in 1 carton',
     kgPerBoreeLabel: 'Kg per boree', pcsPerCartonLabel: 'Pcs per carton', packSpec: 'Pack size',
-    uomTitle: 'Sell in other units', uomUnit: 'Unit', uomQty: 'How many in 1', uomQtyPh: 'e.g. 12',
+    uomTitle: 'Sell in other units', uomUnit: 'Unit', uomQty: 'How many in 1', uomQtyPh: 'e.g. 6',
     uomPrice: 'Price for this unit', uomPricePh: 'empty = auto', uomAdd: '+ Add unit',
-    uomNote: 'Leave the price empty to use base price x quantity. One pack of 12 at Rs 240 needs 12 under "How many in 1".',
+    uomNote: 'Leave the price empty to work it out from the base price. The number says how many of the smaller unit make one of the bigger unit, e.g. 1 box = 6 packs or 1 pack = 6 pcs.',
     stockAddedMsg: 'Stock added to product and inventory.', noUdharYet: 'No udhar yet.',
     showUdharFirst: 'Udhar customers', selectCustomerToBill: 'Select a customer to make a bill',
     allBills: 'All bills', recentBillsOnly: 'Recent', searchBills: 'Search invoice or customer...'
@@ -452,9 +479,9 @@ const STRINGS = {
     whConvertNote: 'گودام سے بوریاں شامل کریں - گودام سے کم ہوں گی اور پروڈکٹ اور اسٹاک میں شامل ہوں گی۔',
     whNoLink: 'پہلے پروڈکٹ لنک کریں', kgPerBoreePh: 'ایک بوری میں کلو', pcsPerCartonPh: 'ایک کارٹن میں عدد',
     kgPerBoreeLabel: 'فی بوری کلو', pcsPerCartonLabel: 'فی کارٹن عدد', packSpec: 'پیک سائز',
-    uomTitle: 'دوسری یونٹ میں بیچیں', uomUnit: 'یونٹ', uomQty: 'ایک میں کتنے', uomQtyPh: 'مثلاً 12',
+    uomTitle: 'دوسری یونٹ میں بیچیں', uomUnit: 'یونٹ', uomQty: 'ایک میں کتنے', uomQtyPh: 'مثلاً 6',
     uomPrice: 'اس یونٹ کی قیمت', uomPricePh: 'خالی = خودکار', uomAdd: '+ یونٹ شامل کریں',
-    uomNote: 'قیمت خالی چھوڑیں تو بنیادی قیمت × تعداد لگ جائے گی۔ 12 کی پیک Rs 240 کی ہے تو "ایک میں کتنے" میں 12 لکھیں۔',
+    uomNote: 'قیمت خالی چھوڑیں تو بنیادی قیمت سے خود نکل آئے گی۔ نمبر بتاتا ہے کہ چھوٹی یونٹ کی کتنی اکائیاں بڑی یونٹ میں آتی ہیں، مثلاً 1 باکس = 6 پیک یا 1 پیک = 6 عدد۔',
     stockAddedMsg: 'اسٹاک پروڈکٹ اور انوینٹری میں شامل ہو گیا۔', noUdharYet: 'ابھی کوئی اُدھار نہیں۔',
     showUdharFirst: 'اُدھار والے گاہک', selectCustomerToBill: 'بل بنانے کے لیے گاہک منتخب کریں',
     allBills: 'تمام بل', recentBillsOnly: 'حالیہ', searchBills: 'انوائس یا گاہک تلاش کریں...'
@@ -1833,9 +1860,10 @@ function POS({ client, data, refresh, applySale, online, setOnline, go }) {
   }
 
   function setLineUnit(index, value) {
-    // Keep the physical amount the same and re-price it: 2 kg at Rs 100/kg becomes 2000 gram at
-    // Rs 0.05/g, so switching the UOM never changes what the customer owes. The rate is derived from
-    // the product's own rate unless the cashier typed a custom one for this line.
+    // Re-price the line from the product's own rate unless the cashier typed a custom one. Measured
+    // goods keep the same physical amount (2 kg becomes 2000 gram), but counted goods keep the number
+    // the cashier typed (1 box becomes 1 pack, never 0.16 of one), because whole units are what the
+    // counter actually sells.
     setCart(items => items.map((item, itemIndex) => {
       if (itemIndex !== index) return item;
       const from = item.unit;
@@ -1851,7 +1879,8 @@ function POS({ client, data, refresh, applySale, online, setOnline, go }) {
       const qty = Number(item.qty) || 0;
       const factor = unitToBase(from, baseUnit, product);
       const nextFactor = unitToBase(value, baseUnit, product);
-      const newQty = round3(qty * (factor / (nextFactor || 1)));
+      const isCount = unitDimension(baseUnit) === 'count';
+      const newQty = isCount ? qty : round3(qty * (factor / (nextFactor || 1)));
       // A typed rate belongs to the unit it was typed in, so lift it to the product's base unit
       // first. Without this, a custom Rs 120/kg typed in kilo would be read as Rs 120 per gram
       // base and jump by a factor of 1000.
@@ -3902,12 +3931,27 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
 }
 
 // Lets a product say what one of its units holds and what that unit sells for, so a pack of 12
-// biscuits at Rs 240 works while a single one stays at Rs 20. No rows means the product is sold only
-// in its base unit, which is how every product already in the shop is set up and is left untouched.
+// biscuits at Rs 240 works while a single one stays at Rs 20, and a box of 6 packs works just as
+// well. No rows means the product is sold only in its base unit, which is how every product already
+// in the shop is set up and is left untouched.
 function UomEditor({ value, baseUnit, onChange }) {
   const rows = Array.isArray(value) ? value : [];
   const setRow = (index, field, next) => onChange(rows.map((row, i) => (i === index ? { ...row, [field]: next } : row)));
   const choices = UNITS.filter(unit => unit.value !== baseUnit);
+  const nameOf = unit => {
+    const found = UNITS.find(u => u.value === unit);
+    return found ? (LANG === 'ur' ? found.urdu : found.en) : unit;
+  };
+  // The same number needs a different sentence depending on which unit is bigger, so the label spells
+  // out the two units instead of a fixed "How many in 1". A box base with a pack row reads
+  // "1 box = ? pack"; a piece base with a pack row reads "1 pack = ? pcs".
+  const qtyLabel = row => {
+    const unit = row.unit || (choices[0] || {}).value;
+    if (!unit || String(unit).toLowerCase() === String(baseUnit || '').toLowerCase()) return t('uomQty');
+    const bigger = unitIsBigger(unit, baseUnit) ? unit : baseUnit;
+    const smaller = bigger === unit ? baseUnit : unit;
+    return `1 ${nameOf(bigger)} = ? ${nameOf(smaller)}`;
+  };
   return h('div', { className: 'uom-editor' },
     rows.map((row, index) =>
       h('div', { className: 'edit-form-row', key: index },
@@ -3916,7 +3960,7 @@ function UomEditor({ value, baseUnit, onChange }) {
           h('select', { value: row.unit || (choices[0] || {}).value, onChange: e => setRow(index, 'unit', e.target.value) },
             choices.map(unit => h('option', { key: unit.value, value: unit.value }, LANG === 'ur' ? unit.urdu : unit.en)))),
         h('div', null,
-          h('label', null, t('uomQty')),
+          h('label', null, qtyLabel(row)),
           h('input', { type: 'number', min: '0', step: 'any', value: row.qty ?? '', placeholder: t('uomQtyPh'), onChange: e => setRow(index, 'qty', e.target.value) })),
         h('div', null,
           h('label', null, t('uomPrice')),
