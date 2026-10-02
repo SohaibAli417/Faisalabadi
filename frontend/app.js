@@ -1261,14 +1261,30 @@ async function shareBillImage(sale, settings, customer, labels) {
   const safeInvoice = String(sale.invoiceNo || 'bill').replace(/[^a-z0-9-]+/gi, '-');
   const file = new File([blob], `${safeInvoice}.png`, { type: 'image/png' });
   const caption = `${(settings && settings.storeName) || 'Faislabadi General Store'} - ${sale.invoiceNo || ''}`.trim();
-  // A bill for a customer whose number is on file goes straight into that customer's chat. The phone's
-  // share sheet cannot address anyone, so it made the cashier hunt for the number in the contact list
-  // on every single bill. WhatsApp opens the right chat already, with the bill written out and ready,
-  // so the only thing left to do is press send.
+  // Saves the picture to the phone under the invoice number.
+  const savePicture = () => {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = file.name;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  };
+  // A bill for a customer whose number is on file is handled here rather than through the phone's share
+  // sheet, because that sheet cannot address anyone and made the cashier hunt for the number in the
+  // contact list on every single bill. Two things happen together: the picture is saved to the phone
+  // first, so it is the newest item in the gallery, and WhatsApp then opens already addressed to that
+  // customer with the full bill - items, subtotal and grand total - written into the message box.
+  // WhatsApp only lets a picture be attached by picking it, and a just-saved one sits at the top of
+  // that list, so the picture reaches the customer without any searching at all.
   const phone = String((customer && customer.phone) || '').replace(/\D/g, '');
   if (phone) {
+    savePicture();
     const opened = window.open(`https://wa.me/${phone}?text=${encodeURIComponent(saleBillText(sale, settings))}`, '_blank');
     if (opened) return 'opened';
+    return 'downloaded';
   }
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
     try {
@@ -1278,14 +1294,7 @@ async function shareBillImage(sale, settings, customer, labels) {
       if (err && err.name === 'AbortError') return 'cancelled';
     }
   }
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = file.name;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 4000);
+  savePicture();
   return 'downloaded';
 }
 
@@ -1297,8 +1306,12 @@ async function shareBillAsImage(sale, settings, customer, report) {
     if (!report) return;
     if (outcome === 'opened') {
       report(LANG === 'ur'
-        ? 'اس گاہک کی WhatsApp چیٹ کھل گئی ہے اور بل لکھا ہوا ہے۔ بس Send دبا دیں۔'
-        : "This customer's WhatsApp chat is open with the bill written out. Just press Send.");
+        ? 'گاہک کی WhatsApp چیٹ کھل گئی اور بل لکھا ہوا ہے۔ Send دبائیں، اور تصویر چاہیے تو گیلری سے سب سے اوپر والی بل کی تصویر لگا دیں۔'
+        : "This customer's WhatsApp chat is open with the bill written out. Press Send, and attach the newest picture from the gallery if you want the image too.");
+    } else if (outcome === 'downloaded') {
+      report(LANG === 'ur'
+        ? 'بل کی تصویر محفوظ ہو گئی اور WhatsApp کھل گیا ہے۔'
+        : 'Bill picture saved and WhatsApp opened.');
     } else if (outcome === 'shared') {
       report(LANG === 'ur' ? 'بل کی تصویر بھیج دی گئی۔' : 'Bill picture sent.');
     } else {
