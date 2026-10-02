@@ -133,6 +133,16 @@ const productUom = (product, unit) => {
   const qty = row ? Number(row.qty) : 0;
   return row && qty > 0 ? row : null;
 };
+// Names the unit and what one of it holds, so a rate is never read as a price for the wrong thing:
+// "Rs 240 / pack (12)" says the 240 is for a whole pack of 12, not for one biscuit. Kept at module
+// scope because the POS, the search list and the products table all show it.
+const rateBasisLabel = (item, product) => {
+  const unit = (item && item.unit) || '';
+  const own = productUom(product, unit);
+  const size = own ? Number(own.qty) : 0;
+  if (size > 1) return `${unitLabel(unit)} (${size})`;
+  return unitLabel(unit);
+};
 // What one `unit` holds, in the product's own base unit. The product's own declaration wins over the
 // shared table, because only the product knows how many of its items make up a pack.
 const unitToBase = (unit, baseUnit, product) => {
@@ -2394,16 +2404,6 @@ function POS({ client, data, refresh, applySale, online, setOnline, go }) {
       setCustomerOpen(false);
     }
   }
-
-  // Names the unit and what one of it holds, so the rate on the row is never read as a price for the
-// wrong thing: "Rs 240 / pack (12)" says the 240 is for a whole pack of 12, not for one biscuit.
-function rateBasisLabel(item, product) {
-  const unit = item.unit || '';
-  const own = productUom(product, unit);
-  const size = own ? Number(own.qty) : 0;
-  if (size > 1) return `${unitLabel(unit)} (${size})`;
-  return unitLabel(unit);
-}
 
   function renderBillRow(item, index) {
     const product = item.productId ? activeProducts.find(p => p.id === item.productId) : null;
