@@ -1261,6 +1261,15 @@ async function shareBillImage(sale, settings, customer, labels) {
   const safeInvoice = String(sale.invoiceNo || 'bill').replace(/[^a-z0-9-]+/gi, '-');
   const file = new File([blob], `${safeInvoice}.png`, { type: 'image/png' });
   const caption = `${(settings && settings.storeName) || 'Faislabadi General Store'} - ${sale.invoiceNo || ''}`.trim();
+  // A bill for a customer whose number is on file goes straight into that customer's chat. The phone's
+  // share sheet cannot address anyone, so it made the cashier hunt for the number in the contact list
+  // on every single bill. WhatsApp opens the right chat already, with the bill written out and ready,
+  // so the only thing left to do is press send.
+  const phone = String((customer && customer.phone) || '').replace(/\D/g, '');
+  if (phone) {
+    const opened = window.open(`https://wa.me/${phone}?text=${encodeURIComponent(saleBillText(sale, settings))}`, '_blank');
+    if (opened) return 'opened';
+  }
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
     try {
       await navigator.share({ files: [file], text: caption });
@@ -1286,7 +1295,11 @@ async function shareBillAsImage(sale, settings, customer, report) {
   try {
     const outcome = await shareBillImage(sale, settings, customer, STRINGS[LANG] || STRINGS.en);
     if (!report) return;
-    if (outcome === 'shared') {
+    if (outcome === 'opened') {
+      report(LANG === 'ur'
+        ? 'اس گاہک کی WhatsApp چیٹ کھل گئی ہے اور بل لکھا ہوا ہے۔ بس Send دبا دیں۔'
+        : "This customer's WhatsApp chat is open with the bill written out. Just press Send.");
+    } else if (outcome === 'shared') {
       report(LANG === 'ur' ? 'بل کی تصویر بھیج دی گئی۔' : 'Bill picture sent.');
     } else {
       report(LANG === 'ur'
@@ -1363,6 +1376,8 @@ const ledgerEntryToBill = (entry, customer) => {
     createdAt: entry.at || new Date().toISOString(),
     createdBy: entry.createdBy || '',
     customerId: (customer && customer.id) || '',
+    customerName: (customer && customer.name) || '',
+    customerNameAtBilling: (customer && customer.name) || '',
     paymentType: settled ? 'Cash' : 'Credit',
     paidAmount: settled ? amount : 0,
     receivedAmount: settled ? amount : 0,
@@ -2416,7 +2431,7 @@ function POS({ client, data, refresh, applySale, online, setOnline, go }) {
 
     function profileSaleRow(sale) {
       const waBtn = selectedCustomer && selectedCustomer.phone
-        ? h('button', { className: 'wa-btn', onClick: () => shareBillAsImage(withPrevBalance(sale), data.settings, selectedCustomer, setMessage) }, t('whatsappBill'))
+        ? h('button', { className: 'wa-btn', onClick: () => shareBillAsImage(withPrevBalance(ledgerEntryToBill(sale, selectedCustomer)), data.settings, selectedCustomer, setMessage) }, t('whatsappBill'))
         : h('span', { className: 'wa-na' }, t('noWhatsapp'));
       return h('div', { className: 'cust-sale', key: sale.id },
         h('div', { className: 'cust-sale-meta' },
@@ -2572,7 +2587,7 @@ function POS({ client, data, refresh, applySale, online, setOnline, go }) {
   // When the cart is empty, fall back to the customer's most recent udhar bill so the WhatsApp
   // button stays useful right after selecting a customer from search.
   const lastProfileSale = ((profile && profile.entries) || []).filter(entry => entry.type === 'sale').slice(-1)[0];
-  const billForShare = currentBillForShare || (canShareBill && lastProfileSale ? withPrevBalance(lastProfileSale) : null);
+  const billForShare = currentBillForShare || (canShareBill && lastProfileSale ? withPrevBalance(ledgerEntryToBill(lastProfileSale, selectedCustomer)) : null);
 
 
   const checkoutSection = h('section', { className: 'checkout-section pos-panel' },
