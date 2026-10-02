@@ -873,6 +873,19 @@ td {
   color: var(--ink);
 }
 .bill-rate-input:focus { outline: 2px solid var(--green); outline-offset: 1px; }
+.bill-rate-unit {
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted, #6b7280);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.uom-editor { display: flex; flex-direction: column; gap: 8px; }
+.uom-editor .edit-form-row { align-items: flex-end; }
+.uom-note { flex-basis: 100%; color: var(--muted, #6b7280); font-size: 11px; line-height: 1.4; }
 .bill-total { text-align: right; font-weight: 800; }
 .bill-remove {
   border: 0;

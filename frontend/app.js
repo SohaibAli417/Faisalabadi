@@ -105,31 +105,57 @@ const unitDimension = unit => {
   return Object.prototype.hasOwnProperty.call(UNIT_DIMENSIONS, key) ? UNIT_DIMENSIONS[key] : null;
 };
 // Units the cashier may pick for something kept in `baseUnit`. A line with no product unit (manual
-// entry) can use any unit.
-const unitsForBase = baseUnit => {
+// entry) can use any unit. A product that declares its own units offers exactly those alongside its
+// base unit, so the dropdown never offers a pack whose contents the product has not stated.
+const unitsForBase = (baseUnit, product) => {
+  const own = ((product && Array.isArray(product.uom)) ? product.uom : [])
+    .filter(row => row && String(row.unit || '').trim() && Number(row.qty) > 0)
+    .map(row => String(row.unit).trim())
+    .filter(unit => unit !== baseUnit);
+  if (own.length) {
+    return UNITS.filter(unit => unit.value === baseUnit || own.includes(unit.value))
+      .concat(own.filter(unit => !UNITS.some(known => known.value === unit)).map(unit => ({ value: unit, urdu: unit, en: unit })));
+  }
   const dimension = unitDimension(baseUnit);
   if (!dimension) return UNITS;
   const allowed = UNITS.filter(unit => unitDimension(unit.value) === dimension);
   // A product in an odd unit must still be able to keep its own unit in the list.
   return allowed.some(unit => unit.value === baseUnit) ? allowed : UNITS;
 };
-const unitToBase = (unit, baseUnit) => {
+// A product can declare its own units of measure: `{ unit: 'pack', qty: 12, price: 240 }` means one
+// pack holds 12 of the product's base unit and is sold at Rs 240. This is what makes a pack of 12
+// biscuits mean 12 biscuits of stock and Rs 240 on the bill instead of 1 and Rs 20. A product with no
+// list of its own falls back to the shared table above, so nothing already in the shop changes.
+const productUom = (product, unit) => {
+  const list = (product && Array.isArray(product.uom)) ? product.uom : [];
+  const key = String(unit == null ? '' : unit).trim().toLowerCase();
+  const row = list.find(item => item && String(item.unit == null ? '' : item.unit).trim().toLowerCase() === key);
+  const qty = row ? Number(row.qty) : 0;
+  return row && qty > 0 ? row : null;
+};
+// What one `unit` holds, in the product's own base unit. The product's own declaration wins over the
+// shared table, because only the product knows how many of its items make up a pack.
+const unitToBase = (unit, baseUnit, product) => {
+  const own = productUom(product, unit);
+  if (own) return Number(own.qty);
   const from = UNIT_FACTORS[String(unit == null ? '' : unit).trim().toLowerCase()];
   const to = UNIT_FACTORS[String(baseUnit == null ? '' : baseUnit).trim().toLowerCase()];
   if (!from || !to) return 1;
   return from / to;
 };
-  // Rate per `unit`. One unit is `unitToBase(unit, baseUnit)` base units and the rate scales the
-  // same way the quantity does, so Rs 100/kg becomes Rs 0.1/gram. Kept at six decimals so a cheap
-  // per-gram rate such as Rs 0.006 is not rounded away.
-  const rateForUnit = (baseRate, unit, baseUnit) => {
-    return Math.round((Number(baseRate) || 0) * unitToBase(unit, baseUnit) * 1e6) / 1e6;
-  };
-  // The same conversion in reverse: a rate typed in `unit` lifted back to the product's base unit.
-  const rateToBase = (rate, unit, baseUnit) => {
-    const factor = unitToBase(unit, baseUnit);
-    return Math.round((Number(rate) || 0) / (factor || 1) * 1e6) / 1e6;
-  };
+// Rate per `unit`. One unit is `unitToBase(unit, baseUnit)` base units and the rate scales the
+// same way the quantity does, so Rs 100/kg becomes Rs 0.1/gram. Kept at six decimals so a cheap
+// per-gram rate such as Rs 0.006 is not rounded away.
+const rateForUnit = (baseRate, unit, baseUnit, product) => {
+  const own = productUom(product, unit);
+  if (own && Number(own.price) > 0) return Math.round(Number(own.price) * 1e6) / 1e6;
+  return Math.round((Number(baseRate) || 0) * unitToBase(unit, baseUnit, product) * 1e6) / 1e6;
+};
+// The same conversion in reverse: a rate typed in `unit` lifted back to the product's base unit.
+const rateToBase = (rate, unit, baseUnit, product) => {
+  const factor = unitToBase(unit, baseUnit, product);
+  return Math.round((Number(rate) || 0) / (factor || 1) * 1e6) / 1e6;
+};
 const pad2 = n => String(n).padStart(2, '0');
 const initialsOf = name => String(name || '?').trim().split(/\s+/).map(word => word[0] || '').join('').slice(0, 2).toUpperCase();
 const customerProductsList = customer => {
@@ -284,6 +310,9 @@ const STRINGS = {
     whConvertNote: 'Add bores from the warehouse - it comes off the warehouse and goes into product + inventory.',
     whNoLink: 'Link a product first', kgPerBoreePh: 'Kg in 1 boree', pcsPerCartonPh: 'Pcs in 1 carton',
     kgPerBoreeLabel: 'Kg per boree', pcsPerCartonLabel: 'Pcs per carton', packSpec: 'Pack size',
+    uomTitle: 'Sell in other units', uomUnit: 'Unit', uomQty: 'How many in 1', uomQtyPh: 'e.g. 12',
+    uomPrice: 'Price for this unit', uomPricePh: 'empty = auto', uomAdd: '+ Add unit',
+    uomNote: 'Leave the price empty to use base price x quantity. One pack of 12 at Rs 240 needs 12 under "How many in 1".',
     stockAddedMsg: 'Stock added to product and inventory.', noUdharYet: 'No udhar yet.',
     showUdharFirst: 'Udhar customers', selectCustomerToBill: 'Select a customer to make a bill',
     allBills: 'All bills', recentBillsOnly: 'Recent', searchBills: 'Search invoice or customer...'
@@ -413,6 +442,9 @@ const STRINGS = {
     whConvertNote: 'گودام سے بوریاں شامل کریں - گودام سے کم ہوں گی اور پروڈکٹ اور اسٹاک میں شامل ہوں گی۔',
     whNoLink: 'پہلے پروڈکٹ لنک کریں', kgPerBoreePh: 'ایک بوری میں کلو', pcsPerCartonPh: 'ایک کارٹن میں عدد',
     kgPerBoreeLabel: 'فی بوری کلو', pcsPerCartonLabel: 'فی کارٹن عدد', packSpec: 'پیک سائز',
+    uomTitle: 'دوسری یونٹ میں بیچیں', uomUnit: 'یونٹ', uomQty: 'ایک میں کتنے', uomQtyPh: 'مثلاً 12',
+    uomPrice: 'اس یونٹ کی قیمت', uomPricePh: 'خالی = خودکار', uomAdd: '+ یونٹ شامل کریں',
+    uomNote: 'قیمت خالی چھوڑیں تو بنیادی قیمت × تعداد لگ جائے گی۔ 12 کی پیک Rs 240 کی ہے تو "ایک میں کتنے" میں 12 لکھیں۔',
     stockAddedMsg: 'اسٹاک پروڈکٹ اور انوینٹری میں شامل ہو گیا۔', noUdharYet: 'ابھی کوئی اُدھار نہیں۔',
     showUdharFirst: 'اُدھار والے گاہک', selectCustomerToBill: 'بل بنانے کے لیے گاہک منتخب کریں',
     allBills: 'تمام بل', recentBillsOnly: 'حالیہ', searchBills: 'انوائس یا گاہک تلاش کریں...'
@@ -1799,21 +1831,24 @@ function POS({ client, data, refresh, applySale, online, setOnline, go }) {
       const from = item.unit;
       if (from === value) return item;
       const baseUnit = item.productUnit || from;
+      // The product decides what a pack holds, so its own conversion is the one used here.
+      const product = item.productId ? activeProducts.find(row => row.id === item.productId) : null;
       // Nothing sensible to convert between different kinds of unit (gram of a litre product), so
       // leave the numbers alone instead of guessing. The dropdown only offers these anyway.
-      if (unitDimension(from) && unitDimension(baseUnit) && unitDimension(value)
+      if (!productUom(product, value)
+        && unitDimension(from) && unitDimension(baseUnit) && unitDimension(value)
         && !(unitDimension(value) === unitDimension(baseUnit))) return item;
       const qty = Number(item.qty) || 0;
-      const factor = unitToBase(from, baseUnit);
-      const nextFactor = unitToBase(value, baseUnit);
+      const factor = unitToBase(from, baseUnit, product);
+      const nextFactor = unitToBase(value, baseUnit, product);
       const newQty = round3(qty * (factor / (nextFactor || 1)));
       // A typed rate belongs to the unit it was typed in, so lift it to the product's base unit
       // first. Without this, a custom Rs 120/kg typed in kilo would be read as Rs 120 per gram
       // base and jump by a factor of 1000.
       const baseRate = item.customRate
-        ? rateToBase((Number(item.price) || 0), from, baseUnit)
+        ? rateToBase((Number(item.price) || 0), from, baseUnit, product)
         : (Number(item.basePrice) || Number(item.price) || 0);
-      const price = rateForUnit(baseRate, value, baseUnit);
+      const price = rateForUnit(baseRate, value, baseUnit, product);
       const amount = item.mode === 'amt' ? round3(price * newQty) : undefined;
       return { ...item, unit: value, qty: newQty, price, amount: amount === undefined ? item.amount : amount };
     }));
@@ -1999,7 +2034,7 @@ function POS({ client, data, refresh, applySale, online, setOnline, go }) {
       if (!product) continue;
       // Compare in the product's base unit, because that is how stock is stored. Billing 2000 gram
       // against a 0.5 kg product must not be read as 2000 kg.
-      const baseQty = round3(Number(item.qty) * unitToBase(item.unit, product.unit));
+      const baseQty = round3(Number(item.qty) * unitToBase(item.unit, product.unit, product));
       // Only enforce the limit when a real stock figure was entered. Most products here have never
       // been given one and read as 0, and treating that as "none left" made Complete & Print refuse
       // the whole bill, so the counter simply could not sell.
@@ -2360,6 +2395,16 @@ function POS({ client, data, refresh, applySale, online, setOnline, go }) {
     }
   }
 
+  // Names the unit and what one of it holds, so the rate on the row is never read as a price for the
+// wrong thing: "Rs 240 / pack (12)" says the 240 is for a whole pack of 12, not for one biscuit.
+function rateBasisLabel(item, product) {
+  const unit = item.unit || '';
+  const own = productUom(product, unit);
+  const size = own ? Number(own.qty) : 0;
+  if (size > 1) return `${unitLabel(unit)} (${size})`;
+  return unitLabel(unit);
+}
+
   function renderBillRow(item, index) {
     const product = item.productId ? activeProducts.find(p => p.id === item.productId) : null;
     const priceNum = Number(item.price) || 0;
@@ -2389,10 +2434,14 @@ function POS({ client, data, refresh, applySale, online, setOnline, go }) {
           !UNITS.some(unit => unit.value === item.unit) && item.unit
             ? h('option', { key: 'custom', value: item.unit }, item.unit)
             : null,
-          // Only units of the same kind as the product's own unit, so the rate and stock stay honest.
-          unitsForBase(item.productUnit).map(unit => h('option', { key: unit.value, value: unit.value }, LANG === 'ur' ? unit.urdu : unit.en)))),
+          // Only units this product actually declares, plus its own base unit, so the rate and stock
+          // stay honest.
+          unitsForBase(item.productUnit, product).map(unit => h('option', { key: unit.value, value: unit.value }, LANG === 'ur' ? unit.urdu : unit.en)))),
       h('div', { className: 'bill-rate' },
-        h('input', { className: 'bill-rate-input', type: 'number', min: '0', step: 'any', value: priceNum, title: t('rateLabel'), onChange: e => setLinePrice(index, e.target.value) })),
+        h('input', { className: 'bill-rate-input', type: 'number', min: '0', step: 'any', value: priceNum, title: t('rateLabel'), onChange: e => setLinePrice(index, e.target.value) }),
+        // Visible beside the rate, so it is never a guess whether the typed number is per item or
+        // per pack.
+        h('small', { className: 'bill-rate-unit' }, `/${rateBasisLabel(item, product)}`)),
       h('span', { className: 'bill-total' }, money(amt)),
       h('button', { className: 'bill-remove', title: t('removeLabel'), 'aria-label': t('removeLabel'), onClick: () => removeLine(index) }, '×'));
   }
@@ -2556,9 +2605,9 @@ function POS({ client, data, refresh, applySale, online, setOnline, go }) {
         h('div', { className: 'search-item-top' },
           h('span', { className: 'search-item-name' }, product.name),
           h('span', { className: 'search-item-meta' }, `${product.sku ? product.sku + ' · ' : ''}${product.stock} ${unitLabel(product.unit)}`),
-          isWeightUnit(product.unit)
-            ? h('span', { className: 'search-item-price' }, `${money(product.price)}/${unitLabel(product.unit)}`)
-            : h('span', { className: 'search-item-price' }, money(product.price))),
+          // The rate is always shown with the unit it is for, and with the size of that unit when the product
+          // packs more than one base unit into it.
+          h('span', { className: 'search-item-price' }, `${money(product.price)}/${rateBasisLabel({ unit: product.unit }, product)}`)),
         h('div', { className: 'search-item-actions' },
           h('span', { className: 'qty-preset-label' }, t('qtyAdd')),
           [isWeightUnit(product.unit) ? 0.5 : 1, isWeightUnit(product.unit) ? 1 : 2, isWeightUnit(product.unit) ? 2 : 5].map(qty =>
@@ -2874,7 +2923,7 @@ function DataPage({ page, data, client, refresh }) {
       h('td', null, `${row.stock} ${unitLabel(row.unit)}`, isLow && row.active !== false ? h('span', null, ' ', h(Badge, { tone: 'danger' }, t('lowBadge'))) : null),
       h('td', null, money(row.cost)),
       h('td', null, h(Badge, { tone: row.price - row.cost > 0 ? 'success' : 'danger' }, money(row.price - row.cost))),
-      h('td', null, isWeightUnit(row.unit) ? `${money(row.price)}/${unitLabel(row.unit)}` : money(row.price)),
+      h('td', null, `${money(row.price)}/${rateBasisLabel({ unit: row.unit }, row)}`),
       h('td', null, row.active === false || row.status === 'inactive' ? h(Badge, { tone: 'neutral' }, t('inactiveBadge')) : h(Badge, { tone: 'success' }, t('activeBadge'))),
       h('td', null,
         canDeleteProducts && h('button', { className: 'secondary small', onClick: () => setEditProduct(row) }, t('editLabel')),
@@ -2947,6 +2996,9 @@ function DataPage({ page, data, client, refresh }) {
         h('select', { key: 'unit', value: form.unit || 'pcs', onChange: e => setProductField('unit', e.target.value), title: t('looseItem') }, UNITS.map(unit => h('option', { key: unit.value, value: unit.value }, unit.urdu))),
         h('input', { key: 'stock', type: 'number', step: 'any', placeholder: t('hStock'), value: form.stock || '', onChange: e => setProductField('stock', e.target.value) }),
         h('input', { key: 'reorderLevel', type: 'number', min: '0', placeholder: t('phLowAlertAt'), value: form.reorderLevel || '', onChange: e => setProductField('reorderLevel', e.target.value) }),
+        h('div', { key: 'uom', style: { flexBasis: '100%' } },
+          h('div', { className: 'section-label' }, t('uomTitle')),
+          h(UomEditor, { value: form.uom, baseUnit: form.unit || 'pcs', onChange: uom => setProductField('uom', uom) })),
         h('button', { key: 'save', className: 'primary' }, t('addProduct'))
       ]),
     ['products', 'inventory', 'customers'].includes(page) && h('div', { className: 'table-toolbar' },
@@ -3849,6 +3901,32 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
     document.body);
 }
 
+// Lets a product say what one of its units holds and what that unit sells for, so a pack of 12
+// biscuits at Rs 240 works while a single one stays at Rs 20. No rows means the product is sold only
+// in its base unit, which is how every product already in the shop is set up and is left untouched.
+function UomEditor({ value, baseUnit, onChange }) {
+  const rows = Array.isArray(value) ? value : [];
+  const setRow = (index, field, next) => onChange(rows.map((row, i) => (i === index ? { ...row, [field]: next } : row)));
+  const choices = UNITS.filter(unit => unit.value !== baseUnit);
+  return h('div', { className: 'uom-editor' },
+    rows.map((row, index) =>
+      h('div', { className: 'edit-form-row', key: index },
+        h('div', null,
+          h('label', null, t('uomUnit')),
+          h('select', { value: row.unit || (choices[0] || {}).value, onChange: e => setRow(index, 'unit', e.target.value) },
+            choices.map(unit => h('option', { key: unit.value, value: unit.value }, LANG === 'ur' ? unit.urdu : unit.en)))),
+        h('div', null,
+          h('label', null, t('uomQty')),
+          h('input', { type: 'number', min: '0', step: 'any', value: row.qty ?? '', placeholder: t('uomQtyPh'), onChange: e => setRow(index, 'qty', e.target.value) })),
+        h('div', null,
+          h('label', null, t('uomPrice')),
+          h('input', { type: 'number', min: '0', step: 'any', value: row.price ?? '', placeholder: t('uomPricePh'), onChange: e => setRow(index, 'price', e.target.value) })),
+        h('button', { type: 'button', className: 'secondary small', onClick: () => onChange(rows.filter((_, i) => i !== index)) }, t('removeLabel')))),
+    h('div', { className: 'edit-form-row' },
+      h('button', { type: 'button', className: 'secondary small', onClick: () => onChange([...rows, { unit: 'pack', qty: '', price: '' }]) }, t('uomAdd')),
+      h('small', { className: 'uom-note' }, t('uomNote'))));
+}
+
 function ProductEditModal({ product, client, refresh, onClose }) {
   const init = {
     name: product.name || '',
@@ -3863,6 +3941,7 @@ function ProductEditModal({ product, client, refresh, onClose }) {
     unit: product.unit || 'pcs',
     kgPerBoree: product.kgPerBoree ?? '',
     pcsPerCarton: product.pcsPerCarton ?? '',
+    uom: Array.isArray(product.uom) ? product.uom : [],
     active: product.active !== false && product.status !== 'inactive'
   };
   const [form, setForm] = useState(init);
@@ -3887,6 +3966,7 @@ function ProductEditModal({ product, client, refresh, onClose }) {
         unit: form.unit,
         kgPerBoree: Number(form.kgPerBoree) || 0,
         pcsPerCarton: Number(form.pcsPerCarton) || 0,
+        uom: form.uom,
         active: form.active,
         status: form.active ? 'active' : 'inactive'
       });
@@ -3925,6 +4005,8 @@ function ProductEditModal({ product, client, refresh, onClose }) {
         h('div', { className: 'edit-form-row' },
           h('div', null, h('label', null, t('kgPerBoreeLabel')), h('input', { type: 'number', min: '0', step: 'any', value: form.kgPerBoree, onChange: e => setForm({ ...form, kgPerBoree: e.target.value }), placeholder: t('kgPerBoreePh') })),
           h('div', null, h('label', null, t('pcsPerCartonLabel')), h('input', { type: 'number', min: '0', step: 'any', value: form.pcsPerCarton, onChange: e => setForm({ ...form, pcsPerCarton: e.target.value }), placeholder: t('pcsPerCartonPh') }))),
+        h('div', { className: 'section-label' }, t('uomTitle')),
+        h(UomEditor, { value: form.uom, baseUnit: form.unit, onChange: uom => setForm({ ...form, uom }) }),
         h('div', { className: 'edit-form-row' },
           h('label', { style: { display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700 } },
             h('input', { type: 'checkbox', checked: form.active, onChange: e => setForm({ ...form, active: e.target.checked }) }),

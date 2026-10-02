@@ -208,6 +208,8 @@ function ensureSchema(db) {
     if (!('status' in product)) { product.status = product.active === false ? 'inactive' : 'active'; changed = true; }
     if (!('kgPerBoree' in product)) { product.kgPerBoree = 0; changed = true; }
     if (!('pcsPerCarton' in product)) { product.pcsPerCarton = 0; changed = true; }
+    // Products already in the shop get an empty list, which is the same as having none at all.
+    if (!('uom' in product) || !Array.isArray(product.uom)) { product.uom = []; changed = true; }
   }
   for (const sale of db.sales) {
     if (!('paidAmount' in sale)) { sale.paidAmount = (sale.paymentType === 'Credit' || sale.paymentType === 'Partial') ? 0 : money(sale.total); changed = true; }
@@ -578,9 +580,58 @@ const unitDimension = unit => {
   const key = String(unit == null ? '' : unit).trim().toLowerCase();
   return Object.prototype.hasOwnProperty.call(UNIT_DIMENSIONS, key) ? UNIT_DIMENSIONS[key] : null;
 };
+// --- Per-product units of measure -------------------------------------------------------------
+// A product may be sold in more than one unit, and each unit can hold a different number of base
+// units and carry its own price. A biscuit sold as a pack of 12 at Rs 240, where the base unit is
+// one biscuit at Rs 20, is stored as:
+//
+//   uom: [{ unit: 'pack', qty: 12, price: 240 }]
+//
+// `qty` is always counted in the product's OWN base unit (product.unit) and `price` is the rate for
+// one of that unit, left out when the pack is simply base price x qty. A product with no `uom` keeps
+// the shared table above, so every product already in the shop bills exactly as it always has.
+const productUom = (product, unit) => {
+  const list = product && Array.isArray(product.uom) ? product.uom : [];
+  const key = String(unit == null ? '' : unit).trim().toLowerCase();
+  const row = list.find(item => item && String(item.unit == null ? '' : item.unit).trim().toLowerCase() === key);
+  const qty = row ? Number(row.qty) : 0;
+  return row && qty > 0 ? row : null;
+};
+// Keeps only well-formed rows: a named unit, a positive count, and an optional non-negative price.
+// Anything else is dropped rather than stored, so a typo cannot turn a pack into 0 items.
+const normalizeProductUom = input => {
+  if (!Array.isArray(input)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const row of input.slice(0, 20)) {
+    if (!row || typeof row !== 'object') continue;
+    const unit = String(row.unit == null ? '' : row.unit).trim().toLowerCase();
+    const qty = round3(Number(row.qty));
+    if (!unit || !(qty > 0)) continue;
+    if (unit === String(row.baseUnit == null ? '' : row.baseUnit).trim().toLowerCase() && row.baseUnit != null) continue;
+    if (seen.has(unit)) continue;
+    seen.add(unit);
+    const price = safeRate(row.price, 0);
+    out.push(price > 0 ? { unit, qty, price } : { unit, qty });
+  }
+  return out;
+};
+// The rate for one `unit` of a product: its own configured price when it has one, otherwise the base
+// rate scaled by how many base units that unit holds. Rs 20 per biscuit with 12 to a pack is Rs 240
+// a pack, whether or not anyone typed the 240.
+const defaultRateFor = (product, unit) => {
+  const own = productUom(product, unit);
+  if (own && Number(own.price) > 0) return safeRate(own.price, Number(product.price || 0));
+  const base = product && String(unit || '').trim() !== String(product.unit || '').trim()
+    ? safeRate(Number(product.price || 0) * unitToBase(unit, product.unit, product), Number(product.price || 0))
+    : safeRate(product && product.price, 0);
+  return base;
+};
 // True when the two units can be converted, or when either side is a custom unit the app has never
 // heard of (those stay 1:1, exactly as before this change).
-const unitsCompatible = (unit, baseUnit) => {
+const unitsCompatible = (unit, baseUnit, product) => {
+  // A unit the product itself declares always converts, whatever the shared table thinks of it.
+  if (productUom(product, unit)) return true;
   const from = unitDimension(unit);
   const to = unitDimension(baseUnit);
   if (!from || !to) return true;
@@ -588,25 +639,27 @@ const unitsCompatible = (unit, baseUnit) => {
 };
 // How many base units one `unit` represents. Unknown units are treated as 1:1 rather than 0, so a
 // custom unit never turns a sale into zero.
-const unitToBase = (unit, baseUnit) => {
+const unitToBase = (unit, baseUnit, product) => {
+  const own = productUom(product, unit);
+  if (own) return Number(own.qty);
   const from = unitFactor(unit);
   const to = unitFactor(baseUnit);
   if (!from || !to) return 1;
   return from / to;
 };
 // Quantity expressed in the product's base unit. `round3` keeps 500 gram as 0.5 kg, not 0.
-const qtyToBase = (qty, unit, baseUnit) => round3(Number(qty || 0) * unitToBase(unit, baseUnit));
+const qtyToBase = (qty, unit, baseUnit, product) => round3(Number(qty || 0) * unitToBase(unit, baseUnit, product));
 // The stock movement size for a stored sale line. New rows carry baseQty; rows saved before unit
 // conversion are recomputed from the billed unit, so old bills still restock the right amount.
 const stockQtyFor = (item, product) => {
   if (item && item.baseQty !== undefined && item.baseQty !== null) return round3(Number(item.baseQty));
-  return qtyToBase(item && item.qty, item && item.unit, product && product.unit);
+  return qtyToBase(item && item.qty, item && item.unit, product && product.unit, product);
 };
 // Rate expressed per `unit`. One unit is `unitToBase(unit, baseUnit)` base units, so the rate scales
 // the same way the quantity does: Rs 100/kg is Rs 0.1/gram. Rates keep decimals here instead of
 // going through money(), which rounds to whole rupees.
-const priceToUnit = (price, unit, baseUnit) => {
-  return safeRate(Number(price || 0) * unitToBase(unit, baseUnit));
+const priceToUnit = (price, unit, baseUnit, product) => {
+  return safeRate(Number(price || 0) * unitToBase(unit, baseUnit, product));
 };
 
 function maskCnic(cnic) {
@@ -634,10 +687,12 @@ function createSale(db, payload, actor, source = 'online') {
       // product). Stock lives in the product's base unit, so the check and the decrement both use
       // the converted quantity - otherwise 500 gram would look like 500 kg of stock.
       const unit = String(item.unit || product.unit || 'pcs').trim() || product.unit || 'pcs';
-      if (!unitsCompatible(unit, product.unit)) {
+      if (!unitsCompatible(unit, product.unit, product)) {
         throw new Error(`${product.name} is stocked in ${product.unit}, so it cannot be billed in ${unit}`);
       }
-      const baseQty = qtyToBase(qty, unit, product.unit);
+      // A product that declares its own units - 12 biscuits to a pack, say - converts through that
+      // declaration, so two packs take 24 off the stock in the product's own base unit instead of 2.
+      const baseQty = qtyToBase(qty, unit, product.unit, product);
       if (baseQty <= 0) throw new Error('Quantity must be positive');
       // A product that was never given a stock figure reads as 0, and most of this shop's products
       // are in that state. Refusing those outright stopped the counter from selling anything at all,
@@ -646,7 +701,14 @@ function createSale(db, payload, actor, source = 'online') {
       if (onHand > 0 && onHand < baseQty) {
         throw new Error(`${product.name} has insufficient stock (available: ${round3(product.stock)} ${product.unit})`);
       }
-      return { productId: product.id, name: product.name, sku: product.sku, unit, qty, baseQty, price: safeRate(item.price, product.price), cost: money(product.cost), manual: false };
+      // A rate sent with the line is the cashier's own choice and is kept as typed. Only a line that
+      // arrives with no rate at all, or with something that is not a number, falls back to the
+      // product - and there it uses the rate configured for that unit, so a pack is never billed at
+      // the price of a single item.
+      const sentRate = item.price === undefined || item.price === null || String(item.price).trim() === ''
+        ? null
+        : safeRate(item.price, NaN);
+      return { productId: product.id, name: product.name, sku: product.sku, unit, qty, baseQty, price: Number.isFinite(sentRate) ? sentRate : defaultRateFor(product, unit), cost: money(product.cost), manual: false };
     }
     const qty = Number(item.qty || 1);
     const price = safeRate(item.price);
@@ -1496,6 +1558,7 @@ async function handleApi(request, response) {
       if (product.reorderLevel === undefined) product.reorderLevel = 5;
       product.kgPerBoree = Math.max(0, Number(product.kgPerBoree || 0));
       product.pcsPerCarton = Math.max(0, Number(product.pcsPerCarton || 0));
+      product.uom = normalizeProductUom(product.uom);
       product.active = !(product.status === 'inactive' || product.active === false);
       product.status = product.active ? 'active' : 'inactive';
       product._updatedAt = now();
@@ -1517,6 +1580,7 @@ async function handleApi(request, response) {
       product.stock = Number(product.stock || 0);
       product.kgPerBoree = Math.max(0, Number(product.kgPerBoree || 0));
       product.pcsPerCarton = Math.max(0, Number(product.pcsPerCarton || 0));
+      product.uom = normalizeProductUom(product.uom);
       product.active = !(product.status === 'inactive' || product.active === false);
       product.status = product.active ? 'active' : 'inactive';
       product._updatedAt = now();
