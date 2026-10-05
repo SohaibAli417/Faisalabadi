@@ -1193,6 +1193,22 @@ td {
 .draft-actions { display: flex; gap: 6px; flex: none; }
 
 /* Receipt additions (v28) */
+/* Shown on the instant receipt that appears the moment Complete is tapped. It sits above the paper, not
+   on it, so nothing about the bill itself is printed while the invoice number is still on its way. */
+.saving-banner {
+  background: #e8f0fe;
+  color: #1a4fa0;
+  border-color: #b9cdf3;
+  font-weight: 600;
+  animation: savingPulse 900ms ease-in-out infinite alternate;
+}
+@keyframes savingPulse {
+  from { opacity: 1; }
+  to { opacity: 0.55; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .saving-banner { animation: none; }
+}
 .receipt-banner {
   background: #fff4e0;
   color: #9b6117;

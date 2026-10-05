@@ -2035,16 +2035,10 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
     return payload;
   }
 
-  function previewSale() {
-    if (!cart.length || cart.some(item => !(Number(item.qty) > 0))) {
-      flash(t('completeSaleBlockedCart'));
-      return;
-    }
-    if (dueAmount > 0 && (!selectedCustomer || customerId === 'cus_walkin')) {
-      flash(t('partialNeedsCustomer'));
-      return;
-    }
-    setReceipt({
+  // The bill exactly as it stands in the browser right now. Both the on-screen preview and the instant
+  // receipt that Complete puts up are built here, so the two can never drift apart.
+  function localBill(overrides) {
+    return {
       preview: true,
       invoiceNo: null,
       createdAt: new Date().toISOString(),
@@ -2063,8 +2057,21 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
       dueAmount: isCredit ? dueAmount : 0,
       reference: reference.trim(),
       delivery: sanitizedDelivery(),
-      returnStatus: 'none'
-    });
+      returnStatus: 'none',
+      ...overrides
+    };
+  }
+
+  function previewSale() {
+    if (!cart.length || cart.some(item => !(Number(item.qty) > 0))) {
+      flash(t('completeSaleBlockedCart'));
+      return;
+    }
+    if (dueAmount > 0 && (!selectedCustomer || customerId === 'cus_walkin')) {
+      flash(t('partialNeedsCustomer'));
+      return;
+    }
+    setReceipt(localBill());
   }
 
   async function charge(printAfter) {
@@ -2104,6 +2111,12 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
     const payload = buildPayload();
     chargingRef.current = true;
     setCharging(true);
+    // The bill goes on screen the instant the button is tapped, not after the save comes back. The hosted
+    // server takes well over a second to answer a sale and until it did there was nothing on screen at
+    // all, so the counter just watched a dead button and could not tell a slow save from a stuck one.
+    // Every figure on the receipt is already known locally; only the invoice number is not, so it is
+    // marked as still being issued and swapped for the real one the moment the server answers.
+    setReceipt(localBill({ saving: true }));
     try {
       const response = await client.post('/api/sales', payload);
       // The response carries the saved invoice plus the customer's recalculated row. The receipt and
@@ -2177,6 +2190,10 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
           ? 'آف لائن محفوظ ہو گیا۔ رسید نیچے پرنٹ کریں - انٹرنیٹ آنے پر سیل خود بخود سنک ہو جائے گی۔'
           : 'Saved OFFLINE. Receipt printed below - sale will sync automatically when internet returns.');
       } else {
+        // The save was refused, so the instant receipt that went up is now a bill that does not exist.
+        // Take it back down and leave the cart standing so the cashier can fix it and try again. The
+        // offline branch above swaps in a real OFFLINE receipt, so only this path needs to clear it.
+        setReceipt(null);
         setMessage(friendlyError(err));
       }
     } finally {
@@ -2195,7 +2212,10 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
   function schedulePrint() {
     let waited = 0;
     (function printWhenReady() {
-      const node = document.querySelector('.receipt-modal .receipt');
+      // Only the settled receipt. The instant one that appears the moment Complete is tapped carries no
+      // invoice number yet, and waiting for the real number is the whole point of the delay - printing
+      // that copy would put a bill with no number on paper and then print a second, correct one over it.
+      const node = document.querySelector('.receipt-modal:not(.saving) .receipt');
       const printRoot = document.getElementById('print-root');
       if (node && printRoot) {
         printRoot.innerHTML = '';
@@ -2801,9 +2821,12 @@ function ReceiptModal({ sale, customers, settings, onClose }) {
     }, []);
     // The bill goes as a picture of the printed receipt, not as text.
     const onWhatsapp = () => shareBillAsImage(sale, settings, customer, setShareNote);
-  return ReactDOM.createPortal(h('div', { className: 'modal receipt-modal', onClick: onClose },
+  return ReactDOM.createPortal(h('div', { className: 'modal receipt-modal' + (sale.saving ? ' saving' : ''), onClick: onClose },
     h('section', { className: 'receipt ' + paperClass, onClick: function(e) { e.stopPropagation(); } },
-      sale.preview && h('div', { className: 'receipt-banner no-print' }, t('notSavedPreview')),
+      sale.preview && !sale.saving && h('div', { className: 'receipt-banner no-print' }, t('notSavedPreview')),
+      // Shown on the instant receipt so the counter can see the bill is real and only the invoice number
+      // is still on its way, instead of assuming the tap did nothing.
+      sale.saving && h('div', { className: 'receipt-banner no-print saving-banner' }, LANG === 'ur' ? 'بل محفوظ ہو رہی ہے…' : 'Saving the bill...'),
       h('div', { className: 'receipt-header' },
         h('div', { className: 'receipt-brand' }, h('img', { className: 'receipt-logo', src: 'logo.png?v=27', alt: '' })),
         h('h2', null, storeName),

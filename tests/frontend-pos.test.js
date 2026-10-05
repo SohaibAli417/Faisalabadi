@@ -190,3 +190,77 @@ test('the cached asset versions all agree', () => {
   assert.ok(swVersions.length, 'sw.js must pin its cached asset versions');
   assert.deepEqual([...new Set(swVersions)], [htmlVersions[0]], 'sw.js and index.html must pin the same version');
 });
+
+// Complete & Print felt like it hung: the save is answered in well over a second by the hosted server and
+// the receipt was only ever put on screen after that answer came back, so the counter watched a dead button
+// for the whole wait. The bill now appears the moment the button is tapped.
+test('the receipt goes up the moment Complete is tapped, not after the save answers', () => {
+  const charge = appJs.slice(appJs.indexOf('async function charge(printAfter)'));
+  const body = charge.slice(0, charge.indexOf('\n  const chargeRef'));
+
+  const optimistic = body.indexOf('setReceipt(localBill({ saving: true }))');
+  const post = body.indexOf("client.post('/api/sales'");
+  assert.ok(optimistic > -1, 'charge() must put an instant receipt up before it waits on the server');
+  assert.ok(post > -1, 'charge() should still save the sale on the server');
+  assert.ok(
+    optimistic < post,
+    'the instant receipt has to be set before the request, otherwise the cashier still stares at nothing while it saves'
+  );
+
+  // The instant copy carries no invoice number, so it must never be the one that gets printed.
+  assert.ok(
+    /\.receipt-modal:not\(\.saving\) \.receipt/.test(appJs),
+    'print must wait for the settled receipt - the instant copy has no invoice number and would print a bill with none'
+  );
+
+  // A refused save must take the instant receipt back down, or a bill that does not exist stays on screen.
+  const refused = body.slice(body.indexOf('} else {', body.indexOf('catch (err)')));
+  assert.ok(
+    /setReceipt\(null\)/.test(refused),
+    'when the save is refused the instant receipt must be cleared, not left on screen as a bill'
+  );
+
+  // The real, numbered receipt still replaces it, and the offline path still prints its own copy.
+  assert.ok(
+    /setReceipt\(\{ \.\.\.sale, previousBalance: prevBalance/.test(body),
+    'the saved invoice must replace the instant receipt when the server answers'
+  );
+  assert.ok(
+    (body.match(/schedulePrint\(\)/g) || []).length >= 2,
+    'both the saved and the offline receipt must still be able to print'
+  );
+});
+
+test('the instant receipt announces that it is still being saved', () => {
+  assert.ok(
+    /receipt-modal' \+ \(sale\.saving \? ' saving' : ''\)/.test(appJs),
+    'the receipt modal must be marked while the save is in flight - the print selector depends on that class'
+  );
+  assert.ok(
+    /sale\.saving && h\('div', \{ className: 'receipt-banner no-print saving-banner'/.test(appJs),
+    'the cashier needs to see that the bill is real and only the number is on its way'
+  );
+  // The instant copy is built as a preview, so without this it would show "not a saved invoice" as well.
+  assert.ok(
+    /sale\.preview && !sale\.saving && h\('div', \{ className: 'receipt-banner no-print'/.test(appJs),
+    'the saving banner replaces the preview banner; showing both at once reads as a contradiction'
+  );
+  assert.ok(/\.saving-banner \{/.test(stylesCss), 'saving-banner must be styled');
+  // The banner is no-print, so a half-saved bill can never reach paper.
+  assert.ok(
+    /saving-banner/.test(appJs) && /no-print/.test(appJs),
+    'the saving banner must carry no-print so it is never printed'
+  );
+});
+
+test('the instant receipt and the on-screen preview are built from one place', () => {
+  assert.ok(/function localBill\(overrides\)/.test(appJs), 'a shared bill builder must exist');
+  assert.ok(
+    /setReceipt\(localBill\(\)\)/.test(appJs),
+    'previewSale must use the shared builder'
+  );
+  assert.ok(
+    /setReceipt\(localBill\(\{ saving: true \}\)\)/.test(appJs),
+    'the instant receipt must use the same builder, so the two cannot drift apart'
+  );
+});
