@@ -1217,21 +1217,11 @@ td {
   .sidebar.pos-hidden { display: none; }
   .sidebar.pos-hidden ~ .main-area { width: 100%; }
 
-  .menu-btn {
-    background: transparent;
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    width: 38px;
-    height: 38px;
-    display: grid;
-    place-items: center;
-    color: var(--ink);
-    flex: none;
-    margin-right: 4px;
-  }
-  .menu-btn:hover { border-color: var(--green); color: var(--green); }
-  .menu-btn-icon { font-size: 18px; line-height: 1; }
-  .crumb { margin-right: auto; }
+  /* Desktop already has the full sidebar on screen, so the hamburger button was just a second, redundant
+     way to open navigation that is already open. Hidden here and on a phone alike, where the bottom nav
+     is the navigator. */
+  .menu-btn { display: none !important; }
+  .menu-btn-icon { display: none !important; }
 
   .sidebar.open {
     position: fixed;
@@ -1588,28 +1578,38 @@ td {
   .panel { padding: 14px !important; }
   .panel h2 { font-size: 14px !important; }
 
-  /* POS Mobile: single column stack, panels re-sorted */
+  /* POS Mobile: the same two columns as desktop - item search and the cart on the left, the customer khata
+     with payment/summary on the right. The khata panel fills itself in the moment a name is picked, so it
+     has to sit beside the search box on a phone too, not below the whole cart. */
   .pos-page { padding: 12px 10px 0 !important; }
 
   .pos-layout {
-    display: flex !important;
-    flex-direction: column !important;
-    gap: 12px !important;
+    display: grid !important;
+    /* No 360px minimum column here: a phone is narrower than that, so the grid would scroll sideways. */
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) !important;
+    grid-template-areas:
+      "invoice invoice"
+      "search   checkout"
+      "bill     checkout"
+      "delivery delivery"
+      "actions  actions" !important;
+    gap: 10px !important;
+    align-items: start !important;
   }
 
-  .pos-layout .invoice-header { order: 1; }
-  .pos-layout .search-section { order: 2; }
-  .pos-layout .bill-section { order: 3; }
-  .pos-layout .checkout-section { order: 8; display: contents !important; }
-  .pos-layout .delivery-section { order: 9; }
-  .pos-layout .actions-section { order: 10; }
-
-  .checkout-section.pos-panel { display: contents !important; }
-  .checkout-grid { display: contents !important; }
-  .pos-layout .customer-panel { order: 4; }
-  .pos-layout .payment-panel { order: 5; }
-  .pos-layout .discount-panel { order: 6; }
-  .pos-layout .summary-panel { order: 7; }
+  /* The checkout column stays one real column instead of being dissolved into the parent stack, which is
+     what the single-column phone layout used to do with display: contents. */
+  .pos-layout .checkout-section {
+    display: block !important;
+    position: static !important;
+    align-self: start !important;
+  }
+  .checkout-section.pos-panel { display: block !important; }
+  .checkout-grid {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 10px !important;
+  }
 
   .invoice-header { flex-direction: column !important; align-items: stretch !important; }
   .inv-customer { flex: none !important; }
@@ -1649,9 +1649,6 @@ td {
   .actions-section { padding: 12px !important; }
   .actions-left, .actions-right { width: 100% !important; }
   .actions-left button, .actions-right button { flex: 1 !important; min-width: 120px !important; }
-
-  /* Hide hamburger on mobile — bottom nav is the navigator */
-  .menu-btn { display: none !important; }
 
   .manual-form {
     flex-direction: column !important;

@@ -1125,12 +1125,21 @@ function drawBillImage(sale, settings, customer, labels) {
   const saleDate = new Date(sale.createdAt || Date.now());
   const dateStr = saleDate.toLocaleDateString('en-PK', { year: 'numeric', month: 'short', day: 'numeric' });
   const timeStr = saleDate.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' });
+  // Every bill that reaches WhatsApp goes through here - the live cart, a completed receipt and a khata
+  // row alike - so the grand total is worked out once and falls back through the other names a bill can
+  // arrive under. That way no image can ever be sent with "Total: Rs 0" just because the shape it came in
+  // called the figure something else.
+  const grandTotalSource = [sale.total, sale.amount, sale.subtotal]
+    .find(value => value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value)));
+  const grandTotal = grandTotalSource === undefined ? 0 : Number(grandTotalSource);
+  const subtotalSource = [Number(sale.subtotal), grandTotal].find(value => Number.isFinite(value) && value > 0);
+  const subtotal = subtotalSource === undefined ? grandTotal : subtotalSource;
   const isCredit = sale.paymentType === 'Credit';
-  const isPartial = isCredit && Number(sale.paidAmount) > 0 && Number(sale.paidAmount) < Number(sale.total);
+  const isPartial = isCredit && Number(sale.paidAmount) > 0 && Number(sale.paidAmount) < grandTotal;
   const methodLabel = isPartial ? t('partialPayment') : isCredit ? t('udhaarPayment') : sale.paymentType === 'Card' ? t('card') : t('cash');
-  const due = Math.max(0, Number(sale.total) - Number(sale.paidAmount));
-  const handed = Math.max(Number(sale.paidAmount), Number(sale.receivedAmount) || 0);
-  const change = !isCredit ? Math.max(0, handed - Number(sale.total)) : 0;
+  const due = Math.max(0, grandTotal - Number(sale.paidAmount || 0));
+  const handed = Math.max(Number(sale.paidAmount || 0), Number(sale.receivedAmount) || 0);
+  const change = !isCredit ? Math.max(0, handed - grandTotal) : 0;
   const delivery = sale.delivery && typeof sale.delivery === 'object' ? sale.delivery : null;
   const baseBalance = Number.isFinite(Number(sale.previousBalance)) ? Number(sale.previousBalance) : Number(customer && customer.balance) || 0;
   const items = (sale.items || []).map(item => ({
@@ -1152,11 +1161,11 @@ function drawBillImage(sale, settings, customer, labels) {
   if (sale.reference) meta.push([t('referenceLabel'), sale.reference]);
   if (sale.offlineDraft) meta.push(['Status', 'OFFLINE - WILL SYNC']);
 
-  const totals = [[t('subtotal'), money(sale.subtotal)]];
+  const totals = [[t('subtotal'), money(subtotal)]];
   if (Number(sale.discount) > 0) totals.push([t('discount'), '- ' + money(sale.discount)]);
   if (Number(sale.additionalDiscount) > 0) totals.push([t('additionalDiscount'), '- ' + money(sale.additionalDiscount)]);
   if (Number(sale.tax) > 0) totals.push([t('taxWord') + ' (' + (settings && settings.taxRate ? (settings.taxRate * 100).toFixed(0) : '18') + '%)', money(sale.tax)]);
-  totals.push([t('grandTotalLabel'), money(sale.total)]);
+  totals.push([t('grandTotalLabel'), money(grandTotal)]);
   if (handed > 0) totals.push([t('amountReceived'), money(handed)]);
   if (change > 0) totals.push([t('changeLabel'), money(change)]);
   if (due > 0) totals.push([t('udharRemaining'), money(due)]);
@@ -1706,7 +1715,7 @@ function DraftsModal({ drafts, customers, onLoad, onDelete, onClose }) {
     document.body);
 }
 
-function POS({ client, data, refresh, applySale, online, setOnline, go }) {
+function POS({ client, data, refresh, applySale, applyCustomer, online, setOnline, go }) {
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchIndex, setSearchIndex] = useState(-1);
@@ -1932,6 +1941,14 @@ function POS({ client, data, refresh, applySale, online, setOnline, go }) {
     // Tapping Cash/Card (or Full) switches it back to a paid sale.
     setPaymentType(customer.id === 'cus_walkin' ? 'Cash' : 'Credit');
     setReceivedInput(customer.id === 'cus_walkin' ? '' : '0');
+    // The khata panel beside the search box must never keep the previous person's rows on screen under
+    // the new name, so the ledger is dropped the instant the pick changes and refilled by the fetch
+    // below. Only when the person actually changes: tapping the name that is already selected must not
+    // blank the panel, because the fetch is keyed on the customer id and would never run again.
+    if (profileFor.current !== customer.id) {
+      profileFor.current = customer.id;
+      setProfile(null);
+    }
   }
 
   useEffect(() => {
@@ -2521,9 +2538,11 @@ function POS({ client, data, refresh, applySale, online, setOnline, go }) {
     const monthKeys = Object.keys(byMonth).sort().reverse();
 
     function profileSaleRow(sale) {
-      const waBtn = selectedCustomer && selectedCustomer.phone
+      // Same rule as the rest of the POS: an old bill can only be re-sent while something is still owed.
+      const customerOwes = Number((selectedCustomer && selectedCustomer.balance) || 0) > 0;
+      const waBtn = selectedCustomer && selectedCustomer.phone && customerOwes
         ? h('button', { className: 'wa-btn', onClick: () => shareBillAsImage(withPrevBalance(ledgerEntryToBill(sale, selectedCustomer)), data.settings, selectedCustomer, setMessage) }, t('whatsappBill'))
-        : h('span', { className: 'wa-na' }, t('noWhatsapp'));
+        : (selectedCustomer && selectedCustomer.phone ? null : h('span', { className: 'wa-na' }, t('noWhatsapp')));
       return h('div', { className: 'cust-sale', key: sale.id },
         h('div', { className: 'cust-sale-meta' },
           h('strong', null, sale.invoiceNo),
@@ -2553,7 +2572,9 @@ function POS({ client, data, refresh, applySale, online, setOnline, go }) {
         h('span', { className: `badge ${Number(selectedCustomer.balance) > 0 ? 'warning' : 'success'}` },
           Number(selectedCustomer.balance) > 0 ? `${t('udharBadge')} ${money(selectedCustomer.balance)}` : t('clearBadge'))),
       monthKeys.length === 0
-        ? h('p', { className: 'profile-empty' }, LANG === 'ur' ? 'پچھلے 6 ماہ میں اُدھار نہیں۔' : 'No udhaar in the last 6 months.')
+        ? h('p', { className: 'profile-empty' }, !profile
+          ? (LANG === 'ur' ? 'کھاتا لوڈ ہو رہا ہے…' : 'Loading their khata...')
+          : (LANG === 'ur' ? 'پچھلے 6 ماہ میں اُدھار نہیں۔' : 'No udhaar in the last 6 months.'))
         : h('div', { className: 'cust-months' }, monthKeys.map(profileMonth)));
   }
 
@@ -2677,8 +2698,13 @@ function POS({ client, data, refresh, applySale, online, setOnline, go }) {
 
   // When the cart is empty, fall back to the customer's most recent udhar bill so the WhatsApp
   // button stays useful right after selecting a customer from search.
-  const lastProfileSale = ((profile && profile.entries) || []).filter(entry => entry.type === 'sale').slice(-1)[0];
-  const billForShare = currentBillForShare || (canShareBill && lastProfileSale ? withPrevBalance(ledgerEntryToBill(lastProfileSale, selectedCustomer)) : null);
+  // Ledger rows come back newest first, so the newest sale is the first match, not the last.
+  const lastProfileSale = ((profile && profile.entries) || []).filter(entry => entry.type === 'sale')[0];
+  // The bill in the cart can always be sent. The fallback to the customer's last khata bill only exists
+  // while something is actually owed: once the remaining is zero and the cart is empty there is no bill
+  // left to send, so the WhatsApp bill button is not offered at all.
+  const customerOwes = Number((selectedCustomer && selectedCustomer.balance) || 0) > 0;
+  const billForShare = currentBillForShare || (canShareBill && customerOwes && lastProfileSale ? withPrevBalance(ledgerEntryToBill(lastProfileSale, selectedCustomer)) : null);
 
 
   const checkoutSection = h('section', { className: 'checkout-section pos-panel' },
@@ -2721,12 +2747,22 @@ function POS({ client, data, refresh, applySale, online, setOnline, go }) {
     newCustomerOpen && h(QuickAddCustomerModal, {
       name: typedName,
       client,
-      onSaved: async created => {
+      onSaved: created => {
         setNewCustomerOpen(false);
-        await refresh();
+        // The new row joins the list on screen and is selected before anything else, so this customer's
+        // name and balance fill the khata panel beside the search box straight away - and their products
+        // and prices land in it as soon as the bill is completed - exactly like every other customer.
+        // Waiting for the reload first left that panel blank in the meantime, which read as "nothing saved".
+        if (typeof applyCustomer === 'function') applyCustomer(created);
         // Straight onto the new customer's khata, so the bill in progress is billed to them and the
         // cashier can carry on counting instead of searching for the name again.
         selectCustomer(created);
+        // The reload only reconciles the row with the server's own numbers; the screen is already right,
+        // so it must never hold the panel up or replace it with an error if it fails.
+        try {
+          const reloading = typeof refresh === 'function' ? refresh() : null;
+          if (reloading && typeof reloading.then === 'function') reloading.catch(() => {});
+        } catch (_) {}
       },
       onClose: () => setNewCustomerOpen(false)
     }),
@@ -3444,7 +3480,7 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
             h('small', { className: 'cust-uid' }, `#${customer.id}`),
             customer.phone && h('p', { className: 'subtitle' }, customer.phone))),
         h('div', { className: 'profile-actions' },
-          customer.phone && h('a', { className: 'wa-btn', href: customer.phone ? waLink(customer.phone, khataStatementText(customer, entries, balance, settings)) : null, target: '_blank', rel: 'noreferrer' }, t('whatsappBill')),
+          customer.phone && Number(balance) > 0 && h('a', { className: 'wa-btn', href: customer.phone ? waLink(customer.phone, khataStatementText(customer, entries, balance, settings)) : null, target: '_blank', rel: 'noreferrer' }, t('whatsappBill')),
           h('span', { className: `badge ${Number(balance) > 0 ? 'warning' : 'success'}` }, Number(balance) > 0 ? `${t('udharBadge')} ${money(balance)}` : t('clearBadge')))),
       h('div', { className: 'profile-details' },
         h('div', null, h('span', null, t('hPhone')), h('b', null, customer.phone || '-')),
@@ -3526,9 +3562,9 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
                        : h('b', { className: isCreditEntry ? 'amount-due' : 'amount-paid' }, `${isCreditEntry ? '+' : '-'}${money(entry.amount)}`),
                      h('span', { className: 'entry-balance' }, `${t('balanceForCustomer')} ${money(balanceAfter[entry.id] ?? balance)}`)),
                   h('div', { className: 'entry-actions' },
-    entry.type === 'sale' && customer.phone
-      ? h('button', { className: 'wa-btn entry-wa', onClick: () => shareBillAsImage(withPrevBalance(ledgerEntryToBill(entry, customer)), settings, customer, setMessage) }, t('whatsappBill'))
-                      : null,
+entry.type === 'sale' && customer.phone && Number(balance) > 0
+                     ? h('button', { className: 'wa-btn entry-wa', onClick: () => shareBillAsImage(withPrevBalance(ledgerEntryToBill(entry, customer)), settings, customer, setMessage) }, t('whatsappBill'))
+                     : null,
                      canReverse && entry.type !== 'udhar'
                        ? h('button', { className: 'danger-btn small entry-reverse', disabled: busy, onClick: () => reverseEntry(entry) },
                          entry.type === 'sale' ? t('reverseBill') : t('reversePayment'))
@@ -3545,7 +3581,10 @@ function QuickAddCustomerModal({ name: initialName, client, onSaved, onClose }) 
   const [phone, setPhone] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
-  const nameRef = useRef(null);
+  // React.useRef, not a bare useRef: only useState/useMemo/useEffect are destructured at the top of this
+  // file, and the bare name threw a ReferenceError the moment this modal opened - which blanked the
+  // whole screen every time the cashier added a customer from the POS search.
+  const nameRef = React.useRef(null);
 
   useEffect(() => {
     if (nameRef.current) nameRef.current.focus();
@@ -4715,6 +4754,22 @@ function App() {
     });
   }
 
+  // A customer typed into the POS search is dropped straight into the list already on screen, so the POS
+  // can select them and fill their khata at once instead of leaving an empty panel until the next full
+  // reload brings them back. If the row is somehow already there, the server's copy wins.
+  function applyCustomer(customer) {
+    if (!customer || !customer.id) return;
+    setData(current => {
+      if (!current) return current;
+      const rows = current.customers || [];
+      const exists = rows.some(row => row.id === customer.id);
+      const customers = exists
+        ? rows.map(row => (row.id === customer.id ? { ...row, ...customer } : row))
+        : [customer, ...rows];
+      return { ...current, customers };
+    });
+  }
+
   useEffect(() => { refresh(); }, [session?.token]);
   useEffect(() => {
     const onOnline = () => { setOnline(true); refresh(); };
@@ -4755,7 +4810,7 @@ function App() {
     h('aside', { className: 'sidebar' + (navOpen ? ' open' : '') }, h('div', { className: 'brand' }, h('img', { className: 'brand-logo', src: 'logo.png?v=27', alt: '' }), h('div', null, h('strong', null, 'Faislabadi'), h('small', null, 'GENERAL STORE'))), h('nav', null, visiblePages.map(([id]) => h('button', { key: id, className: activePage === id ? 'nav-item active' : 'nav-item', onClick: () => { setPage(id); setNavOpen(false); } }, h('span', null, t('nav_' + id)))), h(LangToggle, { tick: bumpLang })), h('div', { className: 'sidebar-footer' }, h('div', { className: 'avatar' }, data.user.name.split(' ').map(part => part[0]).join('').slice(0, 2)), h('div', null, h('strong', null, data.user.name), h('small', null, role)), h('button', { className: 'more', onClick: () => { try { client.post('/api/auth/logout', {}).catch(() => {}); } catch (_) {} localStorage.removeItem(stateKey); setSession(null); } }, t('logout')))),
     h('section', { className: 'main-area' }, h('header', { className: 'topbar' }, activePage === 'pos' && h('button', { className: 'menu-btn', 'aria-label': LANG === 'ur' ? 'مینو کھولیں' : 'Open menu', onClick: () => setNavOpen(!navOpen) }, h('span', { className: 'menu-btn-icon' }, '☰')), h('div', { className: 'crumb' }, 'Faislabadi General Store / ', h('strong', null, t('nav_' + activePage))), h('div', { className: 'top-actions' },
       cloudSync && cloudSync.enabled && h('span', { className: cloudSync.lastError ? 'sync-status offline' : 'sync-status', title: cloudSync.lastSuccessAt ? `${t('cloudSyncedAt')} ${new Date(cloudSync.lastSuccessAt).toLocaleTimeString()}` : t('waitingFirstSync') }, cloudSync.lastError ? t('cloudPending') : (cloudSync.lastSuccessAt ? t('cloudSynced') : t('cloudConnecting'))),
-      h('span', { className: online ? 'sync-status' : 'sync-status offline' }, online ? t('online') : t('offline')), pendingActions > 0 && h('span', { className: 'sync-status offline', title: LANG === 'ur' ? 'انترنت آنے پر یہ خودکار طور پر سنک ہوں گے' : 'These will sync automatically when the internet returns' }, LANG === 'ur' ? `${pendingActions} سنک باقی` : `${pendingActions} waiting to sync`), h('button', { className: 'secondary', onClick: refresh }, t('refresh')), h(LangToggle, { tick: bumpLang }))), dataWarning && h('div', { className: 'notice danger', style: { margin: '12px 20px 0' } }, dataWarning), syncNotice && h('div', { className: 'notice warning', style: { margin: '12px 20px 0' } }, syncNotice), storageNotice && h('div', { className: 'notice warning', style: { margin: '12px 20px 0' } }, storageNotice),     activePage === 'dashboard' ? h(Dashboard, { data, go: setPage, client, refresh }) : activePage === 'pos' ? h(POS, { client, data, refresh, applySale, online, setOnline, go: setPage }) : activePage === 'users' ? h(UsersAdmin, { client }) : activePage === 'returns' ? h(ReturnsPage, { data, client, refresh }) : activePage === 'reports' ? h(Reports, { data, client }) : activePage === 'purchases' ? h(Purchases, { data, client, refresh }) : activePage === 'settings' ? h(Settings, { data, client }) : activePage === 'warehouse' ? h(WarehousePage, { data, client, refresh }) : h(DataPage, { page: activePage, data, client, refresh })));
+      h('span', { className: online ? 'sync-status' : 'sync-status offline' }, online ? t('online') : t('offline')), pendingActions > 0 && h('span', { className: 'sync-status offline', title: LANG === 'ur' ? 'انترنت آنے پر یہ خودکار طور پر سنک ہوں گے' : 'These will sync automatically when the internet returns' }, LANG === 'ur' ? `${pendingActions} سنک باقی` : `${pendingActions} waiting to sync`), h('button', { className: 'secondary', onClick: refresh }, t('refresh')), h(LangToggle, { tick: bumpLang }))), dataWarning && h('div', { className: 'notice danger', style: { margin: '12px 20px 0' } }, dataWarning), syncNotice && h('div', { className: 'notice warning', style: { margin: '12px 20px 0' } }, syncNotice), storageNotice && h('div', { className: 'notice warning', style: { margin: '12px 20px 0' } }, storageNotice),     activePage === 'dashboard' ? h(Dashboard, { data, go: setPage, client, refresh }) : activePage === 'pos' ? h(POS, { client, data, refresh, applySale, applyCustomer, online, setOnline, go: setPage }) : activePage === 'users' ? h(UsersAdmin, { client }) : activePage === 'returns' ? h(ReturnsPage, { data, client, refresh }) : activePage === 'reports' ? h(Reports, { data, client }) : activePage === 'purchases' ? h(Purchases, { data, client, refresh }) : activePage === 'settings' ? h(Settings, { data, client }) : activePage === 'warehouse' ? h(WarehousePage, { data, client, refresh }) : h(DataPage, { page: activePage, data, client, refresh })));
     navOpen && h('div', { className: 'menu-backdrop', onClick: () => setNavOpen(false) });
 }
 
