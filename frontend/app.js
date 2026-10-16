@@ -1,6 +1,6 @@
 /* global React, ReactDOM */
-const APP_VERSION = 'v37';
-const APP_CHECKSUM = 'customer-product-qty-unit-logo-v28';
+const APP_VERSION = 'v38';
+const APP_CHECKSUM = 'customer-product-qty-unit-logo-v29';
 (function() {
   var stored = null;
   try { stored = localStorage.getItem('faislabadi-pos-version'); } catch(_) {}

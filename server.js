@@ -2466,7 +2466,11 @@ function serveStatic(request, response) {
   if (file !== root && !file.startsWith(`${root}${path.sep}`)) return response.writeHead(403, securityHeaders).end('Forbidden');
   fs.readFile(file, (error, content) => {
     if (error) return response.writeHead(error.code === 'ENOENT' ? 404 : 500, securityHeaders).end(error.code === 'ENOENT' ? 'Not found' : 'Server error');
-    response.writeHead(200, { ...securityHeaders, 'Content-Type': types[path.extname(file)] || 'application/octet-stream' });
+    const headers = { ...securityHeaders, 'Content-Type': types[path.extname(file)] || 'application/octet-stream' };
+    // The entry document and the service worker must never be served stale, or a browser keeps the
+    // old cached app.js/styles.css forever and deployed updates never reach the till.
+    if (requested === 'sw.js' || requested === 'index.html') headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';
+    response.writeHead(200, headers);
     response.end(content);
   });
 }
