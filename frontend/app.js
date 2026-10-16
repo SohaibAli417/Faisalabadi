@@ -1,6 +1,6 @@
 /* global React, ReactDOM */
-const APP_VERSION = 'v38';
-const APP_CHECKSUM = 'customer-product-qty-unit-logo-v29';
+const APP_VERSION = 'v39';
+const APP_CHECKSUM = 'customer-product-qty-unit-logo-v30';
 (function() {
   var stored = null;
   try { stored = localStorage.getItem('faislabadi-pos-version'); } catch(_) {}
@@ -1363,7 +1363,6 @@ async function shareBillImage(sale, settings, customer, labels) {
   if (!blob) throw new Error('Could not create the bill image');
   const safeInvoice = String(sale.invoiceNo || 'bill').replace(/[^a-z0-9-]+/gi, '-');
   const file = new File([blob], `${safeInvoice}.png`, { type: 'image/png' });
-  const caption = `${(settings && settings.storeName) || 'Faislabadi General Store'} - ${sale.invoiceNo || ''}`.trim();
   // Saves the picture to the phone under the invoice number.
   const savePicture = () => {
     const url = URL.createObjectURL(blob);
@@ -1383,19 +1382,30 @@ async function shareBillImage(sale, settings, customer, labels) {
   // WhatsApp only lets a picture be attached by picking it, and a just-saved one sits at the top of
   // that list, so the picture reaches the customer without any searching at all.
   const phone = String((customer && customer.phone) || '').replace(/\D/g, '');
+  // Phones that can share a file get the picture itself (WhatsApp attaches it), with the bill written
+  // out as the caption. This is the only way an actual image - not a text message - reaches the
+  // customer, so it is tried first whenever the device supports it.
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], text: saleBillText(sale, settings) });
+      return 'shared';
+    } catch (err) {
+      if (err && err.name === 'AbortError') return 'cancelled';
+      // Anything else (a desktop share sheet with no WhatsApp, say) falls through to the text path.
+    }
+  }
+  // A bill for a customer whose number is on file is handled here rather than through the phone's share
+  // sheet, because that sheet cannot address anyone and made the cashier hunt for the number in the
+  // contact list on every single bill. Two things happen together: the picture is saved to the phone
+  // first, so it is the newest item in the gallery, and WhatsApp then opens already addressed to that
+  // customer with the full bill - items, subtotal and grand total - written into the message box.
+  // WhatsApp only lets a picture be attached by picking it, and a just-saved one sits at the top of
+  // that list, so the picture reaches the customer without any searching at all.
   if (phone) {
     savePicture();
     const opened = window.open(`https://wa.me/${phone}?text=${encodeURIComponent(saleBillText(sale, settings))}`, '_blank');
     if (opened) return 'opened';
     return 'downloaded';
-  }
-  if (navigator.canShare && navigator.canShare({ files: [file] })) {
-    try {
-      await navigator.share({ files: [file], text: caption });
-      return 'shared';
-    } catch (err) {
-      if (err && err.name === 'AbortError') return 'cancelled';
-    }
   }
   savePicture();
   return 'downloaded';
@@ -2572,9 +2582,6 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
           },
             h('span', { className: 'search-item-name' }, `+ ${t('addNewCustomer')} "${typedName}"`),
             h('span', { className: 'search-item-meta' }, t('addCustomerHelp'))))),
-      customerId === 'cus_walkin' && h('div', { className: 'walkin-name' },
-        h('label', null, t('walkInNameLabel')),
-        h('input', { value: walkInName, onChange: e => setWalkInName(e.target.value), placeholder: t('walkInNamePh'), maxLength: 80, autoComplete: 'off' })),
       customerId !== 'cus_walkin' && selectedCustomer && h('div', { className: 'customer-balance' },
         h('span', null, t('balanceForCustomer')),
         h('strong', { style: Number(selectedCustomer.balance) > 0 ? { color: '#c0392b' } : { color: '#267152' } }, money(selectedCustomer.balance)),
@@ -2771,6 +2778,12 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
 
 
   const checkoutSection = h('section', { className: 'checkout-section pos-panel' },
+    // The name that will be printed on this bill sits at the very top of the checkout column, so the
+    // cashier can type a walk-in / manual udhar name before touching anything else. It shows on the
+    // bill, the receipt and the WhatsApp picture.
+    customerId === 'cus_walkin' && h('div', { className: 'walkin-name walkin-name-top' },
+      h('label', null, t('walkInNameLabel')),
+      h('input', { value: walkInName, onChange: e => setWalkInName(e.target.value), placeholder: t('walkInNamePh'), maxLength: 80, autoComplete: 'off' })),
     renderCustomerProfile(),
     h('div', { className: 'checkout-grid' },
       h('article', { className: 'checkout-panel customer-panel' }, renderCustomerPanel()),
@@ -3556,6 +3569,10 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
   const visibleEntries = entries ? entries.filter(passesFilters) : [];
   const clearFilters = () => { setMonthFilter('all'); setFromDate(''); setToDate(''); setFromTime(''); setToTime(''); };
   const monthCount = monthKey => visibleEntries.filter(e => (e.at || '').slice(0, 7) === monthKey).length;
+  // Once the customer has nothing left to pay, the whole khata reads as clear: the running totals are
+  // shown as zero instead of old lifetime figures, so a settled account looks settled everywhere. The
+  // dated history below is untouched and still comes back through the month/date/time filters.
+  const settled = Number(balance) <= 0;
   return ReactDOM.createPortal(h('div', { className: 'modal', onClick: onClose },
     h('section', { className: 'khata', onClick: e => e.stopPropagation() },
       h('header', { className: 'khata-head profile-head' },
@@ -3581,10 +3598,10 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
               h('span', { className: 'product-chip', key: `${prod.id || 'manual'}-${index}` }, `${prod.name}${productQtyLabel(prod)}`)))
             : h('b', null, '-'))),
       h('div', { className: 'khata-summary' },
-        h('div', null, h('span', null, t('totalCreditPurchases')), h('strong', null, money(summary.creditPurchases))),
-        h('div', null, h('span', null, t('totalPaidLabel')), h('strong', null, money(summary.totalPaid))),
+        h('div', null, h('span', null, t('totalCreditPurchases')), h('strong', null, money(settled ? 0 : summary.creditPurchases))),
+        h('div', null, h('span', null, t('totalPaidLabel')), h('strong', null, money(settled ? 0 : summary.totalPaid))),
         h('div', { className: 'khata-outstanding' }, h('span', null, t('currentOutstandingLabel')), h('strong', { style: Number(balance) > 0 ? { color: '#c0392b' } : { color: '#267152' } }, money(balance)))),
-      h('small', { className: 'khata-summary-note' }, t('lifetimeTotalsNote')),
+      !settled && h('small', { className: 'khata-summary-note' }, t('lifetimeTotalsNote')),
       message && h('div', { className: 'notice' }, message),
       canManageUdhar
         ? h('button', {
@@ -4022,7 +4039,7 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
     productSelected && h('p', { className: 'hint', key: 'hint' }, t('productPickHint')));
 
   return ReactDOM.createPortal(h('div', { className: 'modal', onClick: onClose },
-    h('section', { className: 'khata', onClick: e => e.stopPropagation() },
+    h('section', { className: 'khata edit-khata', onClick: e => e.stopPropagation() },
       h('header', { className: 'khata-head' },
         h('div', null, h('p', { className: 'eyebrow' }, t('udharKhataEyebrow')), h('h2', null, `${t('editLabel')}: ${customer.name}`)),
         h('span', { className: `badge ${Number(customer.balance) > 0 ? 'warning' : 'success'}` }, Number(customer.balance) > 0 ? `${t('udharBadge')} ${money(customer.balance)}` : t('clearBadge'))),

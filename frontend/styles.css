@@ -489,6 +489,19 @@ td {
 }
 .chip-remove:hover { color: var(--red); border-color: var(--red); }
 .add-tag { color: var(--green); font-weight: 800; font-size: 15px; }
+
+/* The udhar editor needs more room than the read-only khata: the product picker and its chips were
+   cramped into a narrow column, so the modal is wider and the picked products stack as full rows. */
+.edit-khata { width: min(640px, 100%); }
+.edit-khata .product-picker { gap: 10px; }
+.edit-khata .selected-product { flex-direction: column; align-items: stretch; gap: 8px; }
+.edit-khata .product-chip-list { width: 100%; }
+.edit-khata .chip-item { width: 100%; }
+.edit-khata .product-chip { flex: 1; justify-content: flex-start; border-radius: 10px; }
+.edit-khata .chip-total { margin: 0; }
+.edit-khata .product-match-list { max-height: 240px; overflow-y: auto; }
+.edit-khata .khata-udhar-form input[type='number'],
+.edit-khata .khata-udhar-form input[type='text'] { flex: 1 1 100%; }
 .profile-products { grid-column: 1 / -1; min-width: 0; }
 .profile-product-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 
@@ -1041,6 +1054,9 @@ td {
   font-size: 13px;
 }
 .walkin-name input:focus { border-color: var(--green); outline: none; }
+/* At the top of the checkout column the field leads the column, so it spaces below, not above. */
+.walkin-name-top { margin-top: 0; margin-bottom: 12px; }
+.walkin-name-top input { font-size: 14px; }
 
 /* Customer udhaar profile in POS (right column) */
 .cust-profile {
