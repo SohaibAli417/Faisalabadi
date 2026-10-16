@@ -459,8 +459,11 @@ td {
 }
 .product-match:hover { border-color: var(--green); background: #f3faf6; }
 .product-match.selected { border-color: var(--green); background: #eefaf1; }
-.product-match strong { font-size: 13px; }
-.product-match small { font-size: 11px; color: var(--muted); }
+.product-match-name { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.product-match-name strong { font-size: 13px; }
+.product-match-name small { font-size: 11px; color: var(--muted); }
+.product-match-right { display: inline-flex; align-items: center; gap: 10px; white-space: nowrap; }
+.product-match-price { font-size: 12px; font-weight: 700; color: #267152; }
 .manual-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .manual-row input { flex: 1; min-width: 150px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; }
 .selected-product { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }

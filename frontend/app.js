@@ -1,6 +1,6 @@
 /* global React, ReactDOM */
-const APP_VERSION = 'v39';
-const APP_CHECKSUM = 'customer-product-qty-unit-logo-v30';
+const APP_VERSION = 'v40';
+const APP_CHECKSUM = 'customer-product-qty-unit-logo-v31';
 (function() {
   var stored = null;
   try { stored = localStorage.getItem('faislabadi-pos-version'); } catch(_) {}
@@ -4027,9 +4027,16 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
         className: 'product-match',
         onClick: () => addProduct(prod)
       },
-        h('strong', null, prod.name),
-        h('small', null, [prod.category, prod.sku].filter(Boolean).join(' · ') || t('productLabel')),
-        h('span', { className: 'add-tag' }, t('add'))))),
+        h('span', { className: 'product-match-name' },
+          h('strong', null, prod.name),
+          h('small', null, [prod.category, prod.sku].filter(Boolean).join(' · ') || t('productLabel'))),
+        h('span', { className: 'product-match-right' },
+          // The rate is shown before picking so the cashier can choose the right product and see what it
+          // will add to the udhar; the picked chip then keeps showing the running amount.
+          Number(prod.price) > 0
+            ? h('span', { className: 'product-match-price' }, `${money(prod.price)}/${rateBasisLabel(prod, prod)}`)
+            : null,
+          h('span', { className: 'add-tag' }, t('add')))))),
     productSearch.trim() && productHits.length === 0 && !form.manualMode && h('p', { className: 'hint', key: 'none' }, t('noMatchingProducts')),
     !form.manualMode && h('button', { type: 'button', className: 'secondary', key: 'manual-btn', onClick: openManual }, t('addProductManually')),
     form.manualMode && h('div', { className: 'manual-row', key: 'manual-row' },
