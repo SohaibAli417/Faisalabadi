@@ -964,27 +964,38 @@ function decorateCustomer(db, customer, totalsMap) {
   };
 }
 
+// The shop's own clock, not the server's. Cashiers type a wall-clock time like "14:30" and mean
+// 14:30 at the counter, but the server reads whatever timezone it happens to run in - and the live
+// site runs on Vercel in UTC, so every udhar and payment was stored five hours early and came back
+// on screen five hours late. Pakistan is UTC+5 with no daylight saving, so the offset is fixed and
+// the same figures now hold on the laptop, the shop computer and the hosted site alike.
+const SHOP_UTC_OFFSET_MIN = 300;
+const shopShift = ms => new Date(ms + SHOP_UTC_OFFSET_MIN * 60000);
+const pad2Clock = n => String(n).padStart(2, '0');
+
 function toLocalDateParts(value) {
   const date = new Date(value);
   if (isNaN(date.getTime())) return '';
-  const pad = n => String(n).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  const shifted = shopShift(date.getTime());
+  return `${shifted.getUTCFullYear()}-${pad2Clock(shifted.getUTCMonth() + 1)}-${pad2Clock(shifted.getUTCDate())}`;
 }
 
 function toLocalTimeParts(value) {
   const date = new Date(value);
   if (isNaN(date.getTime())) return '';
-  const pad = n => String(n).padStart(2, '0');
-  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  const shifted = shopShift(date.getTime());
+  return `${pad2Clock(shifted.getUTCHours())}:${pad2Clock(shifted.getUTCMinutes())}`;
 }
 
 function combineDateTime(dateStr, timeStr) {
   const dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateStr || ''));
   const tm = /^(\d{1,2}):(\d{2})$/.exec(String(timeStr || ''));
   if (!dm || !tm) return null;
-  const date = new Date(Number(dm[1]), Number(dm[2]) - 1, Number(dm[3]), Number(tm[1]), Number(tm[2]), 0, 0);
-  if (isNaN(date.getTime())) return null;
-  return date;
+  // Read the typed wall-clock time as shop time by building the instant in UTC and stepping back the
+  // offset, so the result is identical whichever timezone this process is running in.
+  const asIfUtc = Date.parse(`${dm[1]}-${dm[2]}-${dm[3]}T${pad2Clock(Number(tm[1]))}:${tm[2]}:00.000Z`);
+  if (!Number.isFinite(asIfUtc)) return null;
+  return new Date(asIfUtc - SHOP_UTC_OFFSET_MIN * 60000);
 }
 
 function returnedQtyByItem(db, saleId) {
@@ -2554,6 +2565,8 @@ module.exports.returnedQtyByItem = returnedQtyByItem;
 module.exports.customerTotals = customerTotals;
 module.exports.decorateCustomer = decorateCustomer;
 module.exports.combineDateTime = combineDateTime;
+module.exports.toLocalDateParts = toLocalDateParts;
+module.exports.toLocalTimeParts = toLocalTimeParts;
 module.exports.createSupplier = createSupplier;
 module.exports.updateSupplier = updateSupplier;
 module.exports.deleteSupplier = deleteSupplier;

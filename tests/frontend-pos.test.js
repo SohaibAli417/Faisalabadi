@@ -113,8 +113,9 @@ test('a WhatsApp bill is only offered while there is something to send', () => {
   );
   assert.ok(/currentBillForShare \|\| \(canShareBill && customerOwes && lastProfileSale/.test(appJs));
 
-  // The khata modal's own two buttons obey the same rule.
-  const headerWa = appJs.match(/customer\.phone &&[^;]*?waLink\(customer\.phone, khataStatementText/);
+  // The khata modal's own two buttons obey the same rule. The header one used to open a text-only
+  // statement; it now hands over the bill as a picture, so it is matched on that instead.
+  const headerWa = appJs.match(/customer\.phone && Number\(balance\) > 0 && latestBill[\s\S]{0,200}shareBillAsImage\(latestBill/);
   assert.ok(headerWa, 'the khata header WhatsApp button must exist');
   assert.ok(/Number\(balance\) > 0/.test(headerWa[0]), 'the khata header button is hidden at zero remaining');
 
@@ -263,4 +264,44 @@ test('the instant receipt and the on-screen preview are built from one place', (
     /setReceipt\(localBill\(\{ saving: true \}\)\)/.test(appJs),
     'the instant receipt must use the same builder, so the two cannot drift apart'
   );
+});
+
+test('the customer edit form never nests a form inside another form', () => {
+  // A nested <form> inside the edit form made one tap fire the extra-udhar save AND the main customer
+  // save at once, and browsers reject a form inside a form - which broke saving on that screen.
+  const modal = appJs.slice(appJs.indexOf('function CustomerEditModal('), appJs.indexOf('function UomEditor('));
+  assert.equal((modal.match(/h\('form'/g) || []).length, 1, 'the edit modal holds exactly one form');
+  assert.ok(/className: 'payment-form khata-udhar-form'/.test(modal), 'the extra-udhar block must still be present');
+  assert.equal(
+    /h\('form', \{ className: 'payment-form khata-udhar-form'/.test(modal),
+    false,
+    'the extra-udhar block must be a div, not a form nested in the edit form'
+  );
+  assert.ok(/onClick: addExtraUdhar/.test(modal), 'its save button calls addExtraUdhar directly');
+});
+
+test('a settled khata reads as zero, even before the balance has loaded', () => {
+  // A missing balance arrives as null/NaN; `<= 0` lets NaN look live, so a cleared account kept
+  // showing its old lifetime figures.
+  assert.ok(/const settled = !\(Number\(balance\) > 0\)/.test(appJs), 'the khata settled test must reject NaN');
+  assert.ok(
+    /const settled = !\(Number\(row\.balance\) > 0\)/.test(appJs),
+    'the customers table must apply the same rule'
+  );
+});
+
+test('printing a bill reuses the print root so it can never print a blank page', () => {
+  assert.ok(/function printReceiptNow\(/.test(appJs), 'a shared receipt printer must exist');
+  assert.ok(/function printBillImage\(/.test(appJs), 'a bill-picture printer must exist');
+  assert.ok(
+    /printReceiptNow\(\)/.test(appJs),
+    'the receipt Print button and the F4 key must go through it'
+  );
+  // The broken path - window.print() straight from the receipt modal - would print an empty #print-root.
+  assert.equal(
+    /onClick: function\(\) \{ window\.print\(\); \}/.test(appJs),
+    false,
+    'no button may call window.print() directly'
+  );
+  assert.ok(/\.bill-print-image \{/.test(stylesCss), 'the printed bill image must be styled to fit the paper');
 });

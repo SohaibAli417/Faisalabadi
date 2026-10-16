@@ -1,6 +1,6 @@
 /* global React, ReactDOM */
-const APP_VERSION = 'v40';
-const APP_CHECKSUM = 'customer-product-qty-unit-logo-v31';
+const APP_VERSION = 'v41';
+const APP_CHECKSUM = 'customer-product-qty-unit-logo-v32';
 (function() {
   var stored = null;
   try { stored = localStorage.getItem('faislabadi-pos-version'); } catch(_) {}
@@ -1436,6 +1436,51 @@ async function shareBillAsImage(sale, settings, customer, report) {
     if (report) report(friendlyError(err));
   }
 }
+
+// Printing the on-screen receipt where it sits left the printer feeding out a blank sheet, because the
+// modal is a fixed overlay and the print rules hide the whole app except #print-root. So the receipt is
+// copied into that hidden #print-root and only the copy goes on paper. Every print button and the F4 key
+// go through here, so a bill can never be printed from an empty page again.
+function printReceiptNow(node) {
+  const printRoot = document.getElementById('print-root');
+  if (!printRoot) { window.print(); return; }
+  printRoot.innerHTML = '';
+  const target = node || document.querySelector('.receipt-modal:not(.saving) .receipt');
+  if (target) {
+    const copy = target.cloneNode(true);
+    copy.removeAttribute('style');
+    printRoot.appendChild(copy);
+  }
+  // Two frames let the browser lay the copy out before the dialog opens, which phones need.
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    window.print();
+    // Cleared once the dialog closes so the next bill starts from a clean page.
+    setTimeout(() => { printRoot.innerHTML = ''; }, 1000);
+  }));
+}
+
+// The same drawn bill the WhatsApp button sends, on paper instead of a message. The picture is placed
+// in #print-root - the only thing the printer is allowed to see - so it prints exactly like a saved
+// receipt, with no popup and nothing extra installed.
+function printBillImage(sale, settings, customer, report) {
+  try {
+    const canvas = drawBillImage(sale, settings, customer, STRINGS[LANG] || STRINGS.en);
+    const printRoot = document.getElementById('print-root');
+    if (!printRoot) throw new Error('Printing is not available on this device');
+    printRoot.innerHTML = '';
+    const img = document.createElement('img');
+    img.className = 'bill-print-image';
+    img.src = canvas.toDataURL('image/png');
+    printRoot.appendChild(img);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      window.print();
+      setTimeout(() => { printRoot.innerHTML = ''; }, 1000);
+    }));
+    if (report) report(LANG === 'ur' ? 'بل پرنٹ کے لیے بھیج دیا گیا۔' : 'Bill sent to the printer.');
+  } catch (err) {
+    if (report) report(friendlyError(err));
+  }
+}
 // WhatsApp renders a fenced block as monospace, so the same aligned columns the printed receipt uses
 // stay aligned on the phone. This is a real invoice layout, not a "name / qty / price" text dump.
 const WA_WIDTH = 32;
@@ -2613,6 +2658,8 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
       const waBtn = selectedCustomer && selectedCustomer.phone && customerOwes
         ? h('button', { className: 'wa-btn', onClick: () => shareBillAsImage(withPrevBalance(ledgerEntryToBill(sale, selectedCustomer)), data.settings, selectedCustomer, setMessage) }, t('whatsappBill'))
         : (selectedCustomer && selectedCustomer.phone ? null : h('span', { className: 'wa-na' }, t('noWhatsapp')));
+      // Reprinting a past bill works whether or not anything is still owed, so it is always offered.
+      const printBtn = h('button', { className: 'secondary small', onClick: () => printBillImage(withPrevBalance(ledgerEntryToBill(sale, selectedCustomer)), data.settings, selectedCustomer, setMessage) }, t('printBill'));
       return h('div', { className: 'cust-sale', key: sale.id },
         h('div', { className: 'cust-sale-meta' },
           h('strong', null, sale.invoiceNo),
@@ -2622,6 +2669,7 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
           h('span', { className: 'cust-item-amt' }, money(item.amount || item.price * item.qty)))),
         h('div', { className: 'cust-sale-foot' },
           h('strong', null, `${t('totalWord')}: ${money(sale.amount)}`),
+          printBtn,
           waBtn));
     }
 
@@ -2871,7 +2919,7 @@ function ReceiptModal({ sale, customers, settings, onClose }) {
     : (Number(customer && customer.balance) || 0);
   const closingBalance = due > 0 ? money(baseBalance + (sale.preview ? due : 0)) : null;
     useEffect(() => {
-      function handlePrintKey(e) { if (e.key === 'F4') { e.preventDefault(); window.print(); } }
+      function handlePrintKey(e) { if (e.key === 'F4') { e.preventDefault(); printReceiptNow(); } }
       window.addEventListener('keydown', handlePrintKey);
       return () => window.removeEventListener('keydown', handlePrintKey);
     }, []);
@@ -2942,7 +2990,7 @@ function ReceiptModal({ sale, customers, settings, onClose }) {
         customer && customer.phone
           ? h('button', { className: 'wa-btn', onClick: onWhatsapp }, t('whatsappBill'))
           : null,
-        h('button', { className: 'secondary', onClick: function() { window.print(); } }, 'Print (F4)'),
+        h('button', { className: 'secondary', onClick: function() { printReceiptNow(); } }, t('printBill')),
         h('button', { className: 'primary', onClick: onClose }, t('close'))),
       shareNote && h('div', { className: 'receipt-share-note no-print' }, shareNote))),
     document.body);
@@ -3001,12 +3049,15 @@ function DataPage({ page, data, client, refresh }) {
 
   function customerRow(row) {
     const canManageUdhar = data.user.role === 'Admin' || data.user.role === 'Manager';
+    // Same rule as the khata itself: once nothing is owed the lifetime figures read as zero here too,
+    // so a cleared account no longer looks like it is still carrying old credit in the customer list.
+    const settled = !(Number(row.balance) > 0);
     return h('tr', { key: row.id },
       h('td', null, h('strong', null, row.name), h('div', { className: 'row-id' }, `#${row.id}`)),
       h('td', null, row.phone || ''),
       h('td', null, row.cnicMasked || ''),
-      h('td', null, money(row.creditPurchases || 0)),
-      h('td', null, money(row.totalPaid || 0)),
+      h('td', null, money(settled ? 0 : row.creditPurchases)),
+      h('td', null, money(settled ? 0 : row.totalPaid)),
       h('td', null, h('strong', { style: Number(row.balance) > 0 ? { color: '#c0392b' } : null }, money(row.balance))),
       h('td', null, row.lastPaymentAt ? toDateInputValue(row.lastPaymentAt) : h('span', { className: 'muted' }, '-')),
       h('td', null, row.lastPaymentAt ? toTimeInputValue(row.lastPaymentAt) : h('span', { className: 'muted' }, '-')),
@@ -3572,7 +3623,15 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
   // Once the customer has nothing left to pay, the whole khata reads as clear: the running totals are
   // shown as zero instead of old lifetime figures, so a settled account looks settled everywhere. The
   // dated history below is untouched and still comes back through the month/date/time filters.
-  const settled = Number(balance) <= 0;
+  // !(x > 0) instead of x <= 0: a missing or not-yet-loaded balance arrives as null/undefined/NaN,
+  // and <= 0 leaves NaN looking like a live balance, so a cleared account kept showing its old
+  // lifetime figures. Anything that is not a positive balance now reads as settled.
+  const settled = !(Number(balance) > 0);
+  // The header button opens this customer's newest bill. It used to open WhatsApp with a block of
+  // text only; now it hands over the same bill picture the other buttons send, so the customer
+  // receives an image and not a message they cannot read at the counter.
+  const latestBillEntry = (entries || []).find(entry => entry.type === 'sale' && !entry.voided) || null;
+  const latestBill = latestBillEntry ? withPrevBalance(ledgerEntryToBill(latestBillEntry, customer)) : null;
   return ReactDOM.createPortal(h('div', { className: 'modal', onClick: onClose },
     h('section', { className: 'khata', onClick: e => e.stopPropagation() },
       h('header', { className: 'khata-head profile-head' },
@@ -3584,7 +3643,9 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
             h('small', { className: 'cust-uid' }, `#${customer.id}`),
             customer.phone && h('p', { className: 'subtitle' }, customer.phone))),
         h('div', { className: 'profile-actions' },
-          customer.phone && Number(balance) > 0 && h('a', { className: 'wa-btn', href: customer.phone ? waLink(customer.phone, khataStatementText(customer, entries, balance, settings)) : null, target: '_blank', rel: 'noreferrer' }, t('whatsappBill')),
+          customer.phone && Number(balance) > 0 && latestBill
+            ? h('button', { className: 'wa-btn', disabled: busy, onClick: () => shareBillAsImage(latestBill, settings, customer, setMessage) }, t('whatsappBill'))
+            : null,
           h('span', { className: `badge ${Number(balance) > 0 ? 'warning' : 'success'}` }, Number(balance) > 0 ? `${t('udharBadge')} ${money(balance)}` : t('clearBadge')))),
       h('div', { className: 'profile-details' },
         h('div', null, h('span', null, t('hPhone')), h('b', null, customer.phone || '-')),
@@ -3673,7 +3734,12 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
                        ? h('b', { className: 'amount-paid' }, money(entry.amount))
                        : h('b', { className: isCreditEntry ? 'amount-due' : 'amount-paid' }, `${isCreditEntry ? '+' : '-'}${money(entry.amount)}`),
                      h('span', { className: 'entry-balance' }, `${t('balanceForCustomer')} ${money(balanceAfter[entry.id] ?? balance)}`)),
-                  h('div', { className: 'entry-actions' },
+                   h('div', { className: 'entry-actions' },
+                     // Printing a past bill does not depend on the balance, so this sits beside the
+                     // WhatsApp button for every sale rather than only while something is owed.
+                     entry.type === 'sale'
+                       ? h('button', { className: 'secondary small entry-print', disabled: busy, onClick: () => printBillImage(withPrevBalance(ledgerEntryToBill(entry, customer)), settings, customer, setMessage) }, t('printBill'))
+                       : null,
 entry.type === 'sale' && customer.phone && Number(balance) > 0
                      ? h('button', { className: 'wa-btn entry-wa', onClick: () => shareBillAsImage(withPrevBalance(ledgerEntryToBill(entry, customer)), settings, customer, setMessage) }, t('whatsappBill'))
                      : null,
@@ -4068,13 +4134,17 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
           disabled: busy,
           onClick: () => setExtraUdharOpen(open => !open)
         }, extraUdharOpen ? t('closeAddUdhar') : t('addNewUdhar')),
-        canEditUdhar && extraUdharOpen && h('form', { className: 'payment-form khata-udhar-form', onSubmit: addExtraUdhar },
-          h('input', { type: 'number', min: '1', step: 'any', required: true, placeholder: t('udharAmountPh'), value: extraUdhar.amount, onChange: e => setExtraUdhar({ ...extraUdhar, amount: e.target.value }) }),
+        // A <div>, not a <form>. A nested form inside the edit form made one tap fire both this udhar
+        // save and the main customer save at once (the submit bubbled out), and browsers reject a
+        // <form> inside a <form> outright - which is what broke saving here. The amount is still
+        // checked in addExtraUdhar before anything is sent.
+        canEditUdhar && extraUdharOpen && h('div', { className: 'payment-form khata-udhar-form' },
+          h('input', { type: 'number', min: '1', step: 'any', placeholder: t('udharAmountPh'), value: extraUdhar.amount, onChange: e => setExtraUdhar({ ...extraUdhar, amount: e.target.value }) }),
           h('input', { type: 'text', placeholder: t('udharNotePh'), value: extraUdhar.note, onChange: e => setExtraUdhar({ ...extraUdhar, note: e.target.value }) }),
           h('input', { type: 'text', placeholder: t('udharReferencePh'), value: extraUdhar.reference, onChange: e => setExtraUdhar({ ...extraUdhar, reference: e.target.value }) }),
           h('input', { type: 'date', value: extraUdharDate, onChange: e => setExtraUdharDate(e.target.value), title: t('udharDateTitle') }),
           h('input', { type: 'time', value: extraUdharTime, onChange: e => setExtraUdharTime(e.target.value), title: t('udharTimeTitle') }),
-          h('button', { type: 'submit', className: 'primary', disabled: busy || !(Number(extraUdhar.amount) > 0) }, t('saveUdharBtn'))),
+          h('button', { type: 'button', className: 'primary', disabled: busy || !(Number(extraUdhar.amount) > 0), onClick: addExtraUdhar }, t('saveUdharBtn'))),
         canEditUdhar && h('div', { className: 'edit-form-row' },
           h('div', null, h('label', null, t('hTotalCredit')), h('input', { type: 'number', min: '0', value: form.udhaarTotal, onChange: e => setForm({ ...form, udhaarTotal: e.target.value }) })),
           h('div', null, h('label', null, t('hTotalPaid')), h('input', { type: 'number', min: '0', value: form.udhaarPaid, onChange: e => setForm({ ...form, udhaarPaid: e.target.value }) })),

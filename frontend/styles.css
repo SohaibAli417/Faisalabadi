@@ -1900,6 +1900,10 @@ td {
   #print-root .receipt-credit .credit-name { font-size: 11px !important; color: #000 !important; }
   #print-root .receipt-credit .credit-phone { font-size: 9.5px !important; color: #000 !important; background: none !important; border: 1px solid #000 !important; border-radius: 0 !important; }
   #print-root .no-print { display: none !important; }
+
+  /* A bill drawn as a picture, used by the "Print bill" buttons. Scaled to the full paper width so
+     the same 720px drawing fits a 58mm slip, an 80mm roll or an A4 page. */
+  #print-root .bill-print-image { display: block !important; width: 100% !important; max-width: 100% !important; height: auto !important; margin: 0 !important; padding: 0 !important; border: none !important; }
 }
 
 /* --- v9: Udhar totals, partial payments, returns, users --- */

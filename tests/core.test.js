@@ -416,3 +416,22 @@ test('missing profit values fall back to price equal to cost', () => {
   const pricing = resolveProductPricing({ cost: 300 });
   assert.equal(pricing.price, 300);
 });
+
+test('a typed payment time is read as Pakistan time whichever timezone the server runs in', () => {
+  // The live site runs on Vercel in UTC. Before this was pinned, "2026-05-05 14:30" typed at the
+  // counter was stored as 14:30 UTC and came back on screen as 19:30 - five hours late, every time.
+  const { combineDateTime, toLocalDateParts, toLocalTimeParts } = require('../server');
+  const combined = combineDateTime('2026-05-05', '14:30');
+  assert.equal(combined.toISOString(), '2026-05-05T09:30:00.000Z', '14:30 shop time is 09:30 UTC');
+  assert.equal(toLocalDateParts(combined), '2026-05-05', 'the date round-trips');
+  assert.equal(toLocalTimeParts(combined), '14:30', 'the time round-trips');
+  // A late-evening entry must not roll over to the next day when read back.
+  const night = combineDateTime('2026-05-05', '23:45');
+  assert.equal(toLocalDateParts(night), '2026-05-05');
+  assert.equal(toLocalTimeParts(night), '23:45');
+  // Midnight stays on its own day rather than sliding back to the previous evening.
+  const midnight = combineDateTime('2026-05-05', '00:15');
+  assert.equal(toLocalDateParts(midnight), '2026-05-05');
+  assert.equal(toLocalTimeParts(midnight), '00:15');
+});
+
