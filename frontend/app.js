@@ -244,7 +244,7 @@ const STRINGS = {
     fullyPaid: 'Fully paid', total: 'Total', paidNowFull: 'Paid now', full: 'Full', none: 'None',
     selectCustomerForUdhar: 'Select a customer for udhar', chargePayment: 'Charge payment', saveSaleUdhar: 'Save sale - Udhar',
     offlineQueuedBadge: 'queued', management: 'MANAGEMENT',
-    hName: 'Name', hPhone: 'Phone', hCnic: 'CNIC', hTotalCredit: 'Total Credit', hTotalPaid: 'Total Paid', hBalance: 'Balance',
+    hName: 'Name', hPhone: 'Phone', hCnic: 'CNIC', hTotalCredit: 'Total Credit', hTotalPaid: 'Total Paid', hBalance: 'Balance', creditLimitLabel: 'Credit Limit',
     hActions: 'Actions', hProduct: 'Product', hSku: 'SKU', hCategory: 'Category', hStock: 'Stock', hCost: 'Cost', hProfit: 'Profit', hPrice: 'Price',
     hPaymentDate: 'Payment Date', hPaymentTime: 'Payment Time', editLabel: 'Edit', saveLabel: 'Save', cancelLabel: 'Cancel',
     khata: 'Khata', payUdhar: 'Pay Udhar', clearShort: 'Clear', udharBadge: 'Udhar', clearBadge: 'Clear', activeBadge: 'Active', inactiveBadge: 'Inactive', lowBadge: 'Low',
@@ -252,11 +252,11 @@ const STRINGS = {
     phName: 'Name', phPhone: 'Phone', phCnicOptional: 'CNIC (optional)', phAddressOptional: 'Address (optional)',
     phProductName: 'Product name', phCategory: 'Category', phCost: 'Purchase price (cost)', profitRs: 'Profit Rs', profitPercent: 'Profit %',
     phOwnerProfit: 'Owner profit', phSalePriceAuto: 'Sale price (auto)', phLowAlertAt: 'Low stock alert at', barcodeLabel: 'Barcode:',
-    udharKhataEyebrow: 'UDHAR KHATA', cnicLabel: 'CNIC:', totalCreditPurchases: 'Total credit purchases', totalPaidLabel: 'Total paid',
+    udharKhataEyebrow: 'UDHAR KHATA', cnicLabel: 'CNIC:', totalCreditPurchases: 'Lifetime credit purchases', totalPaidLabel: 'Lifetime paid', currentOutstandingLabel: 'Current outstanding udhar', lifetimeTotalsNote: 'Lifetime totals stay after a settlement; current outstanding is what is still owed today.',
     remaining: 'Remaining', payUdharMax: 'Pay udhar - max', clearUdharBtn: 'Clear Udhar', loading: 'Loading...', noUdharHistory: 'No udhar history yet.',
     payFullAmount: 'Pay full amount', udharNeedsManager: 'Only Admin or Manager can receive or clear udhar. Ask them to record this payment.',
     addLabel: 'Add',     addNewUdhaar: 'Add New Udhaar', udhaarAmount: 'Amount', udhaarNote: 'Description / Note',
-    udhaarReference: 'Reference (optional)', udhaarSaved: 'New udhaar added to the khata.', previousBalance: 'Previous balance',
+    udhaarReference: 'Reference (optional)', udhaarSaved: 'New udhaar added to the khata.', previousBalance: 'Previous balance', newPurchaseLabel: 'New purchase', finalOutstandingLabel: 'Final outstanding',
     newBalance: 'New balance', udhaarEntry: 'Udhaar', prevBillLabel: 'Previous bill', dateTimeLabel: 'Date / Time',
     creditSaleEntry: 'Credit sale', paymentReceived: 'Payment received', close: 'Close',
     addNewUdhar: 'Add New Udhaar', closeAddUdhar: 'Close', saveUdharBtn: 'Save Udhaar',
@@ -264,6 +264,8 @@ const STRINGS = {
     udharReferencePh: 'Reference (optional)', udharDateTitle: 'Udhar date', udharTimeTitle: 'Udhar time',
     udharEntryLabel: 'New udhar', refPrefix: 'Ref',
     allMonths: 'All months', reverseBill: 'Reverse bill', reversePayment: 'Reverse payment', balanceForCustomer: 'Balance:',
+    fromDateLabel: 'From date', toDateLabel: 'To date', fromTimeLabel: 'From time', toTimeLabel: 'To time',
+    clearFiltersBtn: 'Clear filters', noEntriesMatch: 'No entries match these filters.',
     saleReturnsEyebrow: 'SALE RETURNS', returnsSubtitle: 'Search a bill by invoice number, then return selected products or the complete bill. Stock and udhar update automatically.',
     enterBillId: 'Enter Bill ID / Invoice No (e.g. FS-1049)', findInvoice: 'Find invoice', noInvoiceLoaded: 'No invoice loaded yet.',
     voidedBlocked: 'This invoice was cancelled/voided - returns are not allowed.', invoiceWord: 'Invoice', cashierLabel: 'Cashier:',
@@ -302,6 +304,7 @@ const STRINGS = {
     referenceLabel: 'Reference', customerLabelShort: 'Customer', selectCustomerPh: 'Search customer by name or phone...',
     addNewCustomer: 'Add new customer', addCustomerHelp: 'Tap to create and use straight away',
     customerNamePh: 'Customer name', phoneLabel: 'Phone', optionalWord: 'optional',
+    walkInNameLabel: 'Name on this bill (optional)', walkInNamePh: 'e.g. Ahmed Khan',
     quickAddNote: 'Name and phone only. CNIC, address and credit limit can be added later from the Customers page.',
     saveAndUse: 'Save & Use', savingWord: 'Saving...',
     scanCamera: 'Scan with camera', amountReceived: 'Amount received', changeLabel: 'Change',
@@ -376,7 +379,7 @@ const STRINGS = {
     fullyPaid: 'مکمل ادائیگی', total: 'ٹوٹل', paidNowFull: 'ابھی ادائیگی', full: 'پورا', none: 'کچھ نہیں',
     selectCustomerForUdhar: 'اُدھار کے لیے گاہک منتخب کریں', chargePayment: 'ادائیگی وصول کریں', saveSaleUdhar: 'سیل محفوظ کریں - اُدھار',
     offlineQueuedBadge: 'زیرِ انتظار', management: 'انتظامیہ',
-    hName: 'نام', hPhone: 'موبائل', hCnic: 'شناختی نمبر', hTotalCredit: 'کل اُدھار', hTotalPaid: 'کل ادائیگی', hBalance: 'بقیہ',
+    hName: 'نام', hPhone: 'موبائل', hCnic: 'شناختی نمبر', hTotalCredit: 'کل اُدھار', hTotalPaid: 'کل ادائیگی', hBalance: 'بقیہ', creditLimitLabel: 'ادھار کی حد',
     hActions: 'ایکشن', hProduct: 'پروڈکٹ', hSku: 'کوڈ', hCategory: 'قسم', hStock: 'اسٹاک', hCost: 'لاگت', hProfit: 'منافع', hPrice: 'قیمت',
     hPaymentDate: 'ادائیگی کی تاریخ', hPaymentTime: 'ادائیگی کا وقت', editLabel: 'ترمیم', saveLabel: 'محفوظ', cancelLabel: 'منسوخ',
     khata: 'کھاتہ', payUdhar: 'اُدھار وصول', clearShort: 'کلیر', udharBadge: 'اُدھار', clearBadge: 'صاف', activeBadge: 'فعال', inactiveBadge: 'بند', lowBadge: 'کم',
@@ -384,11 +387,11 @@ const STRINGS = {
     phName: 'نام', phPhone: 'موبائل', phCnicOptional: 'شناختی نمبر (اختیاری)', phAddressOptional: 'پتہ (اختیاری)',
     phProductName: 'پروڈکٹ کا نام', phCategory: 'قسم', phCost: 'خرید قیمت (لاگت)', profitRs: 'منافع روپے', profitPercent: 'منافع فیصد',
     phOwnerProfit: 'مالکانہ منافع', phSalePriceAuto: 'فروخت قیمت (خود بخود)', phLowAlertAt: 'کم اسٹاک الرٹ پر', barcodeLabel: 'بارکوڈ:',
-    udharKhataEyebrow: 'اُدھار کھاتہ', cnicLabel: 'شناختی کارڈ:', totalCreditPurchases: 'کل اُدھار خریداری', totalPaidLabel: 'کل ادا شدہ',
+    udharKhataEyebrow: 'اُدھار کھاتہ', cnicLabel: 'شناختی کارڈ:', totalCreditPurchases: 'کل اُدھار خریداری (اب تک)', totalPaidLabel: 'کل ادا شدہ (اب تک)', currentOutstandingLabel: 'موجودہ بقایا اُدھار', lifetimeTotalsNote: 'کل (اب تک) کے اعداد تصفیے کے بعد بھی رہتے ہیں؛ موجودہ بقایا آج واجب الادا رقم ہے۔',
     remaining: 'باقی', payUdharMax: 'اُدھار وصول کریں - زیادہ سے زیادہ', clearUdharBtn: 'پورا اُدھار کلیر کریں', loading: 'لوڈ ہو رہا ہے...', noUdharHistory: 'ابھی اُدھار کی تاریخ نہیں۔',
     payFullAmount: 'پوری رقم دیں', udharNeedsManager: 'اُدھار وصول یا کلیر صرف ایڈمن یا منیجر کر سکتا ہے۔ ان سے کہیں کہ ادائیگی درج کریں۔',
     addLabel: 'شامل کریں', addNewUdhaar: 'نیا اُدھار درج کریں', udhaarAmount: 'رقم', udhaarNote: 'تفصیل / نوٹ',
-    udhaarReference: 'حوالہ (اختیاری)', udhaarSaved: 'نیا اُدھار کھاتے میں شامل ہو گیا۔', previousBalance: 'پچھلا بیلنس',
+    udhaarReference: 'حوالہ (اختیاری)', udhaarSaved: 'نیا اُدھار کھاتے میں شامل ہو گیا۔', previousBalance: 'پچھلا بیلنس', newPurchaseLabel: 'نئی خریداری', finalOutstandingLabel: 'آخری بقایا',
     newBalance: 'نیا بیلنس', udhaarEntry: 'اُدھار', prevBillLabel: 'پچھلا بل', dateTimeLabel: 'تاریخ / وقت',
     creditSaleEntry: 'اُدھار سیل', paymentReceived: 'ادائیگی موصول', close: 'بند کریں',
     addNewUdhar: 'نیا اُدھار درج کریں', closeAddUdhar: 'بند کریں', saveUdharBtn: 'اُدھار محفوظ کریں',
@@ -396,6 +399,8 @@ const STRINGS = {
     udharReferencePh: 'حوالہ (اختیاری)', udharDateTitle: 'تاریخ', udharTimeTitle: 'وقت',
     udharEntryLabel: 'نیا اُدھار', refPrefix: 'حوالہ',
     allMonths: 'تمام مہینے', reverseBill: 'بل واپس لوٹائیں', reversePayment: 'ادائیگی واپس', balanceForCustomer: 'بقیہ:',
+    fromDateLabel: 'تاریخ سے', toDateLabel: 'تاریخ تک', fromTimeLabel: 'وقت سے', toTimeLabel: 'وقت تک',
+    clearFiltersBtn: 'فلٹر صاف کریں', noEntriesMatch: 'ان فلٹرز سے کوئی اندراج نہیں ملا۔',
     saleReturnsEyebrow: 'فروخت واپسی', returnsSubtitle: 'بل نمبر سے بل تلاش کریں، پھر منتخب اشیاء یا پورا بل واپس کریں۔ اسٹاک اور اُدھار خود بخود اپڈیٹ ہو جائیں گے۔',
     enterBillId: 'بل آئی ڈی / انوائس نمبر لکھیں (مثلاً FS-1049)', findInvoice: 'بل تلاش کریں', noInvoiceLoaded: 'ابھی کوئی بل کھولا نہیں گیا۔',
     voidedBlocked: 'یہ بل منسوخ ہو چکا ہے - واپسی ممکن نہیں۔', invoiceWord: 'بل', cashierLabel: 'کیشئر:',
@@ -434,6 +439,7 @@ const STRINGS = {
     referenceLabel: 'حوالہ', customerLabelShort: 'گاہک', selectCustomerPh: 'گاہک کا نام یا موبائل تلاش کریں...',
     addNewCustomer: 'نیا گاہک شامل کریں', addCustomerHelp: 'دبانے کے لیے چھوئیں',
     customerNamePh: 'گاہک کا نام', phoneLabel: 'موبائل', optionalWord: 'اختیاری',
+    walkInNameLabel: 'اس بل پر نام (اختیاری)', walkInNamePh: 'مثلاً احمد خان',
     quickAddNote: 'صرف نام اور موبائل۔ شناختی کارڈ، پتہ اور حد اس سے بعد میں گاہک صفحے سے بڑھایا جا سکتا ہے۔',
     saveAndUse: 'محفوظ اور استعمال', savingWord: 'محفوظ ہو رہا ہے...',
     scanCamera: 'کیمرے سے اسکین', amountReceived: 'موصول شدہ رقم', changeLabel: 'باقی رقم',
@@ -934,7 +940,7 @@ function ReverseBillModal({ sale, customers, client, refresh, onClose }) {
           h('div', { className: 'profile-title' },
             h('p', { className: 'eyebrow' }, t('reverseBillTitle')),
             h('h2', null, `${t('invoiceWord')} ${sale.invoiceNo}`),
-            h('p', { className: 'subtitle' }, `${new Date(sale.createdAt).toLocaleString('en-PK')} - ${customer ? customer.name : t('walkIn')} - ${money(sale.total)}`))),
+            h('p', { className: 'subtitle' }, `${new Date(sale.createdAt).toLocaleString('en-PK')} - ${customer ? customer.name : (sale.customerNameAtBilling || sale.customerName || t('walkIn'))} - ${money(sale.total)}`))),
         h('span', { className: `badge ${sale.voided ? 'danger' : sale.paymentType === 'Credit' ? 'warning' : 'success'}` },
           sale.voided ? t('voided') : paymentMethodLabel(sale.paymentType))),
       h('p', { className: 'reverse-help' }, t('reverseBillHelp')),
@@ -1062,7 +1068,7 @@ function SalesTable({ sales, customers, onReverse }) {
       const customer = customers.find(item => item.id === sale.customerId);
       return h('tr', { key: sale.id },
         h('td', null, h('strong', null, sale.invoiceNo)),
-        h('td', null, customer?.name || t('walkIn')),
+        h('td', null, customer?.name || sale.customerNameAtBilling || sale.customerName || t('walkIn')),
         h('td', null, h(Badge, { tone: sale.paymentType === 'Credit' ? 'warning' : 'success' }, paymentMethodLabel(sale.paymentType))),
         h('td', null, new Date(sale.createdAt).toLocaleString()),
         h('td', null, h('strong', null, money(sale.total))),
@@ -1155,7 +1161,7 @@ function drawBillImage(sale, settings, customer, labels) {
     [t('dateLabel'), dateStr],
     [t('hPaymentTime'), timeStr],
     [t('cashierLabel'), sale.createdBy || '-'],
-    [t('customerLabel'), (customer && customer.name) || t('walkIn')],
+    [t('customerLabel'), (sale.customerNameAtBilling || sale.customerName) || (customer && customer.name) || t('walkIn')],
     [t('paymentLabel'), methodLabel]
   ];
   if (sale.reference) meta.push([t('referenceLabel'), sale.reference]);
@@ -1169,7 +1175,14 @@ function drawBillImage(sale, settings, customer, labels) {
   if (handed > 0) totals.push([t('amountReceived'), money(handed)]);
   if (change > 0) totals.push([t('changeLabel'), money(change)]);
   if (due > 0) totals.push([t('udharRemaining'), money(due)]);
-  if (due > 0) totals.push([t('balanceForCustomer'), money(baseBalance + (sale.preview ? due : 0))]);
+
+  // The customer's khata movement, spelled out as the shop reads it: what was already owed, what this
+  // bill added (or, for a payment, what was received), and what is left to pay. A plain cash bill for
+  // a walk-in has no account behind it, so this block stays off those bills instead of printing zeros.
+  const accountPurchase = sale.paymentOnly ? 0 : grandTotal;
+  const accountPayment = Number(sale.paidAmount || 0);
+  const accountFinal = Number.isFinite(Number(sale.finalBalance)) ? Number(sale.finalBalance) : baseBalance + accountPurchase - accountPayment;
+  const showAccount = sale.paymentOnly || baseBalance > 0 || due > 0;
 
   // Measured in two passes: lay the bill out on a throwaway canvas to learn its height, then draw
   // it for real on a canvas of exactly that size. No guessing, so nothing is ever cut off.
@@ -1294,6 +1307,18 @@ function drawBillImage(sale, settings, customer, labels) {
     for (const [left, right] of totals) pair(left, right, 18, left === t('grandTotalLabel') ? '700' : '400');
     y += 6;
     divider();
+
+    // Account movement: previous balance -> this purchase / this payment -> final outstanding.
+    if (showAccount) {
+      pair(t('previousBalance'), money(baseBalance), 17, '400', '#333');
+      if (accountPurchase > 0) pair(t('newPurchaseLabel'), '+ ' + money(accountPurchase), 17, '400', '#333');
+      if (accountPayment > 0) pair(t('paymentReceived'), '- ' + money(accountPayment), 17, '400', '#333');
+      y += 6;
+      divider();
+      pair(t('finalOutstandingLabel'), money(accountFinal), 19, '700');
+      y += 6;
+      divider();
+    }
 
     // Delivery
     if (delivery && DELIVERY_FIELDS.some(([key]) => delivery[key])) {
@@ -1470,10 +1495,12 @@ const ledgerEntryToBill = (entry, customer) => {
     customerName: (customer && customer.name) || '',
     customerNameAtBilling: (customer && customer.name) || '',
     paymentType: settled ? 'Cash' : 'Credit',
+    paymentOnly: entry.type === 'payment',
     paidAmount: settled ? amount : 0,
     receivedAmount: settled ? amount : 0,
     dueAmount: settled ? 0 : amount,
     previousBalance: entry.balanceBefore,
+    finalBalance: Number.isFinite(Number(entry.balanceAfter)) ? Number(entry.balanceAfter) : undefined,
     discount: 0,
     additionalDiscount: 0,
     tax: 0,
@@ -1732,6 +1759,10 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
   const [customerIdx, setCustomerIdx] = useState(-1);
   const [customerHover, setCustomerHover] = useState(-1);
   const [customerId, setCustomerId] = useState('cus_walkin');
+  // A walk-in bill can still carry a name - "Ahmed from the corner shop" - so the printed and WhatsApp
+  // bill reads like a real receipt without the shop having to create a customer account for a one-off
+  // buyer. It is free text stored on the bill only, never on the customer list.
+  const [walkInName, setWalkInName] = useState('');
   // The name the cashier typed into the customer box that did not match anyone. Offered as a
   // one-tap "add this customer" so billing never has to stop and go to the customers page.
   const [newCustomerOpen, setNewCustomerOpen] = useState(false);
@@ -1935,6 +1966,9 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
   function selectCustomer(customer) {
     setCustomerId(customer.id);
     setCustomerSearch(customer.id === 'cus_walkin' ? '' : customer.name);
+    // The typed name belongs to the walk-in bill only. Picking a real customer clears it so the two
+    // cannot disagree about whose name goes on the receipt.
+    if (customer.id !== 'cus_walkin') setWalkInName('');
     setCustomerOpen(false);
     setCustomerIdx(-1);
     // Naming a customer means the goods go on their khata, so default the bill to udhar.
@@ -1978,6 +2012,7 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
     setDraftId(null);
     setCustomerId(keepCustomerId);
     if (keepCustomerId === 'cus_walkin') setCustomerSearch('');
+    setWalkInName('');
     setCustomerOpen(false);
     setCustomerIdx(-1);
     // Keep the same udhar-by-default rule for a customer who is still selected.
@@ -2023,6 +2058,8 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
       // in the same millisecond from being mistaken for one.
       clientId: `client_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
       customerId,
+      // Only a walk-in bill takes a free-text name; a registered customer always bills under their own.
+      customerName: customerId === 'cus_walkin' ? walkInName.trim() : '',
       paymentType: paymentType === 'Partial' ? 'Credit' : paymentType,
       discount: mainD,
       additionalDiscount: extraD,
@@ -2044,6 +2081,8 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
       createdAt: new Date().toISOString(),
       createdBy: (data.user && data.user.name) || '',
       customerId,
+      customerName: customerId === 'cus_walkin' ? walkInName.trim() : '',
+      customerNameAtBilling: (selectedCustomer && selectedCustomer.name) || (customerId === 'cus_walkin' ? walkInName.trim() : ''),
       paymentType,
       source: 'preview',
       items: cart.map(item => ({ ...item, manual: !item.productId })),
@@ -2128,7 +2167,7 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
       // Keep the customer on the bill after a completed sale, whether or not udhar was left. Dropping them
       // back to Walk-in meant the next bill for the same person went nowhere near their khata.
       const keepCustomerId = customerId !== 'cus_walkin' ? customerId : null;
-      setReceipt({ ...sale, previousBalance: prevBalance, customerNameAtBilling: (selectedCustomer && selectedCustomer.name) || '' });
+      setReceipt({ ...sale, previousBalance: prevBalance, customerNameAtBilling: (selectedCustomer && selectedCustomer.name) || (customerId === 'cus_walkin' ? walkInName.trim() : '') });
       // Every bill for a named customer lands on their khata straight away, product names included,
       // instead of only the ones that left udhar.
       if (keepCustomerId) showSaleInProfile(sale, prevBalance);
@@ -2367,7 +2406,8 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
       invoiceNo: draftId ? `${t('draftsLabel')} #${draftId}` : t('pendingInvoice'),
       at: Date.now(),
       createdAt: new Date().toISOString(),
-      customerName: (selectedCustomer && selectedCustomer.name) || '',
+      customerName: (selectedCustomer && selectedCustomer.name) || (customerId === 'cus_walkin' ? walkInName.trim() : ''),
+      customerNameAtBilling: (selectedCustomer && selectedCustomer.name) || (customerId === 'cus_walkin' ? walkInName.trim() : ''),
       items: cart.map(item => ({ name: item.name, qty: item.qty, unit: item.unit, price: item.price })),
       subtotal: Math.round(subtotal),
       discount: combinedD,
@@ -2532,6 +2572,9 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
           },
             h('span', { className: 'search-item-name' }, `+ ${t('addNewCustomer')} "${typedName}"`),
             h('span', { className: 'search-item-meta' }, t('addCustomerHelp'))))),
+      customerId === 'cus_walkin' && h('div', { className: 'walkin-name' },
+        h('label', null, t('walkInNameLabel')),
+        h('input', { value: walkInName, onChange: e => setWalkInName(e.target.value), placeholder: t('walkInNamePh'), maxLength: 80, autoComplete: 'off' })),
       customerId !== 'cus_walkin' && selectedCustomer && h('div', { className: 'customer-balance' },
         h('span', null, t('balanceForCustomer')),
         h('strong', { style: Number(selectedCustomer.balance) > 0 ? { color: '#c0392b' } : { color: '#267152' } }, money(selectedCustomer.balance)),
@@ -2655,7 +2698,7 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
 
   const invoiceHeader = h('section', { className: 'invoice-header' },
     h('div', { className: 'inv-block' }, h('label', null, t('voucherNo')), h('div', { className: 'inv-value voucher-pending' }, t('pendingInvoice'))),
-    h('div', { className: 'inv-block inv-customer' }, h('label', null, t('customerLabelShort')), h('div', { className: 'inv-value' }, selectedCustomer ? selectedCustomer.name : t('walkInCustomer'))),
+        h('div', { className: 'inv-block inv-customer' }, h('label', null, t('customerLabelShort')), h('div', { className: 'inv-value' }, selectedCustomer ? selectedCustomer.name : (walkInName.trim() || t('walkInCustomer')))),
     h('div', { className: 'inv-block' }, h('label', null, t('dateLabel')), h('div', { className: 'inv-value' }, new Date().toLocaleDateString('en-PK', { day: 'numeric', month: 'short', year: 'numeric' }))),
     h('div', { className: 'inv-block' }, h('label', null, t('paymentTerms')),
       h('select', { value: paymentType, onChange: e => { setPaymentType(e.target.value); if (e.target.value === 'Cash') setReceivedInput(''); } },
@@ -2838,7 +2881,7 @@ function ReceiptModal({ sale, customers, settings, onClose }) {
         h('div', { className: 'receipt-row' }, h('span', null, t('dateLabel')), h('span', null, dateStr)),
         h('div', { className: 'receipt-row' }, h('span', null, t('hPaymentTime')), h('span', null, timeStr)),
         h('div', { className: 'receipt-row' }, h('span', null, t('cashierLabel')), h('span', null, sale.createdBy || '-')),
-        h('div', { className: 'receipt-row' }, h('span', null, t('customerLabel')), h('span', null, (customer && customer.name) || t('walkIn'))),
+        h('div', { className: 'receipt-row' }, h('span', null, t('customerLabel')), h('span', null, sale.customerNameAtBilling || sale.customerName || (customer && customer.name) || t('walkIn'))),
         h('div', { className: 'receipt-row' }, h('span', null, t('paymentLabel')), h('span', null, methodLabel)),
         sale.reference && h('div', { className: 'receipt-row' }, h('span', null, t('referenceLabel')), h('span', null, sale.reference)),
         sale.offlineDraft && h('div', { className: 'receipt-row receipt-status' }, h('span', null, 'Status'), h('span', null, 'OFFLINE - WILL SYNC'))),
@@ -3315,6 +3358,10 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
   const [entries, setEntries] = useState(null);
   const [balanceAfter, setBalanceAfter] = useState({});
   const [monthFilter, setMonthFilter] = useState('all');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const [fromTime, setFromTime] = useState('');
+  const [toTime, setToTime] = useState('');
   const [summary, setSummary] = useState({ creditPurchases: customer.creditPurchases || 0, totalPaid: customer.totalPaid || 0 });
   const [balance, setBalance] = useState(customer.balance);
   const [amount, setAmount] = useState('');
@@ -3492,6 +3539,23 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
     }
   }
   const when = at => new Date(at).toLocaleString('en-PK', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  // History filters: a month, a date range and a time-of-day range, plus a one-tap clear. Dates and
+  // times are compared in the shop's local time (the same values the rows show), so a payment listed
+  // as "5 May, 3:20 pm" is found by 2026-05-05 and 15:00–16:00 regardless of the stored UTC string.
+  const hasFilters = monthFilter !== 'all' || !!fromDate || !!toDate || !!fromTime || !!toTime;
+  const passesFilters = entry => {
+    if (monthFilter !== 'all' && (entry.at || '').slice(0, 7) !== monthFilter) return false;
+    const day = toDateInputValue(entry.at);
+    const time = toTimeInputValue(entry.at);
+    if (fromDate && day && day < fromDate) return false;
+    if (toDate && day && day > toDate) return false;
+    if (fromTime && time && time < fromTime) return false;
+    if (toTime && time && time > toTime) return false;
+    return true;
+  };
+  const visibleEntries = entries ? entries.filter(passesFilters) : [];
+  const clearFilters = () => { setMonthFilter('all'); setFromDate(''); setToDate(''); setFromTime(''); setToTime(''); };
+  const monthCount = monthKey => visibleEntries.filter(e => (e.at || '').slice(0, 7) === monthKey).length;
   return ReactDOM.createPortal(h('div', { className: 'modal', onClick: onClose },
     h('section', { className: 'khata', onClick: e => e.stopPropagation() },
       h('header', { className: 'khata-head profile-head' },
@@ -3509,7 +3573,7 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
         h('div', null, h('span', null, t('hPhone')), h('b', null, customer.phone || '-')),
         h('div', null, h('span', null, t('hCnic')), h('b', null, customer.cnicMasked || '-')),
         h('div', null, h('span', null, t('phAddressOptional')), h('b', null, customer.address || '-')),
-        h('div', null, h('span', null, 'Credit Limit'), h('b', null, money(customer.creditLimit))),
+        h('div', null, h('span', null, t('creditLimitLabel')), h('b', null, money(customer.creditLimit))),
         h('div', { className: 'profile-products' },
           h('span', null, t('productLabel')),
           customerProductsList(customer).length
@@ -3519,7 +3583,8 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
       h('div', { className: 'khata-summary' },
         h('div', null, h('span', null, t('totalCreditPurchases')), h('strong', null, money(summary.creditPurchases))),
         h('div', null, h('span', null, t('totalPaidLabel')), h('strong', null, money(summary.totalPaid))),
-        h('div', null, h('span', null, t('remaining')), h('strong', { style: Number(balance) > 0 ? { color: '#c0392b' } : { color: '#267152' } }, money(balance)))),
+        h('div', { className: 'khata-outstanding' }, h('span', null, t('currentOutstandingLabel')), h('strong', { style: Number(balance) > 0 ? { color: '#c0392b' } : { color: '#267152' } }, money(balance)))),
+      h('small', { className: 'khata-summary-note' }, t('lifetimeTotalsNote')),
       message && h('div', { className: 'notice' }, message),
       canManageUdhar
         ? h('button', {
@@ -3556,13 +3621,20 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
               h('option', { value: 'all' }, t('allMonths')),
               monthKeys(entries).map(monthKey => h('option', { key: monthKey, value: monthKey },
                 new Date(monthKey + '-01').toLocaleDateString('en-PK', { month: 'long', year: 'numeric' })))),
-            h('span', { className: 'ledger-balance-tip' }, `${t('remaining')}: ${money(balance)}`)),
-          monthKeys(entries).filter(monthKey => monthFilter === 'all' || monthKey === monthFilter).map(monthKey =>
+            hasFilters ? h('button', { type: 'button', className: 'secondary small', onClick: clearFilters }, t('clearFiltersBtn')) : null,
+            h('span', { className: 'ledger-balance-tip' }, `${t('currentOutstandingLabel')}: ${money(balance)}`)),
+          h('div', { className: 'ledger-range' },
+            h('label', null, h('span', null, t('fromDateLabel')), h('input', { type: 'date', value: fromDate, max: toDate || undefined, onChange: e => setFromDate(e.target.value) })),
+            h('label', null, h('span', null, t('toDateLabel')), h('input', { type: 'date', value: toDate, min: fromDate || undefined, onChange: e => setToDate(e.target.value) })),
+            h('label', null, h('span', null, t('fromTimeLabel')), h('input', { type: 'time', value: fromTime, onChange: e => setFromTime(e.target.value) })),
+            h('label', null, h('span', null, t('toTimeLabel')), h('input', { type: 'time', value: toTime, onChange: e => setToTime(e.target.value) }))),
+          visibleEntries.length === 0 ? h('p', { className: 'empty-copy' }, t('noEntriesMatch')) :
+          monthKeys(visibleEntries).map(monthKey =>
             h('div', { className: 'ledger-month', key: monthKey },
               h('div', { className: 'ledger-month-head' },
                 h('strong', null, new Date(monthKey + '-01').toLocaleDateString('en-PK', { month: 'long', year: 'numeric' })),
-                h('span', null, `${entries.filter(e => (e.at || '').slice(0, 7) === monthKey).length} ${t('billWord')}`)),
-              entries.filter(e => (e.at || '').slice(0, 7) === monthKey).map(entry => {
+                h('span', null, `${monthCount(monthKey)} ${t('billWord')}`)),
+              visibleEntries.filter(e => (e.at || '').slice(0, 7) === monthKey).map(entry => {
                 const canReverse = user && (user.role === 'Admin' || user.role === 'Manager');
                  const isCreditEntry = entry.type !== 'payment';
                  return h('div', { className: `ledger-entry ${entry.type}`, key: entry.id },
@@ -3856,11 +3928,14 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
     // udhar entry instead of quietly rewriting a stored total. It is a separate request field, which
     // is what lets the ledger show it under the day it happened.
     if (canEditUdhar && pendingProductValue > 0) {
+      const pickedAt = new Date().toISOString();
       payload.productUdhar = {
         amount: pendingProductValue,
         note: productUdharNote(pendingProductValue, form.products, init.products),
-        atDate: form.paymentDate || extraUdharDate,
-        atTime: form.paymentTime || extraUdharTime,
+        // Dated to the moment the goods were added on this form. It must not borrow the customer's
+        // last payment date - the two are unrelated and that put the purchase on the wrong day.
+        atDate: toDateInputValue(pickedAt),
+        atTime: toTimeInputValue(pickedAt),
         // Fixed before the request so a queued offline replay carries the same id and cannot add
         // the amount a second time when it eventually syncs.
         clientId: `productUdhar_${Date.now()}_${Math.floor(Math.random() * 1e6)}`
@@ -3959,7 +4034,7 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
           h('div', null, h('label', null, t('hCnic')), h('input', { value: form.cnic, placeholder: customer.cnicMasked || t('phCnicOptional'), onChange: e => setForm({ ...form, cnic: e.target.value }) }))),
         h('div', { className: 'edit-form-row' },
           h('div', null, h('label', null, t('phAddressOptional')), h('input', { value: form.address, onChange: e => setForm({ ...form, address: e.target.value }) })),
-          h('div', null, h('label', null, 'Credit Limit'), h('input', { type: 'number', min: '0', value: form.creditLimit, onChange: e => setForm({ ...form, creditLimit: e.target.value }) }))),
+          h('div', null, h('label', null, t('creditLimitLabel')), h('input', { type: 'number', min: '0', value: form.creditLimit, onChange: e => setForm({ ...form, creditLimit: e.target.value }) }))),
         h('div', { className: 'section-label' }, t('productLabel')),
         productPicker,
         canEditUdhar && h('div', { className: 'section-label' }, t('udharKhataEyebrow')),
@@ -4827,10 +4902,13 @@ function App() {
   if (!session) return h(Login, { onLogin: setSession, langTick, bumpLang });
   if (!data) return h('main', { className: 'loading' }, error || t('loadingData'));
   const role = data.user.role;
+  // The dashboard label is separate from the account's login name: the shop wants "Akmal" on the
+  // admin dashboard and "Aryan" on the other. Fall back to the account name when no label is set.
+  const shownName = data.user.displayName || data.user.name;
   const visiblePages = pages.filter(([id]) => canSee(data.user, id));
   const activePage = visiblePages.some(([id]) => id === page) ? page : (visiblePages[0] || ['dashboard'])[0];
   return h('main', { className: 'app-shell', dir: LANG === 'ur' ? 'rtl' : 'ltr' },
-    h('aside', { className: 'sidebar' + (navOpen ? ' open' : '') }, h('div', { className: 'brand' }, h('img', { className: 'brand-logo', src: 'logo.png?v=27', alt: '' }), h('div', null, h('strong', null, 'Faislabadi'), h('small', null, 'GENERAL STORE'))), h('nav', null, visiblePages.map(([id]) => h('button', { key: id, className: activePage === id ? 'nav-item active' : 'nav-item', onClick: () => { setPage(id); setNavOpen(false); } }, h('span', null, t('nav_' + id)))), h(LangToggle, { tick: bumpLang })), h('div', { className: 'sidebar-footer' }, h('div', { className: 'avatar' }, data.user.name.split(' ').map(part => part[0]).join('').slice(0, 2)), h('div', null, h('strong', null, data.user.name), h('small', null, role)), h('button', { className: 'more', onClick: () => { try { client.post('/api/auth/logout', {}).catch(() => {}); } catch (_) {} localStorage.removeItem(stateKey); setSession(null); } }, t('logout')))),
+    h('aside', { className: 'sidebar' + (navOpen ? ' open' : '') }, h('div', { className: 'brand' }, h('img', { className: 'brand-logo', src: 'logo.png?v=27', alt: '' }), h('div', null, h('strong', null, 'Faislabadi'), h('small', null, 'GENERAL STORE'))), h('nav', null, visiblePages.map(([id]) => h('button', { key: id, className: activePage === id ? 'nav-item active' : 'nav-item', onClick: () => { setPage(id); setNavOpen(false); } }, h('span', null, t('nav_' + id)))), h(LangToggle, { tick: bumpLang })), h('div', { className: 'sidebar-footer' }, h('div', { className: 'avatar' }, shownName.split(' ').map(part => part[0]).join('').slice(0, 2)), h('div', null, h('strong', null, shownName), h('small', null, role)), h('button', { className: 'more', onClick: () => { try { client.post('/api/auth/logout', {}).catch(() => {}); } catch (_) {} localStorage.removeItem(stateKey); setSession(null); } }, t('logout')))),
     h('section', { className: 'main-area' }, h('header', { className: 'topbar' }, activePage === 'pos' && h('button', { className: 'menu-btn', 'aria-label': LANG === 'ur' ? 'مینو کھولیں' : 'Open menu', onClick: () => setNavOpen(!navOpen) }, h('span', { className: 'menu-btn-icon' }, '☰')), h('div', { className: 'crumb' }, 'Faislabadi General Store / ', h('strong', null, t('nav_' + activePage))), h('div', { className: 'top-actions' },
       cloudSync && cloudSync.enabled && h('span', { className: cloudSync.lastError ? 'sync-status offline' : 'sync-status', title: cloudSync.lastSuccessAt ? `${t('cloudSyncedAt')} ${new Date(cloudSync.lastSuccessAt).toLocaleTimeString()}` : t('waitingFirstSync') }, cloudSync.lastError ? t('cloudPending') : (cloudSync.lastSuccessAt ? t('cloudSynced') : t('cloudConnecting'))),
       h('span', { className: online ? 'sync-status' : 'sync-status offline' }, online ? t('online') : t('offline')), pendingActions > 0 && h('span', { className: 'sync-status offline', title: LANG === 'ur' ? 'انترنت آنے پر یہ خودکار طور پر سنک ہوں گے' : 'These will sync automatically when the internet returns' }, LANG === 'ur' ? `${pendingActions} سنک باقی` : `${pendingActions} waiting to sync`), h('button', { className: 'secondary', onClick: refresh }, t('refresh')), h(LangToggle, { tick: bumpLang }))), dataWarning && h('div', { className: 'notice danger', style: { margin: '12px 20px 0' } }, dataWarning), syncNotice && h('div', { className: 'notice warning', style: { margin: '12px 20px 0' } }, syncNotice), storageNotice && h('div', { className: 'notice warning', style: { margin: '12px 20px 0' } }, storageNotice),     activePage === 'dashboard' ? h(Dashboard, { data, go: setPage, client, refresh }) : activePage === 'pos' ? h(POS, { client, data, refresh, applySale, applyCustomer, online, setOnline, go: setPage }) : activePage === 'users' ? h(UsersAdmin, { client }) : activePage === 'returns' ? h(ReturnsPage, { data, client, refresh }) : activePage === 'reports' ? h(Reports, { data, client }) : activePage === 'purchases' ? h(Purchases, { data, client, refresh }) : activePage === 'settings' ? h(Settings, { data, client }) : activePage === 'warehouse' ? h(WarehousePage, { data, client, refresh }) : h(DataPage, { page: activePage, data, client, refresh })));

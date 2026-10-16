@@ -67,6 +67,25 @@ test('billing a kg product in grams checks and reduces stock in kg, not grams', 
   assert.equal(sale.total, 200);
 });
 
+test('a walk-in bill keeps a typed name on the bill without creating a customer', () => {
+  const db = seedData();
+  ensureSchema(db);
+  const admin = db.users[0];
+  const product = db.products[0];
+  product.stock = 10;
+  const before = db.customers.length;
+  const sale = createSale(db, { customerId: 'cus_walkin', customerName: '  Ahmed\nKhan  ', paymentType: 'Cash', taxRate: 0, items: [{ productId: product.id, qty: 1, unit: product.unit, price: product.price }] }, admin);
+  // The name is cleaned and stored on the bill alone.
+  assert.equal(sale.customerName, 'Ahmed Khan');
+  assert.equal(sale.customerNameAtBilling, 'Ahmed Khan');
+  assert.equal(db.customers.length, before);
+  assert.equal(db.customers.some(customer => customer.name === 'Ahmed Khan'), false);
+  // A named registered customer still bills under their own name, never a stray typed one.
+  const registered = createSale(db, { customerId: db.customers.find(c => c.id !== 'cus_walkin').id, customerName: 'Someone Else', paymentType: 'Cash', taxRate: 0, items: [{ productId: product.id, qty: 1, unit: product.unit, price: product.price }] }, admin);
+  assert.equal(registered.customerName, '');
+  assert.equal(registered.customerNameAtBilling, db.customers.find(c => c.id === registered.customerId).name);
+});
+
 test('a sub-rupee per-gram rate is kept, not rounded away to zero', () => {
   const db = seedData();
   ensureSchema(db);

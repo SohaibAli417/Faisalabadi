@@ -234,6 +234,10 @@ function sanitizeUser(user) {
 
 const coreSettings = { storeName: 'Faislabadi General Store', phone: '03024503010', address: 'Fazlia Colony, Opposite Ali Internet Service' };
 
+// Dashboard display labels, keyed by account id. Admin dashboard shows "Akmal", the other
+// (Manager) dashboard shows "Aryan". These only affect the shown label, never login or access.
+const accountDisplayNames = { usr_sohaib: 'Akmal', usr_akmal: 'Aryan' };
+
 function generateInitialPassword() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
   let pw = '';
@@ -264,6 +268,16 @@ function ensureCoreAccounts(db) {
   for (const [key, value] of Object.entries(coreSettings)) {
     if (db.settings[key] !== value) {
       db.settings[key] = value;
+      changed = true;
+    }
+  }
+  // The shop shows a different label on each of its two dashboards. That label is a display name,
+  // kept apart from the account's login name, email, role and permissions, so changing what a
+  // dashboard is called never touches how anyone signs in or what they are allowed to do.
+  for (const user of db.users) {
+    const wanted = accountDisplayNames[user.id];
+    if (wanted && user.displayName !== wanted) {
+      user.displayName = wanted;
       changed = true;
     }
   }
@@ -755,6 +769,13 @@ function createSale(db, payload, actor, source = 'online') {
   const total = taxable + tax;
   const customerId = payload.customerId || 'cus_walkin';
   const customer = db.customers.find(item => item.id === customerId);
+  // A one-off buyer can still have a name on the bill without being added to the customer list. It is
+  // stored on the bill alone; nothing is written to db.customers, so the counter never accumulates
+  // throwaway accounts. Only a walk-in bill takes this name - a registered customer bills under their
+  // own name from the customer record.
+  const walkInName = customerId === 'cus_walkin'
+    ? String(payload.customerName ?? '').replace(/[\r\n\t]+/g, ' ').trim().slice(0, 80)
+    : '';
   const paymentType = payload.paymentType || 'Cash';
 
   let paidAmount;
@@ -795,6 +816,8 @@ function createSale(db, payload, actor, source = 'online') {
     createdBy: actor.id,
     createdByName: actor.name || '',
     customerId,
+    customerName: walkInName,
+    customerNameAtBilling: customer && customerId !== 'cus_walkin' ? customer.name : walkInName,
     paymentType,
     source,
     items: saleItems,

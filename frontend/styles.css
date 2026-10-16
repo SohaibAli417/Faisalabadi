@@ -363,6 +363,22 @@ td {
   font-weight: 700;
   color: var(--muted);
 }
+.ledger-range {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.ledger-range label { display: flex; flex-direction: column; gap: 3px; font-size: 10px; color: #64748b; font-weight: 700; }
+.ledger-range input {
+  padding: 6px 8px;
+  border: 1.5px solid var(--line);
+  border-radius: 8px;
+  font-size: 12px;
+  font-family: inherit;
+  background: #fff;
+}
 .ledger-month { display: flex; flex-direction: column; gap: 8px; }
 .ledger-month-head {
   display: flex;
@@ -1009,6 +1025,23 @@ td {
   .customer-balance .pos-khata-wa { margin-inline-start: 0; width: 100%; }
 }
 
+.walkin-name {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.walkin-name label { color: var(--muted); font-size: 12px; }
+.walkin-name input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1.5px solid var(--line);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 13px;
+}
+.walkin-name input:focus { border-color: var(--green); outline: none; }
+
 /* Customer udhaar profile in POS (right column) */
 .cust-profile {
   background: #fff;
@@ -1627,6 +1660,21 @@ td {
     gap: 10px !important;
   }
 
+  /* Phone POS: the checkout column is the narrow one, so its panels and payment controls have to
+     share the width instead of keeping their desktop sizes and spilling out of the frame. */
+  .pos-layout > * { min-width: 0 !important; }
+  .checkout-grid .checkout-panel { padding: 10px !important; }
+  .payment-form input[type='date'], .payment-form input[type='time'] {
+    width: auto !important;
+    flex: 1 1 42% !important;
+    min-width: 0 !important;
+  }
+  .payment-form input[type='number'], .payment-form input[type='text'], .payment-form select {
+    flex: 1 1 100% !important;
+    min-width: 0 !important;
+  }
+  .checkout-panel .primary, .checkout-panel .secondary { width: 100% !important; }
+
   .invoice-header { flex-direction: column !important; align-items: stretch !important; }
   .inv-customer { flex: none !important; }
 
@@ -1849,6 +1897,8 @@ td {
 .khata-summary div { display: flex; flex-direction: column; gap: 2px; }
 .khata-summary span { font-size: 11px; color: #64748b; font-weight: 600; }
 .khata-summary strong { font-size: 15px; }
+.khata-summary .khata-outstanding strong { font-size: 17px; }
+.khata-summary-note { display: block; font-size: 11px; color: #64748b; margin: -6px 0 12px; }
 .payment-form { display: flex; gap: 8px; align-items: stretch; flex-wrap: wrap; }
 .khata-udhar-toggle { width: 100%; margin: 0 0 10px; }
 .khata-udhar-toggle.open { border-color: #c0392b; color: #c0392b; }
@@ -2016,6 +2066,33 @@ img, table, .receipt, .modal-content { max-width: 100%; }
   /* Keep long names and invoice numbers from forcing the layout wider. */
   .pos-page h1, .pos-page h2, .pos-page h3 { word-break: break-word; }
   .inv-no, .invoice-no, .mono { word-break: break-all; }
+}
+
+/* ============================================================
+   v41 - the Udhar editor (and the khata modal) on a phone:
+   fields, product chips and the action buttons stack instead
+   of being crushed into one narrow row.
+   ============================================================ */
+@media (max-width: 760px) {
+  .modal .khata { width: 100% !important; padding: 16px 14px !important; border-radius: 12px !important; }
+  .khata-head { flex-direction: column !important; align-items: stretch !important; gap: 6px !important; }
+
+  .edit-form-row { gap: 8px !important; }
+  .edit-form-row > div { min-width: 100% !important; }
+  .edit-form input, .edit-form select { font-size: 15px !important; }
+  .edit-form .remaining-row { justify-content: space-between !important; }
+
+  .product-chip-list { width: 100% !important; }
+  .chip-item { width: 100% !important; justify-content: space-between !important; }
+  .chip-qty { width: 68px !important; }
+  .chip-unit { flex: 1 1 64px !important; min-width: 0 !important; max-width: 120px !important; }
+  .chip-amount { margin-inline-start: auto !important; }
+  .selected-product { align-items: stretch !important; }
+  .manual-row input { min-width: 0 !important; flex: 1 1 100% !important; }
+  .manual-row .primary, .manual-row .secondary { flex: 1 1 46% !important; }
+
+  .form-actions { flex-direction: column !important; }
+  .form-actions .primary, .form-actions .secondary { width: 100% !important; }
 }
 
 @media (max-width: 400px) {
