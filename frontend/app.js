@@ -3629,8 +3629,11 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
   const settled = !(Number(balance) > 0);
   // The header button opens this customer's newest bill. It used to open WhatsApp with a block of
   // text only; now it hands over the same bill picture the other buttons send, so the customer
-  // receives an image and not a message they cannot read at the counter.
-  const latestBillEntry = (entries || []).find(entry => entry.type === 'sale' && !entry.voided) || null;
+  // receives an image and not a message they cannot read at the counter. A sale is preferred, but a
+  // customer whose udhar was typed by hand has no sale - so any credit entry is used rather than
+  // dropping the button altogether.
+  const creditEntries = (entries || []).filter(entry => !entry.voided && entry.type !== 'payment');
+  const latestBillEntry = creditEntries.find(entry => entry.type === 'sale') || creditEntries[0] || null;
   const latestBill = latestBillEntry ? withPrevBalance(ledgerEntryToBill(latestBillEntry, customer)) : null;
   return ReactDOM.createPortal(h('div', { className: 'modal', onClick: onClose },
     h('section', { className: 'khata', onClick: e => e.stopPropagation() },
