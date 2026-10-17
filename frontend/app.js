@@ -1,6 +1,6 @@
 /* global React, ReactDOM */
-const APP_VERSION = 'v60';
-const APP_CHECKSUM = 'product-money-sum-v36';
+const APP_VERSION = 'v61';
+const APP_CHECKSUM = 'statement-payments-v37';
 (function() {
   var stored = null;
   try { stored = localStorage.getItem('faislabadi-pos-version'); } catch(_) {}
@@ -1369,6 +1369,16 @@ function outstandingUdhar(entries) {
     .filter(row => row.owed > 0);
 }
 
+// Payments the customer has already handed over in this stretch of the khata, so the statement can
+// mention them. A payment taken at billing rides on the bill's own row already, so it is left out here
+// to keep the same rupees from reading twice. Listing these never changes what is still owed.
+function paidUdhar(entries) {
+  return (entries || [])
+    .filter(entry => entry && !entry.voided && entry.type === 'payment' && !entry.paidAtBilling)
+    .map(entry => ({ entry, paid: Number(entry.amount) || 0 }))
+    .filter(row => row.paid > 0);
+}
+
 // One plain line describing a single udhar row: what was taken and, for a bill, its number. Used by both
 // the statement picture and its written caption so the two always say the same thing.
 function udharRowDescription(entry, ur) {
@@ -1392,6 +1402,8 @@ function drawKhataStatementImage(customer, entries, balance, settings) {
   const storeAddress = (settings && settings.address) || '';
   const remaining = Math.max(0, Number(balance) || 0);
   const owed = outstandingUdhar(entries);
+  const paid = paidUdhar(entries);
+  const totalPaid = round3(paid.reduce((sum, row) => sum + row.paid, 0));
   const customerName = (customer && customer.name) || '';
   const customerPhone = (customer && customer.phone) || '';
   const customerId = (customer && customer.id) || '';
@@ -1407,8 +1419,10 @@ function drawKhataStatementImage(customer, entries, balance, settings) {
     custId: ur ? 'گاہک نمبر' : 'Customer ID',
     date: ur ? 'تاریخ' : 'Date',
     section: ur ? 'باقی اُدھار (تفصیل)' : 'OUTSTANDING UDHAR',
+    paidSection: ur ? 'وصول شدہ رقوم' : 'PAYMENTS RECEIVED',
     colDate: ur ? 'تاریخ' : 'Date',
     colAmount: ur ? 'رقم' : 'Amount',
+    totalPaid: ur ? 'کل وصول شدہ' : 'TOTAL PAID',
     total: ur ? 'کل باقی اُدھار' : 'TOTAL REMAINING',
     none: ur ? 'کوئی باقی اُدھار نہیں' : 'No udhar pending',
     thanks: ur ? 'شکریہ! دوبارہ تشریف لائیں۔' : 'Thank you! Please visit again.'
@@ -1525,7 +1539,27 @@ function drawKhataStatementImage(customer, entries, balance, settings) {
     y += 8;
     divider();
 
-    // The one figure that matters
+    // Money already handed over, listed for the record so the bill is never silent about a payment
+    // that was made. The figures below still add up to what is left to pay.
+    if (paid.length) {
+      y += 4;
+      centred(L.paidSection, 18, '700', '#111');
+      y += 26;
+      text(L.colDate, 15, '700', '#333');
+      rhs(L.colAmount, 15, '700', '#333');
+      y += 4;
+      divider();
+      paid.slice().reverse().forEach(row => {
+        y += 24;
+        text(rowDate(row.entry.at), 17, '600', '#111');
+        rhs('- ' + money(row.paid), 17, '700', '#267152');
+      });
+      y += 8;
+      divider();
+    }
+
+    // The figures that matter
+    if (totalPaid > 0) pair(L.totalPaid, money(totalPaid), 18, '600', '#267152');
     pair(L.total, money(remaining), 21, '700', '#111');
     y += 6;
     divider();
@@ -1861,6 +1895,8 @@ function khataStatementText(customer, entries, balance, settings) {
   const ur = LANG === 'ur';
   const rows = [];
   const owed = outstandingUdhar(entries).slice().reverse();
+  const paid = paidUdhar(entries).slice().reverse();
+  const totalPaid = round3(paid.reduce((sum, row) => sum + row.paid, 0));
   rows.push(...waHeader(settings));
   rows.push(waRule('='));
   rows.push(waCenter('*' + (ur ? 'اُدھار کھاتہ' : 'UDHAR KHATA') + '*'));
@@ -1882,6 +1918,16 @@ function khataStatementText(customer, entries, balance, settings) {
     });
   }
   rows.push(waRule('-'));
+  if (paid.length) {
+    rows.push(waCenter('*' + (ur ? 'وصول شدہ رقوم' : 'PAYMENTS RECEIVED') + '*'));
+    rows.push(waRow(ur ? 'تاریخ' : 'Date', ur ? 'رقم' : 'Amount'));
+    rows.push(waRule('-'));
+    paid.forEach(row => {
+      rows.push(waRow('  ' + waDate(row.entry.at), '- ' + money(row.paid)));
+    });
+    rows.push(waRule('-'));
+  }
+  if (totalPaid > 0) rows.push(waRow(ur ? 'کل وصول شدہ' : 'TOTAL PAID', money(totalPaid)));
   rows.push(waRow('*' + (ur ? 'کل باقی اُدھار' : 'TOTAL REMAINING') + '*', '*' + money(balance) + '*'));
   rows.push(...waFooter(settings));
   return '```\n' + rows.join('\n') + '\n```';
@@ -4008,6 +4054,7 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
   const [form, setForm] = useState(init);
   const [productSearch, setProductSearch] = useState('');
   const [manualDraft, setManualDraft] = useState('');
+  const [manualPrice, setManualPrice] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState('');
   const [extraUdharOpen, setExtraUdharOpen] = useState(false);
@@ -4071,22 +4118,26 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
   function openManual() {
     setForm(old => ({ ...old, manualMode: true }));
     setManualDraft('');
+    setManualPrice('');
   }
   function commitManual() {
     const name = manualDraft.trim();
     if (!name) return;
+    const price = Number(manualPrice) || 0;
     setForm(old => ({
       ...old,
       manualMode: false,
       products: old.products.some(p => !p.id && p.manual && p.name.toLowerCase() === name.toLowerCase())
         ? old.products
-        : [...old.products, { id: null, name, manual: true, qty: 1, unit: '', baseUnit: '', price: 0 }]
+        : [...old.products, { id: null, name, manual: true, qty: 1, unit: '', baseUnit: '', price }]
     }));
     setManualDraft('');
+    setManualPrice('');
   }
   function cancelManual() {
     setForm(old => ({ ...old, manualMode: false }));
     setManualDraft('');
+    setManualPrice('');
   }
     function removeProduct(index) {
       setForm(old => applyProductChange(old, old.products.filter((_, i) => i !== index)));
@@ -4317,6 +4368,7 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
     !form.manualMode && h('button', { type: 'button', className: 'secondary', key: 'manual-btn', onClick: openManual }, t('addProductManually')),
     form.manualMode && h('div', { className: 'manual-row', key: 'manual-row' },
       h('input', { placeholder: t('productName'), value: manualDraft, onChange: e => setManualDraft(e.target.value), autoFocus: true }),
+      h('input', { type: 'number', min: '0', step: 'any', className: 'manual-price', title: t('rateLabel'), placeholder: t('rateLabel'), value: manualPrice, onChange: e => setManualPrice(e.target.value) }),
       h('button', { type: 'button', className: 'primary', onClick: commitManual }, t('add')),
       h('button', { type: 'button', className: 'secondary', onClick: cancelManual }, t('cancelLabel'))),
     productSelected && h('p', { className: 'hint', key: 'hint' }, t('productPickHint')));

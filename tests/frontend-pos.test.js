@@ -156,6 +156,32 @@ test('the khata statement picture and caption both show the outstanding udhar an
   assert.ok(/money\(balance\)/.test(caption), 'the caption must print the remaining total');
 });
 
+test('the khata statement also mentions the payments the customer has made', () => {
+  // Run paidUdhar for real: a payment taken at billing rides on its own bill row, so it must stay out,
+  // and a normal payment must be listed. Nothing here may change the outstanding total.
+  const start = appJs.indexOf('function paidUdhar(');
+  assert.ok(start >= 0, 'paidUdhar must exist');
+  const source = appJs.slice(start, appJs.indexOf('\n}', start) + 2);
+  const paidUdhar = new Function(`${source}; return paidUdhar;`)();
+
+  const rows = paidUdhar([
+    { type: 'payment', id: 'p1', amount: 200, paidAtBilling: false },
+    { type: 'payment', id: 'p2', amount: 300, paidAtBilling: true },
+    { type: 'payment', id: 'p3', amount: 150, voided: true },
+    { type: 'udhar', id: 'u1', amount: 250 }
+  ]);
+  assert.deepEqual(rows.map(row => row.entry.id), ['p1'], 'only a real, non-billing payment is listed');
+  assert.deepEqual(rows.map(row => row.paid), [200]);
+
+  const drawer = appJs.slice(appJs.indexOf('function drawKhataStatementImage('), appJs.indexOf('function shareCanvasAsImage('));
+  assert.ok(/paidUdhar\(entries\)/.test(drawer), 'the picture must list the payments received');
+  assert.ok(/L\.totalPaid/.test(drawer), 'the picture must print a total paid line');
+
+  const caption = appJs.slice(appJs.indexOf('function khataStatementText('), appJs.indexOf('function ScanCamera('));
+  assert.ok(/paidUdhar\(entries\)/.test(caption), 'the caption must list the payments received');
+  assert.ok(/TOTAL PAID/.test(caption), 'the caption must print a total paid line');
+});
+
 test('every WhatsApp bill image prints a grand total', () => {
   // The live cart, a finished receipt and an old khata row all reach drawBillImage in different shapes.
   // Without a fallback, any one of them missing `total` produced an image reading "Total Rs 0".
@@ -345,7 +371,8 @@ test('a remembered product can carry its own price on the customer edit form', (
   const modal = appJs.slice(appJs.indexOf('function CustomerEditModal('), appJs.indexOf('function UomEditor('));
   assert.ok(modal.includes('function setProductPrice('), 'the edit form must be able to change a product line rate');
   assert.ok(modal.includes("className: 'chip-price'"), 'each product chip must offer a price box');
-  assert.ok(modal.includes('price: 0 }'), 'a manually-typed product must start with a price slot');
+  assert.ok(modal.includes("className: 'manual-price'"), 'a remembered product must take a price as it is typed in');
+  assert.ok(modal.includes('const price = Number(manualPrice) || 0;'), 'the typed manual price must reach the new product line');
   assert.ok(modal.includes('Number(product.price) || 0'), 'productValue must read the typed price so it reaches the udhar');
 });
 
