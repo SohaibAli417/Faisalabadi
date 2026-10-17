@@ -337,3 +337,23 @@ test('printing a bill reuses the print root so it can never print a blank page',
   );
   assert.ok(/\.bill-print-image \{/.test(stylesCss), 'the printed bill image must be styled to fit the paper');
 });
+
+// A remembered product (one not in the catalogue) is added by name, so it used to arrive with no price
+// and added nothing to the khata. The cashier can now type its rate on the chip, and the amount typed
+// beside it in "Add New Udhaar" joins the same Save instead of being dropped - the two add up.
+test('a remembered product can carry its own price on the customer edit form', () => {
+  const modal = appJs.slice(appJs.indexOf('function CustomerEditModal('), appJs.indexOf('function UomEditor('));
+  assert.ok(modal.includes('function setProductPrice('), 'the edit form must be able to change a product line rate');
+  assert.ok(modal.includes("className: 'chip-price'"), 'each product chip must offer a price box');
+  assert.ok(modal.includes('price: 0 }'), 'a manually-typed product must start with a price slot');
+  assert.ok(modal.includes('Number(product.price) || 0'), 'productValue must read the typed price so it reaches the udhar');
+});
+
+test('a hand-written udhar amount beside a product is saved with it, not dropped', () => {
+  const modal = appJs.slice(appJs.indexOf('function CustomerEditModal('), appJs.indexOf('function UomEditor('));
+  const save = modal.slice(modal.indexOf('async function save(event)'));
+  assert.ok(save.includes('const moneyPayload = moneyAmount > 0 ?'), 'the typed amount must be captured on Save');
+  assert.ok(save.includes('await client.post(`/api/customers/${customer.id}/udhar`, moneyPayload)'), 'the amount must be posted to the udhar endpoint');
+  assert.ok(save.includes("queueAction('udhar', { customerId: customer.id, ...moneyPayload })"), 'an offline amount must be queued too');
+  assert.ok(save.includes('payload.productUdhar ='), 'the priced product is still sent as a product udhar');
+});

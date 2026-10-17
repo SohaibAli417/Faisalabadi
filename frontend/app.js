@@ -1,6 +1,6 @@
 /* global React, ReactDOM */
-const APP_VERSION = 'v59';
-const APP_CHECKSUM = 'khata-statement-v35';
+const APP_VERSION = 'v60';
+const APP_CHECKSUM = 'product-money-sum-v36';
 (function() {
   var stored = null;
   try { stored = localStorage.getItem('faislabadi-pos-version'); } catch(_) {}
@@ -4080,7 +4080,7 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
       manualMode: false,
       products: old.products.some(p => !p.id && p.manual && p.name.toLowerCase() === name.toLowerCase())
         ? old.products
-        : [...old.products, { id: null, name, manual: true, qty: 1, unit: '' }]
+        : [...old.products, { id: null, name, manual: true, qty: 1, unit: '', baseUnit: '', price: 0 }]
     }));
     setManualDraft('');
   }
@@ -4093,6 +4093,11 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
     }
     function setProductQty(index, qty) {
       setForm(old => applyProductChange(old, old.products.map((p, i) => i === index ? { ...p, qty } : p)));
+    }
+    // A remembered product has no catalogue rate, so the cashier types one here. It feeds the same
+    // productValue() the picked products use, which is what lets it reach the khata on save.
+    function setProductPrice(index, price) {
+      setForm(old => applyProductChange(old, old.products.map((p, i) => i === index ? { ...p, price } : p)));
     }
     function setProductUnit(index, unit) {
       // Keep the physical amount and re-price it from the product's own rate: 2 kg at Rs 100/kg
@@ -4211,13 +4216,29 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
         clientId: `productUdhar_${Date.now()}_${Math.floor(Math.random() * 1e6)}`
       };
     }
+    // A hand-written amount still sitting in "Add New Udhaar" joins this save instead of being lost
+    // when the cashier presses Save, so a remembered product and the money typed beside it both reach
+    // the khata and add up. Posting it clears the field, so an amount already sent cannot double up.
+    const moneyAmount = canEditUdhar ? Number(extraUdhar.amount) || 0 : 0;
+    const moneyPayload = moneyAmount > 0 ? {
+      amount: moneyAmount,
+      note: extraUdhar.note.trim(),
+      reference: extraUdhar.reference.trim(),
+      ...(extraUdharDate || extraUdharTime ? { atDate: extraUdharDate, atTime: extraUdharTime } : {})
+    } : null;
     try {
       const saved = await client.put(`/api/customers/${customer.id}`, payload);
+      let moneyEntry = null;
+      if (moneyPayload) {
+        const moneySaved = await client.post(`/api/customers/${customer.id}/udhar`, moneyPayload);
+        moneyEntry = moneySaved && moneySaved.entry;
+      }
       const entry = saved && saved.productUdharEntry;
-      setMessage(entry
+      const addedUdhar = round3((entry ? Number(entry.amount) || 0 : 0) + (moneyEntry ? Number(moneyEntry.amount) || 0 : 0));
+      setMessage(addedUdhar > 0
         ? (LANG === 'ur'
-          ? `محفوظ ہو گیا۔ ${money(entry.amount)} کا نیا اُدھار درج ہو گیا۔`
-          : `Saved. ${money(entry.amount)} recorded as a new dated udhar entry.`)
+          ? `محفوظ ہو گیا۔ ${money(addedUdhar)} کا نیا اُدھار درج ہو گیا۔`
+          : `Saved. ${money(addedUdhar)} recorded as new udhar.`)
         : (LANG === 'ur' ? 'محفوظ ہو گیا۔' : 'Saved.'));
       await refresh();
       onClose();
@@ -4227,6 +4248,7 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
         // same fields again later gives the same result on the server, and the dated udhar entry goes
         // in with it under its own clientId.
         queueAction('customer', { customerId: customer.id, ...payload });
+        if (moneyPayload) queueAction('udhar', { customerId: customer.id, ...moneyPayload });
         setMessage(LANG === 'ur'
           ? 'محفوظ ہو گیا۔ یہ تبدیلی انترنت آنے پر خودکار طور پر سنک ہو گئی۔'
           : 'Saved on this device. It will sync automatically when the internet returns.');
@@ -4246,6 +4268,7 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
         return h('span', { className: 'chip-item', key: `${prod.id || 'manual'}-${index}` },
           h('span', { className: `product-chip${prod.manual ? ' manual' : ''}` },
             `${prod.name}${productQtyLabel(prod)}`,
+            h('input', { type: 'number', min: '0', step: 'any', className: 'chip-price', title: t('rateLabel'), placeholder: '0', value: Number(prod.price) > 0 ? prod.price : '', onChange: e => setProductPrice(index, e.target.value) }),
             h('input', { type: 'number', min: '1', step: 'any', className: 'chip-qty', value: Number(prod.qty || 1), onChange: e => setProductQty(index, e.target.value) }),
             h('select', { className: 'chip-unit', value: prod.unit || '', onChange: e => setProductUnit(index, e.target.value) },
               !UNITS.some(unit => unit.value === prod.unit) && prod.unit
@@ -4332,6 +4355,9 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
           h('input', { type: 'date', value: extraUdharDate, onChange: e => setExtraUdharDate(e.target.value), title: t('udharDateTitle') }),
           h('input', { type: 'time', value: extraUdharTime, onChange: e => setExtraUdharTime(e.target.value), title: t('udharTimeTitle') }),
           h('button', { type: 'button', className: 'primary', disabled: busy || !(Number(extraUdhar.amount) > 0), onClick: addExtraUdhar }, t('saveUdharBtn'))),
+        canEditUdhar && Number(extraUdhar.amount) > 0 && h('p', { className: 'hint' }, LANG === 'ur'
+          ? `یہ ${money(Number(extraUdhar.amount))} بھی Save دبانے پر اُدھار میں شامل ہو جائے گا۔`
+          : `This ${money(Number(extraUdhar.amount))} will also be added to udhar when you press Save.`),
         canEditUdhar && h('div', { className: 'edit-form-row' },
           h('div', null, h('label', null, t('hTotalCredit')), h('input', { type: 'number', min: '0', value: form.udhaarTotal, onChange: e => setForm({ ...form, udhaarTotal: e.target.value }) })),
           h('div', null, h('label', null, t('hTotalPaid')), h('input', { type: 'number', min: '0', value: form.udhaarPaid, onChange: e => setForm({ ...form, udhaarPaid: e.target.value }) })),
@@ -4340,8 +4366,8 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
           h('div', null, h('label', null, t('hPaymentDate')), h('input', { type: 'date', value: form.paymentDate, onChange: e => setForm({ ...form, paymentDate: e.target.value }) })),
           h('div', null, h('label', null, t('hPaymentTime')), h('input', { type: 'time', value: form.paymentTime, onChange: e => setForm({ ...form, paymentTime: e.target.value }) }))),
         canEditUdhar && h('p', { className: 'hint' }, LANG === 'ur'
-          ? 'نوٹ: نیا اُدھار اوپر "نیا اُدھار درج کریں" سے درج کریں - ہر اُدھار الگ اندراج کے طور پر محفوظ ہوتا ہے۔ ادائیگی کھاتہ سے درج کریں۔'
-          : 'Add each udhar with "Add New Udhaar" above - every entry is stored separately in the ledger. Record payments from the Khata.'),
+          ? 'نوٹ: نیا اُدھار اوپر "نیا اُدھار درج کریں" سے درج کریں، یا رقم بھر کر سیدھا Save دبا دیں - ہر اُدھار الگ اندراج کے طور پر محفوظ ہوتا ہے۔ ادائیگی کھاتہ سے درج کریں۔'
+          : 'Add udhar with "Add New Udhaar" above, or just fill the amount and press Save - every entry is stored separately in the ledger. Record payments from the Khata.'),
         h('div', { className: 'form-actions' },
           h('button', { className: 'primary', disabled: busy }, t('saveLabel')),
           h('button', { type: 'button', className: 'secondary', onClick: onClose }, t('cancelLabel')))))),

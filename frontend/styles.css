@@ -480,6 +480,10 @@ td {
   width: 52px; padding: 4px 8px; font-size: 12px; font-weight: 650; text-align: center;
   border: 1px solid var(--line); border-radius: 6px; background: #fff; color: inherit;
 }
+.chip-price {
+  width: 78px; padding: 4px 8px; font-size: 12px; font-weight: 650; text-align: center;
+  border: 1px solid var(--line); border-radius: 6px; background: #fff; color: inherit;
+}
 .chip-unit {
   max-width: 92px; padding: 4px 6px; font-size: 12px; font-weight: 650;
   border: 1px solid var(--line); border-radius: 6px; background: #fff; color: inherit;
@@ -2108,6 +2112,7 @@ img, table, .receipt, .modal-content { max-width: 100%; }
   .product-chip-list { width: 100% !important; }
   .chip-item { width: 100% !important; justify-content: space-between !important; }
   .chip-qty { width: 68px !important; }
+  .chip-price { width: 82px !important; }
   .chip-unit { flex: 1 1 64px !important; min-width: 0 !important; max-width: 120px !important; }
   .chip-amount { margin-inline-start: auto !important; }
   .selected-product { align-items: stretch !important; }
