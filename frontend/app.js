@@ -1,6 +1,6 @@
 /* global React, ReactDOM */
-const APP_VERSION = 'v61';
-const APP_CHECKSUM = 'statement-payments-v37';
+const APP_VERSION = 'v62';
+const APP_CHECKSUM = 'cashier-display-v38';
 (function() {
   var stored = null;
   try { stored = localStorage.getItem('faislabadi-pos-version'); } catch(_) {}
@@ -859,7 +859,7 @@ function StockAddModal({ product, client, refresh, onClose }) {
     document.body);
 }
 
-function ReverseBillModal({ sale, customers, client, refresh, onClose }) {
+function ReverseBillModal({ sale, customers, settings, client, refresh, onClose }) {
   const [lookup, setLookup] = useState(null);
   const [quantities, setQuantities] = useState({});
   const [reason, setReason] = useState('');
@@ -958,6 +958,7 @@ function ReverseBillModal({ sale, customers, client, refresh, onClose }) {
             : h(Badge, { tone: 'neutral' }, t('fullyReturned'))))))),
       lookup && h('div', { className: 'reverse-actions' },
         h('input', { placeholder: t('reasonOptional'), value: reason, onChange: e => setReason(e.target.value), className: 'reverse-reason' }),
+        h('button', { className: 'secondary', disabled: busy, onClick: () => printBillImage(lookupResultToBill(lookup), settings, lookup.customer, setMessage) }, LANG === 'ur' ? 'بل دیکھیں' : 'View bill'),
         h('button', { className: 'secondary', disabled: busy || !selectedCount, onClick: () => reverse(false) },
           `${t('reverseSelectedItems')} (${selectedCount})`),
         h('button', { className: 'danger-btn', disabled: busy || lookup.items.every(item => item.eligibleQty <= 0), onClick: () => reverse(true) }, t('reverseWholeBill')),
@@ -1052,7 +1053,7 @@ function Dashboard({ data, go, client, refresh }) {
           ? h('button', { className: 'secondary load-more-btn', onClick: () => setLowLimit(n => n + LOW_STOCK_PAGE) }, `${t('loadMore')} (${filteredLow.length - lowItems.length})`)
           : null,
         filteredLow.length > 0 && h('small', { className: 'muted low-stock-count' }, `${t('showingCount')} ${lowItems.length} / ${filteredLow.length}`))),
-    reverseSale && h(ReverseBillModal, { sale: reverseSale, customers: data.customers, client, refresh, onClose: () => setReverseSale(null) }),
+      reverseSale && h(ReverseBillModal, { sale: reverseSale, customers: data.customers, settings: data.settings, client, refresh, onClose: () => setReverseSale(null) }),
     stockProduct && h(StockAddModal, {
       product: stockProduct,
       client,
@@ -1160,7 +1161,7 @@ function drawBillImage(sale, settings, customer, labels) {
     [t('invoiceWord'), sale.invoiceNo || t('pendingInvoice')],
     [t('dateLabel'), dateStr],
     [t('hPaymentTime'), timeStr],
-    [t('cashierLabel'), sale.createdBy || '-'],
+    [t('cashierLabel'), billCashierName(sale)],
     [t('customerLabel'), (sale.customerNameAtBilling || sale.customerName) || (customer && customer.name) || t('walkIn')],
     [t('paymentLabel'), methodLabel]
   ];
@@ -1748,6 +1749,12 @@ const waDate = value => {
   return `${d.toLocaleDateString('en-PK', { day: '2-digit', month: 'short', year: 'numeric' })} ${d.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' })}`;
 };
 const plain = value => String(value == null ? '' : value).replace(/[*_`#]/g, '');
+// A bill names whoever rang it up. The server keeps the account's own name and the shop's dashboard
+// label apart, so prefer the label; fall back to the stored name so an older bill still reads.
+const billCashierName = sale => {
+  const name = (sale && (sale.createdByName || sale.createdBy)) || '';
+  return String(name) || '-';
+};
 // Ledger rows carry the running balance of every entry. Handing the bill text the "before" figure
 // lets a shared bill show previous balance -> this bill -> new balance, with no extra request.
 const withPrevBalance = entry => (entry && Number.isFinite(Number(entry.balanceBefore))
@@ -1805,6 +1812,43 @@ const ledgerEntryToBill = (entry, customer) => {
   };
 };
 
+// A found bill (from the reverse lookup) reshaped into the same object the bill picture is drawn from,
+// so the counter can see the exact bill - items, rates and totals - before reversing it.
+const lookupResultToBill = lookup => {
+  const sale = (lookup && lookup.sale) || {};
+  const customer = (lookup && lookup.customer) || null;
+  const items = ((lookup && lookup.items) || []).map(item => {
+    const qty = Number(item.qty) || 0;
+    const price = Number(item.price) || 0;
+    return {
+      name: item.name || '',
+      sku: item.sku || '',
+      qty,
+      unit: item.unit || '',
+      price,
+      amount: item.amount != null ? Number(item.amount) : Math.round(price * qty)
+    };
+  });
+  return {
+    invoiceNo: sale.invoiceNo,
+    createdAt: sale.createdAt,
+    createdBy: sale.createdByName || '',
+    createdByName: sale.createdByName || '',
+    customerId: customer ? customer.id : '',
+    customerName: customer ? customer.name : '',
+    customerNameAtBilling: customer ? customer.name : '',
+    paymentType: sale.paymentType,
+    subtotal: sale.subtotal,
+    discount: sale.discount,
+    additionalDiscount: 0,
+    tax: sale.tax,
+    total: sale.total,
+    paidAmount: sale.paidAmount,
+    dueAmount: sale.dueAmount,
+    items
+  };
+};
+
 function waHeader(settings) {
   const storeName = plain((settings && settings.storeName) || 'Faislabadi General Store');
   const rows = [waCenter('*' + storeName + '*')];
@@ -1842,7 +1886,7 @@ function saleBillText(sale, settings) {
   rows.push(waRow(t('invoiceWord'), sale.invoiceNo || t('pendingInvoice')));
   rows.push(waRow(t('dateLabel'), waDateOnly(sale.createdAt || sale.at)));
   rows.push(waRow(t('hPaymentTime'), timeText));
-  rows.push(waRow(t('cashierLabel'), plain(sale.createdBy) || '-'));
+  rows.push(waRow(t('cashierLabel'), plain(billCashierName(sale))));
   rows.push(waRow(t('customerLabel'), plain(sale.customerNameAtBilling || sale.customerName) || t('walkIn')));
   rows.push(waRow(t('paymentLabel'), methodLabel));
   if (sale.reference) rows.push(waRow(t('referenceLabel'), plain(sale.reference)));
@@ -2360,7 +2404,8 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
       preview: true,
       invoiceNo: null,
       createdAt: new Date().toISOString(),
-      createdBy: (data.user && data.user.name) || '',
+      createdBy: (data.user && (data.user.displayName || data.user.name)) || '',
+      createdByName: (data.user && (data.user.displayName || data.user.name)) || '',
       customerId,
       customerName: customerId === 'cus_walkin' ? walkInName.trim() : '',
       customerNameAtBilling: (selectedCustomer && selectedCustomer.name) || (customerId === 'cus_walkin' ? walkInName.trim() : ''),
@@ -2483,7 +2528,8 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
           offlineDraft: true,
           invoiceNo: 'OFFLINE-' + Date.now().toString().slice(-5),
           createdAt: new Date().toISOString(),
-          createdBy: (data.user && data.user.name) || '',
+          createdBy: (data.user && (data.user.displayName || data.user.name)) || '',
+          createdByName: (data.user && (data.user.displayName || data.user.name)) || '',
           customerId,
           paymentType,
           source: 'offline',
@@ -3167,7 +3213,7 @@ function ReceiptModal({ sale, customers, settings, onClose }) {
         h('div', { className: 'receipt-row' }, h('span', null, t('invoiceWord')), h('span', null, sale.invoiceNo || t('pendingInvoice'))),
         h('div', { className: 'receipt-row' }, h('span', null, t('dateLabel')), h('span', null, dateStr)),
         h('div', { className: 'receipt-row' }, h('span', null, t('hPaymentTime')), h('span', null, timeStr)),
-        h('div', { className: 'receipt-row' }, h('span', null, t('cashierLabel')), h('span', null, sale.createdBy || '-')),
+        h('div', { className: 'receipt-row' }, h('span', null, t('cashierLabel')), h('span', null, billCashierName(sale))),
         h('div', { className: 'receipt-row' }, h('span', null, t('customerLabel')), h('span', null, sale.customerNameAtBilling || sale.customerName || (customer && customer.name) || t('walkIn'))),
         h('div', { className: 'receipt-row' }, h('span', null, t('paymentLabel')), h('span', null, methodLabel)),
         sale.reference && h('div', { className: 'receipt-row' }, h('span', null, t('referenceLabel')), h('span', null, sale.reference)),
@@ -3857,6 +3903,9 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
   // and <= 0 leaves NaN looking like a live balance, so a cleared account kept showing its old
   // lifetime figures. Anything that is not a positive balance now reads as settled.
   const settled = !(Number(balance) > 0);
+  // The newest bill on the khata, so the header can send it on WhatsApp the same way the POS tab does.
+  // entries arrive newest-first, so the first live sale is the latest bill.
+  const latestSale = (entries || []).find(entry => entry.type === 'sale' && !entry.voided);
   // The header button sends the customer their whole khata as one picture - every udhar still owed and
   // the total left to pay - instead of a single newest bill. Cleared money is left out of it, so the
   // statement never asks again for a rupee the customer has already paid.
@@ -3871,8 +3920,11 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
             h('small', { className: 'cust-uid' }, `#${customer.id}`),
             customer.phone && h('p', { className: 'subtitle' }, customer.phone))),
         h('div', { className: 'profile-actions' },
+          customer.phone && latestSale
+            ? h('button', { className: 'wa-btn', disabled: busy, onClick: () => shareBillAsImage(withPrevBalance(ledgerEntryToBill(latestSale, customer)), settings, customer, setMessage) }, t('whatsappBill'))
+            : null,
           customer.phone && Number(balance) > 0
-            ? h('button', { className: 'wa-btn', disabled: busy, onClick: () => shareKhataStatement(customer, entries || [], balance, settings, setMessage) }, t('whatsappBill'))
+            ? h('button', { className: 'secondary', disabled: busy, onClick: () => shareKhataStatement(customer, entries || [], balance, settings, setMessage) }, LANG === 'ur' ? 'مکمل کھاتہ' : 'Full statement')
             : null,
           h('span', { className: `badge ${Number(balance) > 0 ? 'warning' : 'success'}` }, Number(balance) > 0 ? `${t('udharBadge')} ${money(balance)}` : t('clearBadge')))),
       h('div', { className: 'profile-details' },
@@ -4808,6 +4860,7 @@ function ReturnsPage({ data, client, refresh }) {
             : h(Badge, { tone: 'neutral' }, t('fullyReturned')))))))),
       h('div', { style: { display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center', marginTop: '12px' } },
         h('input', { placeholder: t('reasonOptional'), value: reason, onChange: e => setReason(e.target.value), style: { maxWidth: '260px' } }),
+        h('button', { className: 'secondary', disabled: busy, onClick: () => printBillImage(lookupResultToBill(lookup), data.settings, lookup.customer, setMessage) }, LANG === 'ur' ? 'بل دیکھیں' : 'View bill'),
         h('button', { className: 'secondary', disabled: busy, onClick: () => submitReturn(false) }, t('returnSelected')),
         h('button', { className: 'danger-btn', disabled: busy || lookup.items.every(item => item.eligibleQty <= 0), onClick: () => submitReturn(true) }, t('returnComplete')),
         canVoid && h('button', { className: 'danger-btn', disabled: busy, onClick: voidBill }, t('voidBill')))),

@@ -4,7 +4,7 @@ const {
   seedData, ensureSchema, createSale, processReturn, receiveUdharPayment,
   clearUdhar, returnedQtyByItem, customerTotals, decorateCustomer,
   createSupplier, updateSupplier, deleteSupplier, deleteCustomer, can,
-  voidSale, reversePayment, addUdharEntry
+  voidSale, reversePayment, addUdharEntry, cashierNameOf
 } = require('../server');
 const { mergeDbs, udharCreditDelta } = require('../sync');
 
@@ -13,6 +13,28 @@ function fixture() {
   const admin = db.users[0];
   return { db, admin };
 }
+
+test('cashierNameOf shows the dashboard label, then the account name, then nothing', () => {
+  assert.equal(cashierNameOf('usr_sohaib', 'Sohaib Ali'), 'Akmal');
+  assert.equal(cashierNameOf('usr_akmal', 'Akmal'), 'Aryan');
+  assert.equal(cashierNameOf('usr_unknown', 'Someone Else'), 'Someone Else');
+  assert.equal(cashierNameOf('usr_unknown'), '');
+});
+
+test('a sale stamps the cashier under the dashboard label, not the login name', () => {
+  const { db, admin } = fixture();
+  const sale = createSale(db, { customerId: 'cus_1', paymentType: 'Cash', items: [{ productId: 'prd_1', qty: 1 }] }, admin);
+  // usr_sohaib signs in as "Sohaib Ali" but the shop's Admin dashboard reads "Akmal".
+  assert.equal(sale.createdByName, 'Akmal');
+});
+
+test('udhar entries and payments also carry the dashboard label', () => {
+  const { db, admin } = fixture();
+  const added = addUdharEntry(db, 'cus_1', { amount: 100 }, admin);
+  assert.equal(added.entry.createdByName, 'Akmal');
+  const paid = receiveUdharPayment(db, 'cus_1', 50, admin);
+  assert.equal(paid.payment.createdBy, 'Akmal');
+});
 
 test('partial payment sale: Rs 5000 bill paid Rs 2000 adds only Rs 3000 udhar and records the Rs 2000 payment', () => {
   const { db, admin } = fixture();

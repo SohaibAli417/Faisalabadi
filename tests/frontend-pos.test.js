@@ -384,3 +384,49 @@ test('a hand-written udhar amount beside a product is saved with it, not dropped
   assert.ok(save.includes("queueAction('udhar', { customerId: customer.id, ...moneyPayload })"), 'an offline amount must be queued too');
   assert.ok(save.includes('payload.productUdhar ='), 'the priced product is still sent as a product udhar');
 });
+
+// A bill must name the cashier the shop knows them by. The server keeps the account's own name and the
+// shop's dashboard label apart ("Sohaib Ali" is shown as "Akmal"), so the bill has to prefer the label.
+test('a bill names the cashier by the shop dashboard label, falling back to the stored name', () => {
+  const start = appJs.indexOf('const billCashierName =');
+  assert.notEqual(start, -1, 'billCashierName must exist');
+  const billCashierName = new Function(appJs.slice(start, appJs.indexOf('\n};', start) + 3) + '; return billCashierName;')();
+  assert.equal(billCashierName({ createdByName: 'Akmal', createdBy: 'usr_sohaib' }), 'Akmal');
+  assert.equal(billCashierName({ createdBy: 'Sohaib Ali' }), 'Sohaib Ali');
+  assert.equal(billCashierName({}), '-');
+  // Every bill surface must route through it, not print the raw field.
+  assert.match(appJs, /\[t\('cashierLabel'\), billCashierName\(sale\)\]/);
+  assert.match(appJs, /plain\(billCashierName\(sale\)\)/);
+});
+
+test('the khata header offers the latest bill on WhatsApp, like the POS tab, plus the statement', () => {
+  const body = appJs.slice(appJs.indexOf('function KhataModal('), appJs.indexOf('function QuickAddCustomerModal('));
+  assert.ok(/const latestSale = \(entries \|\| \[\]\)\.find\(entry => entry\.type === 'sale' && !entry\.voided\)/.test(body),
+    'the header must find the newest live bill');
+  assert.ok(/shareBillAsImage\(withPrevBalance\(ledgerEntryToBill\(latestSale, customer\)\), settings, customer, setMessage\)/.test(body),
+    'the header must send the latest bill the same way the POS tab does');
+  assert.ok(/shareKhataStatement\(customer, entries \|\| \[\], balance, settings, setMessage\)/.test(body),
+    'the whole-khata statement button must stay');
+});
+
+test('a found bill can be viewed in print form before reversing it', () => {
+  const start = appJs.indexOf('const lookupResultToBill =');
+  assert.notEqual(start, -1, 'lookupResultToBill must exist');
+  const toBill = new Function(appJs.slice(start, appJs.indexOf('\n};', start) + 3) + '; return lookupResultToBill;')();
+  const bill = toBill({
+    sale: { invoiceNo: 'INV-1', createdAt: '2026-10-17T10:00:00.000Z', paymentType: 'Credit', subtotal: 200, total: 200, paidAmount: 0, dueAmount: 200, createdByName: 'Akmal' },
+    customer: { id: 'cus_1', name: 'Ali' },
+    items: [{ name: 'Soap', qty: 2, price: 100 }]
+  });
+  assert.equal(bill.invoiceNo, 'INV-1');
+  assert.equal(bill.createdByName, 'Akmal');
+  assert.equal(bill.total, 200);
+  assert.equal(bill.items[0].amount, 200);
+
+  const returns = appJs.slice(appJs.indexOf('function ReturnsPage('), appJs.indexOf('function UsersAdmin('));
+  assert.ok(/printBillImage\(lookupResultToBill\(lookup\), data\.settings, lookup\.customer, setMessage\)/.test(returns),
+    'the find-bill panel must offer a print-form view');
+  const reverse = appJs.slice(appJs.indexOf('function ReverseBillModal('), appJs.indexOf('function Dashboard('));
+  assert.ok(/printBillImage\(lookupResultToBill\(lookup\), settings, lookup\.customer, setMessage\)/.test(reverse),
+    'the reverse popup must offer a print-form view');
+});

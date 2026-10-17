@@ -1,10 +1,10 @@
-const CACHE_NAME = 'faislabadi-pos-v61';
+const CACHE_NAME = 'faislabadi-pos-v62';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
-  '/styles.css?v=61',
-  '/manual.css?v=61',
-  '/app.js?v=61',
+  '/styles.css?v=62',
+  '/manual.css?v=62',
+  '/app.js?v=62',
   '/vendor/react.production.min.js',
   '/vendor/react-dom.production.min.js',
   '/manifest.json',

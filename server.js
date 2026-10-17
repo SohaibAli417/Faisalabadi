@@ -238,6 +238,13 @@ const coreSettings = { storeName: 'Faislabadi General Store', phone: '0302450301
 // (Manager) dashboard shows "Aryan". These only affect the shown label, never login or access.
 const accountDisplayNames = { usr_sohaib: 'Akmal', usr_akmal: 'Aryan' };
 
+// The label a bill should carry for whoever rang it up: the shop's own dashboard label when the account
+// has one (Admin shows "Akmal", Manager shows "Aryan"), otherwise the account's name. The stored name is
+// the last fallback so old rows with no known id stay readable.
+function cashierNameOf(id, fallback) {
+  return accountDisplayNames[id] || fallback || '';
+}
+
 function generateInitialPassword() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
   let pw = '';
@@ -814,7 +821,7 @@ function createSale(db, payload, actor, source = 'online') {
     invoiceNo: nextInvoice(db),
     createdAt: now(),
     createdBy: actor.id,
-    createdByName: actor.name || '',
+    createdByName: cashierNameOf(actor.id, actor.name),
     customerId,
     customerName: walkInName,
     customerNameAtBilling: customer && customerId !== 'cus_walkin' ? customer.name : walkInName,
@@ -857,7 +864,7 @@ function createSale(db, payload, actor, source = 'online') {
   }
   db.sales.unshift(sale);
   if (paidAmount > 0) {
-    db.payments = [{ id: uid('pay'), customerId, amount: paidAmount, at: sale.createdAt, createdBy: actor.name || '', createdById: actor.id, saleId: sale.id, note: `Paid at billing (${sale.invoiceNo})`, _updatedAt: now() }, ...(db.payments || [])];
+    db.payments = [{ id: uid('pay'), customerId, amount: paidAmount, at: sale.createdAt, createdBy: cashierNameOf(actor.id, actor.name), createdById: actor.id, saleId: sale.id, note: `Paid at billing (${sale.invoiceNo})`, _updatedAt: now() }, ...(db.payments || [])];
   }
   audit(db, actor, 'create', 'sale', sale.id, { invoiceNo: sale.invoiceNo, total, paid: paidAmount, due: dueAmount });
   return sale;
@@ -1108,7 +1115,7 @@ function processReturn(db, body, actor) {
     customerId: sale.customerId,
     createdAt: now(),
     createdBy: actor.id,
-    createdByName: actor.name || '',
+    createdByName: cashierNameOf(actor.id, actor.name),
     clientId: returnClientId || undefined,
     items: returnItems,
     reason: String(body.reason || '').trim() || 'Customer return',
@@ -1170,7 +1177,7 @@ function receiveUdharPayment(db, customerId, amountInput, actor, options = {}) {
   if (customer.recordedPaid !== undefined && customer.recordedPaid !== null && customer.recordedPaid !== '') {
     customer.recordedPaid = money(Number(customer.recordedPaid) + amount);
   }
-  const payment = { id: uid('pay'), customerId, amount, at, createdBy: actor.name || '', createdById: actor.id, saleId: options.saleId || null, note: options.note || '', clientId: clientId || undefined, _updatedAt: now() };
+  const payment = { id: uid('pay'), customerId, amount, at, createdBy: cashierNameOf(actor.id, actor.name), createdById: actor.id, saleId: options.saleId || null, note: options.note || '', clientId: clientId || undefined, _updatedAt: now() };
   db.payments = [payment, ...(db.payments || [])];
   audit(db, actor, options.clear ? 'clear-udhar' : 'payment', 'customer', customerId, { amount, newBalance: customer.balance, note: options.note || '' });
   return { payment, balance: customer.balance };
@@ -1217,7 +1224,7 @@ function addUdharEntry(db, customerId, body, actor) {
     at,
     createdAt: now(),
     createdBy: actor.id,
-    createdByName: actor.name || '',
+    createdByName: cashierNameOf(actor.id, actor.name),
     previousBalance,
     balanceAfter: money(previousBalance + amount),
     clientId: clientId || undefined,
@@ -1933,7 +1940,7 @@ async function handleApi(request, response) {
             price: Number(item.price) || 0,
             amount: Math.round((Number(item.price) || 0) * (Number(item.qty) || 0))
           })),
-          createdBy: sale.createdByName || ''
+          createdBy: cashierNameOf(sale.createdBy, sale.createdByName)
         }));
 // The money taken at the counter is already carried on the bill's own row as "paid at billing", so
       // counting its payment row again in the running balance used to subtract the same rupees twice
@@ -1952,7 +1959,7 @@ async function handleApi(request, response) {
             paidAtBilling,
             invoiceNo: bill ? (bill.invoiceNo || '') : '',
             note: payment.note || '',
-            createdBy: payment.createdBy || ''
+            createdBy: cashierNameOf(payment.createdById, payment.createdBy)
           };
 });
       const udharEntries = (db.udharEntries || [])
@@ -1965,7 +1972,7 @@ async function handleApi(request, response) {
           invoiceNo: '',
           note: entry.note || '',
           reference: entry.reference || '',
-          createdBy: entry.createdByName || ''
+          createdBy: cashierNameOf(entry.createdBy, entry.createdByName)
         }));
       const allEntries = [...creditSales, ...payments, ...udharEntries].sort((a, b) => new Date(a.at) - new Date(b.at));
       // A khata that has been paid off in full starts a fresh book. Everything recorded at or before
@@ -2106,7 +2113,7 @@ async function handleApi(request, response) {
       if (!items.length) return json(response, 400, { error: 'Draft must include at least one item' });
       let draft = db.drafts.find(item => item.id === body.id || (body.clientId && item.clientId === body.clientId));
       if (!draft) {
-        draft = { id: uid('drf'), clientId: body.clientId || uid('drfc'), createdAt: now(), createdByName: actor.name || '' };
+        draft = { id: uid('drf'), clientId: body.clientId || uid('drfc'), createdAt: now(), createdByName: cashierNameOf(actor.id, actor.name) };
         db.drafts.unshift(draft);
       }
       draft.updatedAt = now();
@@ -2281,7 +2288,7 @@ async function handleApi(request, response) {
           dueAmount: Math.max(0, money(sale.dueAmount)),
           voided: !!sale.voided,
           returnStatus: sale.returnStatus || 'none',
-          createdByName: sale.createdByName || ''
+          createdByName: cashierNameOf(sale.createdBy, sale.createdByName)
         },
         customer: customer ? { id: customer.id, name: customer.name, phone: customer.phone, cnicMasked: maskCnic(customer.cnic), balance: money(customer.balance) } : null,
         previousReturns: db.returns.filter(record => record.saleId === sale.id),
@@ -2586,6 +2593,8 @@ module.exports.maskCnic = maskCnic;
 module.exports.restoreBackup = restoreBackup;
 module.exports.ensureSchema = ensureSchema;
 module.exports.createSale = createSale;
+module.exports.cashierNameOf = cashierNameOf;
+module.exports.accountDisplayNames = accountDisplayNames;
 module.exports.processReturn = processReturn;
 module.exports.receiveUdharPayment = receiveUdharPayment;
 module.exports.addUdharEntry = addUdharEntry;
