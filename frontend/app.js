@@ -1,6 +1,6 @@
 /* global React, ReactDOM */
-const APP_VERSION = 'v41';
-const APP_CHECKSUM = 'customer-product-qty-unit-logo-v32';
+const APP_VERSION = 'v57';
+const APP_CHECKSUM = 'khata-sum-clear-v33';
 (function() {
   var stored = null;
   try { stored = localStorage.getItem('faislabadi-pos-version'); } catch(_) {}
@@ -3960,6 +3960,11 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
       setExtraUdharDate(toDateInputValue(new Date().toISOString()));
       setExtraUdharTime(toTimeInputValue(new Date().toISOString()));
       setExtraUdharOpen(false);
+      // Keep the form's Total Credit in step with the entry just recorded - the offline path below
+      // does the same. Without it the refreshed customer carries the new total while this form still
+      // holds the old one, and the next Save writes the stale number back and silently drops the
+      // manual udhar the cashier just added.
+      setForm(old => ({ ...old, udhaarTotal: round3((Number(old.udhaarTotal) || 0) + Number(result.entry.amount)) }));
       setMessage(LANG === 'ur'
         ? `${money(result.entry.amount)} نیا اُدھار درج ہو گیا۔ کل بیلنس: ${money(result.balance)}۔`
         : `New udhar of ${money(result.entry.amount)} recorded. New balance: ${money(result.balance)}.`);

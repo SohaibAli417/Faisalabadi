@@ -870,14 +870,27 @@ function itemKey(item) {
 function customerTotals(db) {
   const totals = {};
   const entry = id => totals[id] || (totals[id] = { creditPurchases: 0, totalPaid: 0, lastPaymentAt: null });
+  // Once a khata is settled in full the book restarts, so the figures the counter sees (total credit,
+  // total paid) only count the entries from the current stretch - the same rows the ledger shows.
+  const clearedAt = {};
+  for (const customer of db.customers || []) {
+    if (customer.khataClearedAt) clearedAt[customer.id] = new Date(customer.khataClearedAt).getTime();
+  }
+  const inCurrentBook = (id, at) => {
+    const since = clearedAt[id];
+    if (!since) return true;
+    return new Date(at || 0).getTime() > since;
+  };
   for (const sale of db.sales) {
    if (sale.voided || sale.customerId === 'cus_walkin') continue;
    // Any bill that leaves a due behind is an udhar purchase - not just paymentType === 'Credit'.
    if (!isCreditSale(sale)) continue;
+   if (!inCurrentBook(sale.customerId, sale.createdAt)) continue;
    entry(sale.customerId).creditPurchases += money(sale.total);
   }
   for (const payment of db.payments || []) {
     if (!payment.customerId || payment.customerId === 'cus_walkin' || payment.voided) continue;
+    if (!inCurrentBook(payment.customerId, payment.at)) continue;
     const totals = entry(payment.customerId);
     totals.totalPaid += money(payment.amount);
     const atMs = new Date(payment.at || 0).getTime();
@@ -888,6 +901,7 @@ function customerTotals(db) {
   // drift away from the balance the very same entries produce.
   for (const udhar of db.udharEntries || []) {
     if (udhar.voided || !udhar.customerId || udhar.customerId === 'cus_walkin') continue;
+    if (!inCurrentBook(udhar.customerId, udhar.at || udhar.createdAt)) continue;
     entry(udhar.customerId).creditPurchases += money(udhar.amount);
   }
   return totals;
@@ -1149,6 +1163,10 @@ function receiveUdharPayment(db, customerId, amountInput, actor, options = {}) {
   customer.balance = money(balance - amount);
   customer._updatedAt = now();
   customer.lastPaymentAt = at;
+  // Paying the udhar off in full closes the book on that stretch of the khata. The timestamp lets the
+  // ledger hide the settled history once the customer borrows again - nothing is deleted, the old rows
+  // are simply not part of the new running total.
+  if (money(customer.balance) <= 0) customer.khataClearedAt = at;
   if (customer.recordedPaid !== undefined && customer.recordedPaid !== null && customer.recordedPaid !== '') {
     customer.recordedPaid = money(Number(customer.recordedPaid) + amount);
   }
@@ -1294,11 +1312,15 @@ function updateCustomer(db, id, body, actor) {
     }
   }
   if (can(actor, 'udhar') && wantsUdharEdit) {
+    const balanceBeforeEdit = money(customer.balance);
     if (body.udhaarTotal !== undefined) customer.recordedTotal = money(body.udhaarTotal);
     if (body.udhaarPaid !== undefined) customer.recordedPaid = money(body.udhaarPaid);
     if (body.udhaarTotal !== undefined || body.udhaarPaid !== undefined) {
       const totals = customerTotals(db)[id] || { creditPurchases: 0, totalPaid: 0 };
       customer.balance = customerBalanceFromRecorded(db, customer, totals, customer.recordedTotal, customer.recordedPaid);
+      // Only a real drop to zero closes the book - re-saving an already-clear customer must not push
+      // the marker forward and hide entries that still belong to the open khata.
+      if (balanceBeforeEdit > 0 && money(customer.balance) <= 0) customer.khataClearedAt = now();
     }
     if (body.paymentDate !== undefined || body.paymentTime !== undefined) {
       const related = (db.payments || []).filter(p => p.customerId === id);
@@ -1946,17 +1968,24 @@ async function handleApi(request, response) {
           createdBy: entry.createdByName || ''
         }));
       const allEntries = [...creditSales, ...payments, ...udharEntries].sort((a, b) => new Date(a.at) - new Date(b.at));
+      // A khata that has been paid off in full starts a fresh book. Everything recorded at or before
+      // the clearing moment is dropped from this view (the rows stay in the database for backups and
+      // reports), so the next udhar does not sit on top of a history the counter has already settled.
+      const clearedAt = customer.khataClearedAt ? new Date(customer.khataClearedAt).getTime() : null;
+      const periodEntries = clearedAt == null
+        ? allEntries
+        : allEntries.filter(entry => new Date(entry.at).getTime() > clearedAt);
       let running = 0;
       const balanceAfter = {};
       const balanceBefore = {};
-      for (const entry of allEntries) {
+      for (const entry of periodEntries) {
         balanceBefore[entry.id] = money(running);
         if (entry.type === 'sale') running += money(entry.udharAdded);
         else if (entry.type === 'payment') { if (!entry.paidAtBilling) running -= money(entry.amount); }
         else running += money(entry.amount);
         balanceAfter[entry.id] = money(running);
       }
-      const entries = allEntries.reverse();
+      const entries = periodEntries.reverse();
       return json(response, 200, { customer: { ...customer, cnicMasked: maskCnic(customer.cnic), cnic: undefined }, entries, balanceAfter, balanceBefore });
     }
 
