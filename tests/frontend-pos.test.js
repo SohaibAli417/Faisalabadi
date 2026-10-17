@@ -113,15 +113,47 @@ test('a WhatsApp bill is only offered while there is something to send', () => {
   );
   assert.ok(/currentBillForShare \|\| \(canShareBill && customerOwes && lastProfileSale/.test(appJs));
 
-  // The khata modal's own two buttons obey the same rule. The header one used to open a text-only
-  // statement; it now hands over the bill as a picture, so it is matched on that instead.
-  const headerWa = appJs.match(/customer\.phone && Number\(balance\) > 0 && latestBill[\s\S]{0,200}shareBillAsImage\(latestBill/);
-  assert.ok(headerWa, 'the khata header WhatsApp button must exist');
+  // The khata modal's own two buttons obey the same rule. The header one now sends the customer their
+  // overall khata statement as a picture, so it is matched on that.
+  const headerWa = appJs.match(/customer\.phone && Number\(balance\) > 0[\s\S]{0,200}shareKhataStatement\(customer/);
+  assert.ok(headerWa, 'the khata header WhatsApp button must send the overall statement');
   assert.ok(/Number\(balance\) > 0/.test(headerWa[0]), 'the khata header button is hidden at zero remaining');
 
   const entryWa = appJs.match(/entry\.type === 'sale' && customer\.phone[^?]*\? h\('button', \{ className: 'wa-btn entry-wa'/);
   assert.ok(entryWa, 'the per-bill WhatsApp button must exist');
   assert.ok(/Number\(balance\) > 0/.test(entryWa[0]), 'a settled khata row offers no bill to resend');
+});
+
+test('the khata statement lists only udhar still owed and never adds back cleared money', () => {
+  // This is the rule behind the statement picture and its caption: a payment row, a voided row and a
+  // bill that was cleared at the counter must all stay out, and a part-paid bill must only carry the
+  // part that is still owed. Run for real against the function in app.js rather than trusting a regex.
+  const start = appJs.indexOf('function outstandingUdhar(');
+  assert.ok(start >= 0, 'outstandingUdhar must exist');
+  const source = appJs.slice(start, appJs.indexOf('\n}', start) + 2);
+  const outstandingUdhar = new Function(`${source}; return outstandingUdhar;`)();
+
+  const rows = outstandingUdhar([
+    { type: 'sale', id: 's1', amount: 500, paidAtBilling: 0, udharAdded: 500 },
+    { type: 'sale', id: 's2', amount: 300, paidAtBilling: 300, udharAdded: 0 },
+    { type: 'sale', id: 's3', amount: 400, paidAtBilling: 100, udharAdded: 300 },
+    { type: 'payment', id: 'p1', amount: 200 },
+    { type: 'udhar', id: 'u1', amount: 250 },
+    { type: 'udhar', id: 'u2', amount: 150, voided: true }
+  ]);
+
+  assert.deepEqual(rows.map(row => row.entry.id), ['s1', 's3', 'u1'], 'only the unpaid credit rows remain');
+  assert.deepEqual(rows.map(row => row.owed), [500, 300, 250], 'a part-paid bill carries only the unpaid part');
+});
+
+test('the khata statement picture and caption both show the outstanding udhar and the total remaining', () => {
+  const drawer = appJs.slice(appJs.indexOf('function drawKhataStatementImage('), appJs.indexOf('function shareCanvasAsImage('));
+  assert.ok(/outstandingUdhar\(entries\)/.test(drawer), 'the picture must list only the outstanding udhar');
+  assert.ok(/money\(remaining\)/.test(drawer), 'the picture must print the remaining total');
+
+  const caption = appJs.slice(appJs.indexOf('function khataStatementText('), appJs.indexOf('function ScanCamera('));
+  assert.ok(/outstandingUdhar\(entries\)/.test(caption), 'the caption must list the same udhar');
+  assert.ok(/money\(balance\)/.test(caption), 'the caption must print the remaining total');
 });
 
 test('every WhatsApp bill image prints a grand total', () => {

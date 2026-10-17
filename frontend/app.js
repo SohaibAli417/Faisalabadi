@@ -1,6 +1,6 @@
 /* global React, ReactDOM */
-const APP_VERSION = 'v58';
-const APP_CHECKSUM = 'khata-month-local-v34';
+const APP_VERSION = 'v59';
+const APP_CHECKSUM = 'khata-statement-v35';
 (function() {
   var stored = null;
   try { stored = localStorage.getItem('faislabadi-pos-version'); } catch(_) {}
@@ -1354,16 +1354,213 @@ function drawBillImage(sale, settings, customer, labels) {
   return canvas;
 }
 
-// Shares the bill as a picture. Phones that support sharing files get the image attached to the
+// The rows that still make up what the customer owes: a credit bill or a hand-typed udhar that has not
+// been settled, with anything already handed over at billing taken off. Payment rows, voided rows and
+// bills cleared in full are left out, so a statement can never add back money that was already paid.
+function outstandingUdhar(entries) {
+  return (entries || [])
+    .filter(entry => entry && !entry.voided && entry.type !== 'payment')
+    .map(entry => {
+      const owed = entry.type === 'sale'
+        ? Number(entry.udharAdded != null ? entry.udharAdded : (Number(entry.amount) || 0) - (Number(entry.paidAtBilling) || 0))
+        : Number(entry.amount) || 0;
+      return { entry, owed };
+    })
+    .filter(row => row.owed > 0);
+}
+
+// One plain line describing a single udhar row: what was taken and, for a bill, its number. Used by both
+// the statement picture and its written caption so the two always say the same thing.
+function udharRowDescription(entry, ur) {
+  if (entry.type === 'sale') {
+    const parts = [];
+    if (entry.invoiceNo) parts.push(plain(entry.invoiceNo));
+    if (entry.products) parts.push(plain(entry.products));
+    return parts.length ? parts.join(' - ') : (ur ? 'اُدھار بل' : 'Credit bill');
+  }
+  const base = plain(entry.note) || (ur ? 'نیا اُدھار' : 'New udhar');
+  return entry.reference ? `${base} (${plain(entry.reference)})` : base;
+}
+
+// The customer's whole khata on one picture: every udhar still owed, oldest first, and the one figure
+// that matters - what is left to pay. Cleared money is not on the list, so the customer is never asked
+// for a rupee they have already settled. Drawn the same two-pass way as the bill so nothing is cut off.
+function drawKhataStatementImage(customer, entries, balance, settings) {
+  const ur = LANG === 'ur';
+  const storeName = (settings && settings.storeName) || 'Faislabadi General Store';
+  const storePhone = (settings && settings.phone) || '';
+  const storeAddress = (settings && settings.address) || '';
+  const remaining = Math.max(0, Number(balance) || 0);
+  const owed = outstandingUdhar(entries);
+  const customerName = (customer && customer.name) || '';
+  const customerPhone = (customer && customer.phone) || '';
+  const customerId = (customer && customer.id) || '';
+  const today = new Date().toLocaleDateString('en-PK', { year: 'numeric', month: 'short', day: 'numeric' });
+  const rowDate = at => {
+    const d = new Date(at);
+    return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-PK', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+  const L = {
+    title: ur ? 'اُدھار کھاتہ' : 'UDHAR KHATA',
+    customer: ur ? 'گاہک' : 'Customer',
+    mobile: ur ? 'موبائل' : 'Mobile',
+    custId: ur ? 'گاہک نمبر' : 'Customer ID',
+    date: ur ? 'تاریخ' : 'Date',
+    section: ur ? 'باقی اُدھار (تفصیل)' : 'OUTSTANDING UDHAR',
+    colDate: ur ? 'تاریخ' : 'Date',
+    colAmount: ur ? 'رقم' : 'Amount',
+    total: ur ? 'کل باقی اُدھار' : 'TOTAL REMAINING',
+    none: ur ? 'کوئی باقی اُدھار نہیں' : 'No udhar pending',
+    thanks: ur ? 'شکریہ! دوبارہ تشریف لائیں۔' : 'Thank you! Please visit again.'
+  };
+  const measure = document.createElement('canvas').getContext('2d');
+  const canvas = document.createElement('canvas');
+  canvas.width = BILL_WIDTH;
+  const build = ctx => {
+    let y = BILL_PAD;
+    const font = (size, weight) => `${weight || '400'} ${size || 17}px "Segoe UI", system-ui, sans-serif`;
+    const text = (value, size, weight, colour, indent, align) => {
+      ctx.font = font(size, weight);
+      ctx.fillStyle = colour || '#111';
+      ctx.textAlign = align || 'left';
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillText(String(value == null ? '' : value), BILL_PAD + (indent || 0), y);
+      ctx.textAlign = 'left';
+    };
+    const rightEdge = BILL_WIDTH - BILL_PAD;
+    const rhs = (value, size, weight, colour) => {
+      ctx.font = font(size, weight);
+      ctx.fillStyle = colour || '#111';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillText(String(value == null ? '' : value), rightEdge, y);
+      ctx.textAlign = 'left';
+    };
+    const centred = (value, size, weight, colour) => {
+      ctx.font = font(size, weight);
+      ctx.fillStyle = colour || '#111';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillText(String(value == null ? '' : value), BILL_WIDTH / 2, y);
+      ctx.textAlign = 'left';
+    };
+    const wrap = (value, size, weight, colour, indent, maxWidth, step, align) => {
+      ctx.font = font(size, weight);
+      ctx.fillStyle = colour || '#111';
+      ctx.textAlign = align || 'left';
+      const lines = [];
+      for (const paragraph of String(value == null ? '' : value).split('\n')) {
+        let current = '';
+        for (const word of paragraph.split(/\s+/).filter(Boolean)) {
+          const next = current ? current + ' ' + word : word;
+          if (current && ctx.measureText(next).width > maxWidth) { lines.push(current); current = word; }
+          else current = next;
+        }
+        lines.push(current);
+      }
+      for (const line of lines) {
+        if (line) {
+          if (align === 'center') ctx.fillText(line, BILL_WIDTH / 2, y);
+          else ctx.fillText(line, BILL_PAD + (indent || 0), y);
+        }
+        y += step;
+      }
+      ctx.textAlign = 'left';
+    };
+    const divider = () => {
+      ctx.strokeStyle = '#d8d8d8';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath();
+      ctx.moveTo(BILL_PAD, Math.round(y) + 0.5);
+      ctx.lineTo(rightEdge, Math.round(y) + 0.5);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      y += 18;
+    };
+    const pair = (left, rightValue, size, weight, colour) => {
+      y += size || 20;
+      text(left, size, weight, colour);
+      rhs(rightValue, size, weight, colour);
+    };
+
+    // Header
+    wrap(storeName, 27, '700', '#111', 0, rightEdge - BILL_PAD, 34, 'center');
+    if (storeAddress) wrap(storeAddress, 15, '400', '#444', 0, rightEdge - BILL_PAD, 21, 'center');
+    if (storePhone) wrap(storePhone, 15, '400', '#444', 0, rightEdge - BILL_PAD, 21, 'center');
+    y += 12;
+    divider();
+
+    // Who this khata belongs to
+    centred(L.title, 22, '700', '#111');
+    y += 30;
+    pair(L.customer, customerName, 18, '600');
+    if (customerPhone) pair(L.mobile, customerPhone, 17, '400', '#333');
+    if (customerId) pair(L.custId, '#' + customerId, 17, '400', '#333');
+    pair(L.date, today, 17, '400', '#333');
+    y += 6;
+    divider();
+
+    // The udhar still owed, oldest first
+    y += 4;
+    centred(L.section, 18, '700', '#111');
+    y += 26;
+    text(L.colDate, 15, '700', '#333');
+    rhs(L.colAmount, 15, '700', '#333');
+    y += 4;
+    divider();
+    if (!owed.length) {
+      y += 20;
+      centred(L.none, 17, '400', '#555');
+      y += 8;
+    } else {
+      owed.slice().reverse().forEach(row => {
+        y += 24;
+        text(rowDate(row.entry.at), 17, '600', '#111');
+        rhs(money(row.owed), 17, '700', '#111');
+        y += 20;
+        wrap(udharRowDescription(row.entry, ur), 15, '400', '#444', 16, rightEdge - BILL_PAD - 16, 19);
+      });
+    }
+    y += 8;
+    divider();
+
+    // The one figure that matters
+    pair(L.total, money(remaining), 21, '700', '#111');
+    y += 6;
+    divider();
+
+    // Footer, same wording as the bill
+    y += 22;
+    centred(L.thanks, 16, '400');
+    y += 26;
+    centred('Designed and Developed By', 14, '400', '#777');
+    y += 20;
+    centred('Sohaib Ali', 16, '700', '#333');
+    y += 20;
+    centred('Mobile No: 03074224449', 14, '400', '#777');
+    y += BILL_PAD;
+    return y;
+  };
+  const height = build(measure);
+  canvas.height = Math.max(320, Math.ceil(height));
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  build(ctx);
+  return canvas;
+}
+
+// Shares a drawn picture on WhatsApp. Phones that support sharing files get the image attached to the
 // message straight from the share sheet; anywhere else the picture is saved so it can be attached by
-// hand. Either way the customer receives the bill itself, not a wall of text.
-async function shareBillImage(sale, settings, customer, labels) {
-  const canvas = drawBillImage(sale, settings, customer, labels);
+// hand and WhatsApp opens already addressed. Either way the customer receives the picture itself, not
+// a wall of text. Both the bill and the khata statement go through here, so they behave identically.
+async function shareCanvasAsImage(canvas, fileBase, waText, phone) {
   const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
-  if (!blob) throw new Error('Could not create the bill image');
-  const safeInvoice = String(sale.invoiceNo || 'bill').replace(/[^a-z0-9-]+/gi, '-');
-  const file = new File([blob], `${safeInvoice}.png`, { type: 'image/png' });
-  // Saves the picture to the phone under the invoice number.
+  if (!blob) throw new Error('Could not create the picture');
+  const safeName = String(fileBase || 'bill').replace(/[^a-z0-9-]+/gi, '-');
+  const file = new File([blob], `${safeName}.png`, { type: 'image/png' });
+  // Saves the picture to the phone under the given name.
   const savePicture = () => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -1374,36 +1571,25 @@ async function shareBillImage(sale, settings, customer, labels) {
     link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 4000);
   };
-  // A bill for a customer whose number is on file is handled here rather than through the phone's share
-  // sheet, because that sheet cannot address anyone and made the cashier hunt for the number in the
-  // contact list on every single bill. Two things happen together: the picture is saved to the phone
-  // first, so it is the newest item in the gallery, and WhatsApp then opens already addressed to that
-  // customer with the full bill - items, subtotal and grand total - written into the message box.
-  // WhatsApp only lets a picture be attached by picking it, and a just-saved one sits at the top of
-  // that list, so the picture reaches the customer without any searching at all.
-  const phone = String((customer && customer.phone) || '').replace(/\D/g, '');
-  // Phones that can share a file get the picture itself (WhatsApp attaches it), with the bill written
-  // out as the caption. This is the only way an actual image - not a text message - reaches the
-  // customer, so it is tried first whenever the device supports it.
+  // Phones that can share a file get the picture itself (WhatsApp attaches it), with the message
+  // written out as the caption. This is the only way an actual image - not a text message - reaches
+  // the customer, so it is tried first whenever the device supports it.
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
     try {
-      await navigator.share({ files: [file], text: saleBillText(sale, settings) });
+      await navigator.share({ files: [file], text: waText });
       return 'shared';
     } catch (err) {
       if (err && err.name === 'AbortError') return 'cancelled';
       // Anything else (a desktop share sheet with no WhatsApp, say) falls through to the text path.
     }
   }
-  // A bill for a customer whose number is on file is handled here rather than through the phone's share
-  // sheet, because that sheet cannot address anyone and made the cashier hunt for the number in the
-  // contact list on every single bill. Two things happen together: the picture is saved to the phone
-  // first, so it is the newest item in the gallery, and WhatsApp then opens already addressed to that
-  // customer with the full bill - items, subtotal and grand total - written into the message box.
-  // WhatsApp only lets a picture be attached by picking it, and a just-saved one sits at the top of
-  // that list, so the picture reaches the customer without any searching at all.
-  if (phone) {
+  // With a number on file the picture is saved to the phone first - so it is the newest item in the
+  // gallery - and WhatsApp then opens already addressed, because the share sheet cannot address anyone
+  // and made the cashier hunt for the number on every bill.
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (digits) {
     savePicture();
-    const opened = window.open(`https://wa.me/${phone}?text=${encodeURIComponent(saleBillText(sale, settings))}`, '_blank');
+    const opened = window.open(`https://wa.me/${digits}?text=${encodeURIComponent(waText)}`, '_blank');
     if (opened) return 'opened';
     return 'downloaded';
   }
@@ -1411,27 +1597,44 @@ async function shareBillImage(sale, settings, customer, labels) {
   return 'downloaded';
 }
 
-// Same thing for the screens that only need a button: the outcome is reported in that screen's own
-// message line, so the cashier can see whether the picture was sent or saved.
+async function shareBillImage(sale, settings, customer, labels) {
+  const canvas = drawBillImage(sale, settings, customer, labels);
+  return shareCanvasAsImage(canvas, String(sale.invoiceNo || 'bill'), saleBillText(sale, settings), customer && customer.phone);
+}
+
+// Reports the outcome of a WhatsApp share in the screen's own message line, so the cashier can see
+// whether the picture was sent or saved.
+function reportShareOutcome(outcome, report) {
+  if (!report) return;
+  if (outcome === 'opened') {
+    report(LANG === 'ur'
+      ? 'گاہک کی WhatsApp چیٹ کھل گئی اور پیغام لکھا ہوا ہے۔ Send دبائیں، اور تصویر چاہیے تو گیلری سے سب سے اوپر والی تصویر لگا دیں۔'
+      : "This customer's WhatsApp chat is open with the message written out. Press Send, and attach the newest picture from the gallery if you want the image too.");
+  } else if (outcome === 'downloaded') {
+    report(LANG === 'ur' ? 'تصویر محفوظ ہو گئی اور WhatsApp کھل گیا ہے۔' : 'Picture saved and WhatsApp opened.');
+  } else if (outcome === 'shared') {
+    report(LANG === 'ur' ? 'تصویر بھیج دی گئی۔' : 'Picture sent.');
+  } else {
+    report(LANG === 'ur' ? 'تصویر محفوظ ہو گئی۔ اب WhatsApp کھول کر یہ تصویر بھیجیں۔' : 'Picture saved. Open WhatsApp and send this picture.');
+  }
+}
+
 async function shareBillAsImage(sale, settings, customer, report) {
   try {
     const outcome = await shareBillImage(sale, settings, customer, STRINGS[LANG] || STRINGS.en);
-    if (!report) return;
-    if (outcome === 'opened') {
-      report(LANG === 'ur'
-        ? 'گاہک کی WhatsApp چیٹ کھل گئی اور بل لکھا ہوا ہے۔ Send دبائیں، اور تصویر چاہیے تو گیلری سے سب سے اوپر والی بل کی تصویر لگا دیں۔'
-        : "This customer's WhatsApp chat is open with the bill written out. Press Send, and attach the newest picture from the gallery if you want the image too.");
-    } else if (outcome === 'downloaded') {
-      report(LANG === 'ur'
-        ? 'بل کی تصویر محفوظ ہو گئی اور WhatsApp کھل گیا ہے۔'
-        : 'Bill picture saved and WhatsApp opened.');
-    } else if (outcome === 'shared') {
-      report(LANG === 'ur' ? 'بل کی تصویر بھیج دی گئی۔' : 'Bill picture sent.');
-    } else {
-      report(LANG === 'ur'
-        ? 'بل کی تصویر محفوظ ہو گئی۔ اب WhatsApp کھول کر یہ تصویر بھیجیں۔'
-        : 'Bill picture saved. Open WhatsApp and send this picture.');
-    }
+    reportShareOutcome(outcome, report);
+  } catch (err) {
+    if (report) report(friendlyError(err));
+  }
+}
+
+// Sends the customer their overall khata as one picture: every udhar still owed and the total left to
+// pay. Cleared money is left out, so the statement never asks for money already paid.
+async function shareKhataStatement(customer, entries, balance, settings, report) {
+  try {
+    const canvas = drawKhataStatementImage(customer, entries, balance, settings);
+    const outcome = await shareCanvasAsImage(canvas, `khata-${(customer && customer.id) || 'customer'}`, khataStatementText(customer, entries, balance, settings), customer && customer.phone);
+    reportShareOutcome(outcome, report);
   } catch (err) {
     if (report) report(friendlyError(err));
   }
@@ -1652,57 +1855,34 @@ function saleBillText(sale, settings) {
   rows.push(waCenter('Sohaib Ali - 03074224449'));
   return '```\n' + rows.join('\n') + '\n```';
 }
-// One ledger row's effect on the outstanding balance. Sales and manually entered udhar add, payments
-// subtract. Used for the WhatsApp running balance so the statement always adds up to the real one.
-const entryDelta = entry => {
-  const amount = Number(entry && entry.amount) || 0;
-  if (entry && entry.type === 'payment') return -amount;
-  if (entry && entry.type === 'sale') return amount - (Number(entry.paidAtBilling) || 0);
-  return amount;
-};
+// The written twin of the statement picture: the same udhar rows and the same total, so a phone that
+// only gets the caption still reads a statement that matches the image. Cleared money is never listed.
 function khataStatementText(customer, entries, balance, settings) {
+  const ur = LANG === 'ur';
   const rows = [];
-  const all = entries || [];
-  // Opening balance = the balance that is left once every stored transaction is taken out again, so
-  // it stays correct no matter how many rows the statement shows.
-  const opening = Math.max(0, (Number(balance) || 0) - all.reduce((sum, entry) => sum + entryDelta(entry), 0));
+  const owed = outstandingUdhar(entries).slice().reverse();
   rows.push(...waHeader(settings));
   rows.push(waRule('='));
-  rows.push(waRow(LANG === 'ur' ? 'کھاتہ' : 'KHATA', plain(customer && customer.name)));
-  rows.push(waRow(LANG === 'ur' ? 'گاہک نمبر' : 'Customer ID', '#' + plain(customer && customer.id)));
-  if (customer && customer.phone) rows.push(waRow(LANG === 'ur' ? 'موبائل' : 'Mobile', plain(customer.phone)));
-  rows.push(waRow(LANG === 'ur' ? 'کھاتہ بند' : 'Statement date', waDate(new Date().toISOString())));
+  rows.push(waCenter('*' + (ur ? 'اُدھار کھاتہ' : 'UDHAR KHATA') + '*'));
+  rows.push(waRow(ur ? 'گاہک' : 'Customer', plain(customer && customer.name)));
+  if (customer && customer.phone) rows.push(waRow(ur ? 'موبائل' : 'Mobile', plain(customer.phone)));
+  if (customer && customer.id) rows.push(waRow(ur ? 'گاہک نمبر' : 'Customer ID', '#' + plain(customer.id)));
+  rows.push(waRow(ur ? 'تاریخ' : 'Date', waDate(new Date().toISOString())));
   rows.push(waRule('-'));
-  rows.push(waRow(LANG === 'ur' ? 'پچھلا بیلنس' : 'Previous balance', money(opening)));
-  rows.push(waCenter(LANG === 'ur' ? 'نئی لین ڈار این ٹری' : 'NEW TRANSACTIONS'));
+  rows.push(waCenter('*' + (ur ? 'باقی اُدھار (تفصیل)' : 'OUTSTANDING UDHAR') + '*'));
+  rows.push(waRow(ur ? 'تاریخ' : 'Date', ur ? 'رقم' : 'Amount'));
   rows.push(waRule('-'));
-  rows.push(waRow(LANG === 'ur' ? 'تاریخ / وقت' : 'Date / Time', LANG === 'ur' ? 'رقم / بیلنس' : 'Amount / Balance'));
-  rows.push(waRule('-'));
-  // The ledger arrives newest first; walk it oldest first so the running balance reads correctly.
-  const shown = all.slice(0, 40).slice().reverse();
-  let running = opening;
-  shown.forEach(entry => {
-    running = Math.max(0, running + entryDelta(entry));
-    const isCredit = entry.type !== 'payment';
-    const heading = entry.type === 'sale'
-      ? (LANG === 'ur' ? 'اُدھار بل' : 'Credit bill') + (entry.invoiceNo ? ' ' + plain(entry.invoiceNo) : '')
-      : entry.type === 'udhar'
-        ? (LANG === 'ur' ? 'نیا اُدھار' : 'New udhar') + (entry.note ? ' - ' + plain(entry.note) : '')
-        : (LANG === 'ur' ? 'ادائیگی موصول' : 'Payment received') + (entry.invoiceNo ? ' (' + plain(entry.invoiceNo) + ')' : (entry.note ? ' - ' + plain(entry.note) : ''));
-    const shownAmount = entry.type === 'sale' ? Number(entry.amount || 0) - (Number(entry.paidAtBilling) || 0) : Number(entry.amount) || 0;
-    rows.push(waRow('  ' + heading, (isCredit ? '+' : '-') + money(shownAmount)));
-    rows.push(waRow('    ' + waDate(entry.at), (LANG === 'ur' ? 'بیلنس ' : 'Bal ') + money(running)));
-    (entry.items || []).forEach(item => {
-      rows.push(waRow('    - ' + plain(item.name), `${item.qty}${item.unit ? ' ' + unitName(item.unit) : ''} x ${money(item.price)} = ${money(item.amount)}`));
+  if (!owed.length) {
+    rows.push(waCenter(ur ? 'کوئی باقی اُدھار نہیں' : 'No udhar pending'));
+  } else {
+    // Oldest first, so the customer reads their udhar in the order it happened.
+    owed.forEach(row => {
+      rows.push(waRow('  ' + waDate(row.entry.at), money(row.owed)));
+      rows.push(waRow('    ' + udharRowDescription(row.entry, ur), ''));
     });
-    if (entry.reference) rows.push(waRow('    ' + (LANG === 'ur' ? 'حوالہ' : 'Ref'), plain(entry.reference)));
-    if (entry.createdBy) rows.push(waRow('    ' + (LANG === 'ur' ? 'بذریعہ' : 'By'), plain(entry.createdBy)));
-  });
-  if (all.length > shown.length) {
-    rows.push(waRow('  ' + (LANG === 'ur' ? 'اور پرانی لین ڈار این ٹری شامل ہیں' : 'plus ' + (all.length - shown.length) + ' earlier transactions'), ''));
   }
   rows.push(waRule('-'));
-  rows.push(waRow('*' + (LANG === 'ur' ? 'کل باقی اُدھار' : 'TOTAL OUTSTANDING') + '*', '*' + money(balance) + '*'));
+  rows.push(waRow('*' + (ur ? 'کل باقی اُدھار' : 'TOTAL REMAINING') + '*', '*' + money(balance) + '*'));
   rows.push(...waFooter(settings));
   return '```\n' + rows.join('\n') + '\n```';
 }
@@ -3631,14 +3811,9 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
   // and <= 0 leaves NaN looking like a live balance, so a cleared account kept showing its old
   // lifetime figures. Anything that is not a positive balance now reads as settled.
   const settled = !(Number(balance) > 0);
-  // The header button opens this customer's newest bill. It used to open WhatsApp with a block of
-  // text only; now it hands over the same bill picture the other buttons send, so the customer
-  // receives an image and not a message they cannot read at the counter. A sale is preferred, but a
-  // customer whose udhar was typed by hand has no sale - so any credit entry is used rather than
-  // dropping the button altogether.
-  const creditEntries = (entries || []).filter(entry => !entry.voided && entry.type !== 'payment');
-  const latestBillEntry = creditEntries.find(entry => entry.type === 'sale') || creditEntries[0] || null;
-  const latestBill = latestBillEntry ? withPrevBalance(ledgerEntryToBill(latestBillEntry, customer)) : null;
+  // The header button sends the customer their whole khata as one picture - every udhar still owed and
+  // the total left to pay - instead of a single newest bill. Cleared money is left out of it, so the
+  // statement never asks again for a rupee the customer has already paid.
   return ReactDOM.createPortal(h('div', { className: 'modal', onClick: onClose },
     h('section', { className: 'khata', onClick: e => e.stopPropagation() },
       h('header', { className: 'khata-head profile-head' },
@@ -3650,8 +3825,8 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
             h('small', { className: 'cust-uid' }, `#${customer.id}`),
             customer.phone && h('p', { className: 'subtitle' }, customer.phone))),
         h('div', { className: 'profile-actions' },
-          customer.phone && Number(balance) > 0 && latestBill
-            ? h('button', { className: 'wa-btn', disabled: busy, onClick: () => shareBillAsImage(latestBill, settings, customer, setMessage) }, t('whatsappBill'))
+          customer.phone && Number(balance) > 0
+            ? h('button', { className: 'wa-btn', disabled: busy, onClick: () => shareKhataStatement(customer, entries || [], balance, settings, setMessage) }, t('whatsappBill'))
             : null,
           h('span', { className: `badge ${Number(balance) > 0 ? 'warning' : 'success'}` }, Number(balance) > 0 ? `${t('udharBadge')} ${money(balance)}` : t('clearBadge')))),
       h('div', { className: 'profile-details' },
