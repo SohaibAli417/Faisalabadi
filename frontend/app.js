@@ -1,6 +1,6 @@
 /* global React, ReactDOM */
-const APP_VERSION = 'v57';
-const APP_CHECKSUM = 'khata-sum-clear-v33';
+const APP_VERSION = 'v58';
+const APP_CHECKSUM = 'khata-month-local-v34';
 (function() {
   var stored = null;
   try { stored = localStorage.getItem('faislabadi-pos-version'); } catch(_) {}
@@ -2647,7 +2647,7 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
     const recent = sales.filter(entry => new Date(entry.at) >= sixMonthsAgo);
     const byMonth = {};
     recent.forEach(sale => {
-      const key = sale.at.slice(0, 7);
+      const key = toDateInputValue(sale.at).slice(0, 7);
       (byMonth[key] = byMonth[key] || []).push(sale);
     });
     const monthKeys = Object.keys(byMonth).sort().reverse();
@@ -3564,9 +3564,13 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
       setBusy(false);
     }
   }
+  // The month is read from the shop's local date, never the raw stored UTC string. Entries made in the
+  // small hours (00:00–04:59 Pakistan) sit on the previous UTC day, so slicing the UTC value dropped
+  // month-start udhar into the month before and the month select showed the wrong history.
+  const monthKeyOf = at => toDateInputValue(at).slice(0, 7);
   const monthKeys = list => {
     const keys = {};
-    (list || []).forEach(entry => { const k = (entry.at || '').slice(0, 7); if (k) keys[k] = true; });
+    (list || []).forEach(entry => { const k = monthKeyOf(entry.at); if (k) keys[k] = true; });
     const all = Object.keys(keys).sort();
     const nowK = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
     const bound = new Date();
@@ -3608,7 +3612,7 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
   // as "5 May, 3:20 pm" is found by 2026-05-05 and 15:00–16:00 regardless of the stored UTC string.
   const hasFilters = monthFilter !== 'all' || !!fromDate || !!toDate || !!fromTime || !!toTime;
   const passesFilters = entry => {
-    if (monthFilter !== 'all' && (entry.at || '').slice(0, 7) !== monthFilter) return false;
+    if (monthFilter !== 'all' && monthKeyOf(entry.at) !== monthFilter) return false;
     const day = toDateInputValue(entry.at);
     const time = toTimeInputValue(entry.at);
     if (fromDate && day && day < fromDate) return false;
@@ -3619,7 +3623,7 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
   };
   const visibleEntries = entries ? entries.filter(passesFilters) : [];
   const clearFilters = () => { setMonthFilter('all'); setFromDate(''); setToDate(''); setFromTime(''); setToTime(''); };
-  const monthCount = monthKey => visibleEntries.filter(e => (e.at || '').slice(0, 7) === monthKey).length;
+  const monthCount = monthKey => visibleEntries.filter(e => monthKeyOf(e.at) === monthKey).length;
   // Once the customer has nothing left to pay, the whole khata reads as clear: the running totals are
   // shown as zero instead of old lifetime figures, so a settled account looks settled everywhere. The
   // dated history below is untouched and still comes back through the month/date/time filters.
@@ -3715,7 +3719,7 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
               h('div', { className: 'ledger-month-head' },
                 h('strong', null, new Date(monthKey + '-01').toLocaleDateString('en-PK', { month: 'long', year: 'numeric' })),
                 h('span', null, `${monthCount(monthKey)} ${t('billWord')}`)),
-              visibleEntries.filter(e => (e.at || '').slice(0, 7) === monthKey).map(entry => {
+              visibleEntries.filter(e => monthKeyOf(e.at) === monthKey).map(entry => {
                 const canReverse = user && (user.role === 'Admin' || user.role === 'Manager');
                  const isCreditEntry = entry.type !== 'payment';
                  return h('div', { className: `ledger-entry ${entry.type}`, key: entry.id },
