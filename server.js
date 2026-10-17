@@ -1992,8 +1992,25 @@ async function handleApi(request, response) {
         else running += money(entry.amount);
         balanceAfter[entry.id] = money(running);
       }
+      // The full history is sent alongside the current book, so a settled khata can still be read back
+      // month by month without the counter's default view ever showing money that was already cleared.
+      // The running balance restarts at the clearing moment, so each book keeps its own figures and an
+      // old month never reads as if it sat on top of the current outstanding.
+      let historyRunning = 0;
+      let historyReset = clearedAt == null;
+      const historyBalanceAfter = {};
+      const historyBalanceBefore = {};
+      for (const entry of allEntries) {
+        if (!historyReset && new Date(entry.at).getTime() > clearedAt) { historyRunning = 0; historyReset = true; }
+        historyBalanceBefore[entry.id] = money(historyRunning);
+        if (entry.type === 'sale') historyRunning += money(entry.udharAdded);
+        else if (entry.type === 'payment') { if (!entry.paidAtBilling) historyRunning -= money(entry.amount); }
+        else historyRunning += money(entry.amount);
+        historyBalanceAfter[entry.id] = money(historyRunning);
+      }
       const entries = periodEntries.reverse();
-      return json(response, 200, { customer: { ...customer, cnicMasked: maskCnic(customer.cnic), cnic: undefined }, entries, balanceAfter, balanceBefore });
+      const history = allEntries.slice().reverse();
+      return json(response, 200, { customer: { ...customer, cnicMasked: maskCnic(customer.cnic), cnic: undefined }, entries, balanceAfter, balanceBefore, history, historyBalanceAfter, historyBalanceBefore, clearedAt: customer.khataClearedAt || null });
     }
 
     if (method === 'POST' && /^\/api\/customers\/[^/]+\/payments$/.test(url.pathname)) {

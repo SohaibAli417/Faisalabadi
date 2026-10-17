@@ -467,6 +467,8 @@ td {
 .manual-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .manual-row input { flex: 1; min-width: 150px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; }
 .manual-row .manual-price { flex: 0 1 120px; min-width: 96px; }
+.manual-row .manual-qty { flex: 0 1 90px; min-width: 72px; }
+.manual-row .manual-unit { flex: 0 1 110px; min-width: 84px; }
 .selected-product { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .product-chip {
   display: inline-flex; align-items: center; gap: 6px;

@@ -372,3 +372,37 @@ test('a cashier cannot replay udhar amounts through the sync endpoint', async ()
   const customer = (await call('GET', '/api/customers')).body.find(item => item.id === 'cus_2');
   assert.notEqual(customer.name, 'Renamed By Cashier');
 });
+
+// A settled khata starts a fresh book, but the shop still needs to read an old month back. The default
+// `entries` are the current book only (old money is never shown again); `history` carries everything,
+// and the running balance restarts at the clearing moment so the two books never mix.
+test('a cleared khata keeps the old money out of entries but keeps it in history', async () => {
+  const token = await loginAs('admin');
+  const call = api(token);
+  const customerId = await freshCustomer(token, 'Clear History Customer', 0);
+
+  const first = await call('POST', `/api/customers/${customerId}/udhar`, { amount: 700, note: 'before clear' });
+  assert.equal(first.status, 201);
+
+  const cleared = await call('POST', `/api/customers/${customerId}/clear-udhar`, {});
+  assert.equal(cleared.status, 200);
+  assert.equal(cleared.body.cleared, true);
+
+  // A hair between the clearing and the next entry so the new udhar is unambiguously after the clear.
+  await new Promise(resolve => setTimeout(resolve, 5));
+
+  const second = await call('POST', `/api/customers/${customerId}/udhar`, { amount: 250, note: 'after clear' });
+  assert.equal(second.status, 201);
+
+  const ledger = (await call('GET', `/api/customers/${customerId}/ledger`)).body;
+  assert.ok(ledger.clearedAt, 'the clearing moment must be reported');
+  // The default view (entries) is the fresh book only - the cleared 700 is gone.
+  assert.deepEqual(ledger.entries.map(entry => entry.amount), [250]);
+  assert.equal(ledger.balanceAfter[second.body.entry.id], 250, 'the running balance restarts at the clear');
+  // The full history still carries the old money, for an old month to be opened on demand.
+  const historyAmounts = ledger.history.map(entry => entry.amount);
+  assert.ok(historyAmounts.includes(700) && historyAmounts.includes(250), 'history keeps both books');
+  assert.equal(ledger.historyBalanceAfter[first.body.entry.id], 700, 'the old book keeps its own running balance');
+  assert.equal(ledger.historyBalanceAfter[second.body.entry.id], 250, 'the new book starts from zero');
+});
+

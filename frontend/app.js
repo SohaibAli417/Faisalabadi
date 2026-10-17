@@ -1,6 +1,6 @@
 /* global React, ReactDOM */
-const APP_VERSION = 'v62';
-const APP_CHECKSUM = 'cashier-display-v38';
+const APP_VERSION = 'v63';
+const APP_CHECKSUM = 'khata-history-manual-unit-v39';
 (function() {
   var stored = null;
   try { stored = localStorage.getItem('faislabadi-pos-version'); } catch(_) {}
@@ -92,6 +92,11 @@ const UNITS = [
 const unitLabel = unit => (UNITS.find(item => item.value === unit) || {}).urdu || unit || '';
 const unitName = unit => (UNITS.find(item => item.value === unit) || {}).en || unit || '';
 const isWeightUnit = unit => ['kg', 'gram', 'litre', 'boree'].includes(unit);
+// Units a hand-written khata line may be written in. The counter often notes "3 pao chawal" or
+// "pao daal", so a manual line keeps a free-text unit - these are only the common suggestions the
+// input offers while it is typed. They never touch the stock unit tables, so a shop product's own
+// unit dropdown is unchanged.
+const MANUAL_UNIT_SUGGESTIONS = ['pao', ...UNITS.map(unit => unit.value)];
 
 // How many base units one unit is worth, matching the server's table exactly. Stock lives in the
 // product's own unit, so billing in grams on a kg product has to move the qty one way and the rate
@@ -3058,7 +3063,8 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
       h('input', { value: manual.name, onChange: e => setManual({ ...manual, name: e.target.value }), placeholder: t('productName'), required: true }),
       h('input', { type: 'number', min: '0', step: 'any', value: manual.price, onChange: e => setManual({ ...manual, price: e.target.value }), placeholder: `${t('ratePer')} ${unitLabel(manual.unit)}`, required: true }),
       h('input', { type: 'number', min: '0', step: 'any', value: manual.qty, onChange: e => setManual({ ...manual, qty: e.target.value }), placeholder: t('weightQty'), required: true }),
-      h('select', { value: manual.unit, onChange: e => setManual({ ...manual, unit: e.target.value }) }, UNITS.map(unit => h('option', { key: unit.value, value: unit.value }, unit.urdu))),
+      h('input', { type: 'text', list: 'pos-manual-unit-list', value: manual.unit, onChange: e => setManual({ ...manual, unit: e.target.value }), placeholder: t('unitLabelWord') }),
+      h('datalist', { id: 'pos-manual-unit-list' }, MANUAL_UNIT_SUGGESTIONS.map(unit => h('option', { key: unit, value: unit }))),
       h('button', { className: 'primary', type: 'submit' }, t('add'))));
 
   const billSection = h('section', { className: 'bill-section pos-panel', ref: billRef },
@@ -3693,6 +3699,7 @@ function WarehousePage({ data, client, refresh }) {
 function KhataModal({ customer, client, settings, user, onClose, refresh }) {
   const [entries, setEntries] = useState(null);
   const [balanceAfter, setBalanceAfter] = useState({});
+  const [clearedAt, setClearedAt] = useState(null);
   const [monthFilter, setMonthFilter] = useState('all');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
@@ -3714,8 +3721,12 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
   async function loadLedger() {
     try {
       const payload = await client.get(`/api/customers/${customer.id}/ledger`);
-      setEntries(payload.entries);
-      setBalanceAfter(payload.balanceAfter || {});
+      // The server sends the current book as `entries` and the whole history as `history`. The khata
+      // popup keeps the full history on hand so an old month can still be opened, then hides anything
+      // at or before the last clearing in the default view.
+      setEntries(payload.history || payload.entries);
+      setBalanceAfter(payload.historyBalanceAfter || payload.balanceAfter || {});
+      setClearedAt(payload.clearedAt || (payload.customer && payload.customer.khataClearedAt) || null);
       setBalance(payload.customer.balance);
     } catch (err) {
       setMessage(friendlyError(err));
@@ -3883,6 +3894,11 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
   // times are compared in the shop's local time (the same values the rows show), so a payment listed
   // as "5 May, 3:20 pm" is found by 2026-05-05 and 15:00–16:00 regardless of the stored UTC string.
   const hasFilters = monthFilter !== 'all' || !!fromDate || !!toDate || !!fromTime || !!toTime;
+  // A khata cleared in full starts a fresh book: by default only the entries after that moment are
+  // shown, so no already-settled money reappears. Picking a month (or a date/time range) opens the
+  // history on purpose, and then every entry that matches is listed, cleared or not.
+  const clearedMs = clearedAt ? new Date(clearedAt).getTime() : null;
+  const inCurrentBook = entry => clearedMs == null || new Date(entry.at).getTime() > clearedMs;
   const passesFilters = entry => {
     if (monthFilter !== 'all' && monthKeyOf(entry.at) !== monthFilter) return false;
     const day = toDateInputValue(entry.at);
@@ -3893,7 +3909,7 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
     if (toTime && time && time > toTime) return false;
     return true;
   };
-  const visibleEntries = entries ? entries.filter(passesFilters) : [];
+  const visibleEntries = entries ? entries.filter(entry => passesFilters(entry) && (hasFilters || inCurrentBook(entry))) : [];
   const clearFilters = () => { setMonthFilter('all'); setFromDate(''); setToDate(''); setFromTime(''); setToTime(''); };
   const monthCount = monthKey => visibleEntries.filter(e => monthKeyOf(e.at) === monthKey).length;
   // Once the customer has nothing left to pay, the whole khata reads as clear: the running totals are
@@ -3903,9 +3919,12 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
   // and <= 0 leaves NaN looking like a live balance, so a cleared account kept showing its old
   // lifetime figures. Anything that is not a positive balance now reads as settled.
   const settled = !(Number(balance) > 0);
+  // The current-book rows only (everything after the last clearing). The latest bill and the whole
+  // khata statement are read from these, so a settled account never re-sends money it already cleared.
+  const currentBook = (entries || []).filter(inCurrentBook);
   // The newest bill on the khata, so the header can send it on WhatsApp the same way the POS tab does.
   // entries arrive newest-first, so the first live sale is the latest bill.
-  const latestSale = (entries || []).find(entry => entry.type === 'sale' && !entry.voided);
+  const latestSale = currentBook.find(entry => entry.type === 'sale' && !entry.voided);
   // The header button sends the customer their whole khata as one picture - every udhar still owed and
   // the total left to pay - instead of a single newest bill. Cleared money is left out of it, so the
   // statement never asks again for a rupee the customer has already paid.
@@ -3924,7 +3943,7 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
             ? h('button', { className: 'wa-btn', disabled: busy, onClick: () => shareBillAsImage(withPrevBalance(ledgerEntryToBill(latestSale, customer)), settings, customer, setMessage) }, t('whatsappBill'))
             : null,
           customer.phone && Number(balance) > 0
-            ? h('button', { className: 'secondary', disabled: busy, onClick: () => shareKhataStatement(customer, entries || [], balance, settings, setMessage) }, LANG === 'ur' ? 'مکمل کھاتہ' : 'Full statement')
+            ? h('button', { className: 'secondary', disabled: busy, onClick: () => shareKhataStatement(customer, currentBook, balance, settings, setMessage) }, LANG === 'ur' ? 'مکمل کھاتہ' : 'Full statement')
             : null,
           h('span', { className: `badge ${Number(balance) > 0 ? 'warning' : 'success'}` }, Number(balance) > 0 ? `${t('udharBadge')} ${money(balance)}` : t('clearBadge')))),
       h('div', { className: 'profile-details' },
@@ -4106,6 +4125,8 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
   const [form, setForm] = useState(init);
   const [productSearch, setProductSearch] = useState('');
   const [manualDraft, setManualDraft] = useState('');
+  const [manualQty, setManualQty] = useState('1');
+  const [manualUnit, setManualUnit] = useState('');
   const [manualPrice, setManualPrice] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState('');
@@ -4170,25 +4191,33 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
   function openManual() {
     setForm(old => ({ ...old, manualMode: true }));
     setManualDraft('');
+    setManualQty('1');
+    setManualUnit('');
     setManualPrice('');
   }
   function commitManual() {
     const name = manualDraft.trim();
     if (!name) return;
     const price = Number(manualPrice) || 0;
+    const unit = manualUnit.trim();
+    const qty = Math.max(0, Number(manualQty)) || 1;
     setForm(old => ({
       ...old,
       manualMode: false,
       products: old.products.some(p => !p.id && p.manual && p.name.toLowerCase() === name.toLowerCase())
         ? old.products
-        : [...old.products, { id: null, name, manual: true, qty: 1, unit: '', baseUnit: '', price }]
+        : [...old.products, { id: null, name, manual: true, qty, unit, baseUnit: unit, price }]
     }));
     setManualDraft('');
+    setManualQty('1');
+    setManualUnit('');
     setManualPrice('');
   }
   function cancelManual() {
     setForm(old => ({ ...old, manualMode: false }));
     setManualDraft('');
+    setManualQty('1');
+    setManualUnit('');
     setManualPrice('');
   }
     function removeProduct(index) {
@@ -4373,11 +4402,13 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
             `${prod.name}${productQtyLabel(prod)}`,
             h('input', { type: 'number', min: '0', step: 'any', className: 'chip-price', title: t('rateLabel'), placeholder: '0', value: Number(prod.price) > 0 ? prod.price : '', onChange: e => setProductPrice(index, e.target.value) }),
             h('input', { type: 'number', min: '1', step: 'any', className: 'chip-qty', value: Number(prod.qty || 1), onChange: e => setProductQty(index, e.target.value) }),
-            h('select', { className: 'chip-unit', value: prod.unit || '', onChange: e => setProductUnit(index, e.target.value) },
-              !UNITS.some(unit => unit.value === prod.unit) && prod.unit
-                ? h('option', { value: prod.unit, key: 'custom' }, prod.unit)
-                : null,
-              unitsForBase(prod.baseUnit).map(unit => h('option', { value: unit.value, key: unit.value }, unitLabel(unit.value)))),
+            prod.manual
+              ? h('input', { type: 'text', list: 'manual-unit-list', className: 'chip-unit', placeholder: t('unitLabelWord'), title: t('unitLabelWord'), value: prod.unit || '', onChange: e => setProductUnit(index, e.target.value) })
+              : h('select', { className: 'chip-unit', value: prod.unit || '', onChange: e => setProductUnit(index, e.target.value) },
+                  !UNITS.some(unit => unit.value === prod.unit) && prod.unit
+                    ? h('option', { value: prod.unit, key: 'custom' }, prod.unit)
+                    : null,
+                  unitsForBase(prod.baseUnit).map(unit => h('option', { value: unit.value, key: unit.value }, unitLabel(unit.value)))),
             Number(prod.price) > 0
               ? h('span', { className: 'chip-amount' }, `${moneyRate(rowRate * (Number(prod.qty) || 0))}`)
               : null),
@@ -4420,9 +4451,12 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
     !form.manualMode && h('button', { type: 'button', className: 'secondary', key: 'manual-btn', onClick: openManual }, t('addProductManually')),
     form.manualMode && h('div', { className: 'manual-row', key: 'manual-row' },
       h('input', { placeholder: t('productName'), value: manualDraft, onChange: e => setManualDraft(e.target.value), autoFocus: true }),
+      h('input', { type: 'number', min: '0', step: 'any', className: 'manual-qty', title: t('qtyShort'), placeholder: t('qtyShort'), value: manualQty, onChange: e => setManualQty(e.target.value) }),
+      h('input', { type: 'text', list: 'manual-unit-list', className: 'manual-unit', title: t('unitLabelWord'), placeholder: t('unitLabelWord'), value: manualUnit, onChange: e => setManualUnit(e.target.value) }),
       h('input', { type: 'number', min: '0', step: 'any', className: 'manual-price', title: t('rateLabel'), placeholder: t('rateLabel'), value: manualPrice, onChange: e => setManualPrice(e.target.value) }),
       h('button', { type: 'button', className: 'primary', onClick: commitManual }, t('add')),
       h('button', { type: 'button', className: 'secondary', onClick: cancelManual }, t('cancelLabel'))),
+    h('datalist', { id: 'manual-unit-list', key: 'manual-units' }, MANUAL_UNIT_SUGGESTIONS.map(unit => h('option', { key: unit, value: unit }))),
     productSelected && h('p', { className: 'hint', key: 'hint' }, t('productPickHint')));
 
   return ReactDOM.createPortal(h('div', { className: 'modal', onClick: onClose },
