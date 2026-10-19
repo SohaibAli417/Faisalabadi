@@ -1,6 +1,6 @@
 /* global React, ReactDOM */
-const APP_VERSION = 'v63';
-const APP_CHECKSUM = 'khata-history-manual-unit-v39';
+const APP_VERSION = 'v64';
+const APP_CHECKSUM = 'khata-print-button-v40';
 (function() {
   var stored = null;
   try { stored = localStorage.getItem('faislabadi-pos-version'); } catch(_) {}
@@ -1720,6 +1720,26 @@ function printBillImage(sale, settings, customer, report) {
       setTimeout(() => { printRoot.innerHTML = ''; }, 1000);
     }));
     if (report) report(LANG === 'ur' ? 'بل پرنٹ کے لیے بھیج دیا گیا۔' : 'Bill sent to the printer.');
+  } catch (err) {
+    if (report) report(friendlyError(err));
+  }
+}
+
+function printKhataStatement(customer, entries, balance, settings, report) {
+  try {
+    const canvas = drawKhataStatementImage(customer, entries, balance, settings);
+    const printRoot = document.getElementById('print-root');
+    if (!printRoot) throw new Error('Printing is not available on this device');
+    printRoot.innerHTML = '';
+    const img = document.createElement('img');
+    img.className = 'bill-print-image';
+    img.src = canvas.toDataURL('image/png');
+    printRoot.appendChild(img);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      window.print();
+      setTimeout(() => { printRoot.innerHTML = ''; }, 1000);
+    }));
+    if (report) report(LANG === 'ur' ? 'کھاتہ پرنٹ کے لیے بھیج دیا گیا۔' : 'Khata sent to the printer.');
   } catch (err) {
     if (report) report(friendlyError(err));
   }
@@ -3944,6 +3964,9 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
             : null,
           customer.phone && Number(balance) > 0
             ? h('button', { className: 'secondary', disabled: busy, onClick: () => shareKhataStatement(customer, currentBook, balance, settings, setMessage) }, LANG === 'ur' ? 'مکمل کھاتہ' : 'Full statement')
+            : null,
+          Number(balance) > 0
+            ? h('button', { className: 'secondary', disabled: busy, onClick: () => printKhataStatement(customer, currentBook, balance, settings, setMessage) }, LANG === 'ur' ? 'کھاتہ پرنٹ' : 'Print khata')
             : null,
           h('span', { className: `badge ${Number(balance) > 0 ? 'warning' : 'success'}` }, Number(balance) > 0 ? `${t('udharBadge')} ${money(balance)}` : t('clearBadge')))),
       h('div', { className: 'profile-details' },

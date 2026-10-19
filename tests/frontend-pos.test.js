@@ -409,6 +409,8 @@ test('the khata header offers the latest bill on WhatsApp, like the POS tab, plu
     'the header must send the latest bill the same way the POS tab does');
   assert.ok(/shareKhataStatement\(customer, currentBook, balance, settings, setMessage\)/.test(body),
     'the whole-khata statement button must stay, on the current book only');
+  assert.ok(/printKhataStatement\(customer, currentBook, balance, settings, setMessage\)/.test(body),
+    'a print button must sit beside the statement button and print the same current book');
 });
 
 // A khata paid off in full starts a fresh book, but the counter must still be able to read an old month
