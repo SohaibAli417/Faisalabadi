@@ -451,3 +451,57 @@ test('a found bill can be viewed in print form before reversing it', () => {
   assert.ok(/printBillImage\(lookupResultToBill\(lookup\), settings, lookup\.customer, setMessage\)/.test(reverse),
     'the reverse popup must offer a print-form view');
 });
+
+// The old "Additional / Delivery Information" box was twelve fields nobody filled in. It is now a single
+// named charge (title + qty + amount) that joins the products as one more line, so the grand total, the
+// printed bill and the khata all carry it without any special handling anywhere.
+test('the POS tab takes one named extra charge instead of the delivery form', () => {
+  assert.ok(/const \[extraCharge, setExtraCharge\] = useState\(\{ title: '', qty: '1', amount: '' \}\)/.test(appJs),
+    'the delivery state must be replaced by a single charge state');
+  assert.equal(/const \[delivery, setDelivery\] = useState/.test(appJs), false, 'the delivery state must be gone');
+  assert.equal(/function sanitizedDelivery\(/.test(appJs), false, 'the delivery sanitiser must be gone');
+
+  // The charge rides in as a manual line so subtotal/total/payload/preview all see it for free.
+  assert.ok(/const billItems = chargeLine \? \[\.\.\.cart, chargeLine\] : cart;/.test(appJs),
+    'the charge must be appended to the cart items before any total is worked out');
+  assert.ok(/const subtotal = billItems\.reduce\(/.test(appJs), 'the subtotal must be built from the charge-included items');
+  assert.ok(/items: billItems\.map\(/.test(appJs), 'the saved payload and the preview must send the charge line');
+  assert.ok(/delivery: null/.test(appJs), 'a new bill no longer writes the delivery block');
+
+  // The form itself, and the clear button the panel head shows once something is typed.
+  assert.ok(/const chargeSection = h\('section', \{ className: 'delivery-section pos-panel' \}/.test(appJs),
+    'the charge box must take the delivery section slot');
+  assert.ok(/function setChargeField\(key, value\)/.test(appJs), 'each field must write into the charge state');
+  assert.ok(/function clearCharge\(/.test(appJs), 'the charge must be clearable');
+  assert.ok(/extraCharge: 'Additional Charge'/.test(appJs) && /extraChargeNote:/.test(appJs), 'the box must be titled');
+});
+
+test('the extra charge reaches a draft and comes back with it', () => {
+  assert.ok(/charge: extraCharge,/.test(appJs), 'Save must send the charge to the draft endpoint');
+  assert.ok(/setExtraCharge\(draft\.charge \?/.test(appJs), 'Load must restore the charge box');
+  const server = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  assert.ok(/draft\.charge = \{/.test(server), 'the server must keep the charge on the draft');
+});
+
+// Changing the unit label used to rewrite the number the cashier typed: 2 kg became 2000 g. The cashier
+// asked for the box to stay put, so only the rate converts with the unit now.
+test('changing the UOM keeps the quantity exactly as it was typed', () => {
+  const start = appJs.indexOf('function setLineUnit(');
+  assert.notEqual(start, -1, 'setLineUnit must exist');
+  const body = appJs.slice(start, appJs.indexOf('\n  }', start) + 4);
+  assert.ok(/const newQty = qty;/.test(body), 'the typed quantity must be carried over unchanged');
+  assert.equal(/qty \* \(factor/.test(body), false, 'the old unit-rescale of the quantity must be gone');
+  assert.ok(/const price = rateForUnit\(baseRate, value, baseUnit, product\);/.test(body),
+    'the rate must still be converted to the new unit');
+});
+
+// Every customer needs a number the counter can read off and search by, taken from the full list so it
+// does not reshuffle while a filter narrows the table down.
+test('the customers table numbers each row and searches by that number', () => {
+  assert.ok(/const serialById = new Map\(\(data\.customers \|\| \[\]\)\.map\(\(row, index\) => \[row\.id, index \+ 1\]\)\)/.test(appJs),
+    'a stable serial must be derived from the full customer list');
+  assert.ok(/\? \['#', t\('hName'\)/.test(appJs), 'the customers table must gain a leading # column');
+  assert.ok(/className: 'row-serial'/.test(appJs), 'each customer row must print its serial');
+  assert.ok(/\$\{serialById\.get\(row\.id\) \|\| ''\} \$\{row\.name/.test(appJs),
+    'the search filter must match the serial number as well as the name and phone');
+});

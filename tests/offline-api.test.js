@@ -406,3 +406,33 @@ test('a cleared khata keeps the old money out of entries but keeps it in history
   assert.equal(ledger.historyBalanceAfter[second.body.entry.id], 250, 'the new book starts from zero');
 });
 
+// The POS extra charge is saved with the draft and handed straight back, so reopening a draft restores the
+// exact box the cashier left behind instead of silently dropping the charge.
+test('a draft keeps the extra charge the cashier typed', async () => {
+  const token = await loginAs('admin');
+  const call = api(token);
+
+  const created = await call('POST', '/api/drafts', {
+    clientId: 'draft_charge_test',
+    customerId: 'cus_walkin',
+    items: [{ name: 'Soap', unit: 'pcs', qty: 2, price: 50 }],
+    charge: { title: 'Delivery', qty: 1, amount: 300 }
+  });
+  assert.equal(created.status, 200, JSON.stringify(created.body));
+  assert.deepEqual(created.body.draft.charge, { title: 'Delivery', qty: 1, amount: 300 });
+
+  const listed = await call('GET', '/api/drafts');
+  const saved = listed.body.drafts.find(draft => draft.id === created.body.draft.id);
+  assert.ok(saved, 'the draft must be listed back');
+  assert.deepEqual(saved.charge, { title: 'Delivery', qty: 1, amount: 300 });
+
+  // A draft saved with an empty charge must not carry a stale one forward.
+  const cleared = await call('POST', '/api/drafts', {
+    id: created.body.draft.id,
+    items: [{ name: 'Soap', unit: 'pcs', qty: 2, price: 50 }],
+    charge: { title: '', qty: '1', amount: '' }
+  });
+  assert.equal(cleared.status, 200);
+  assert.equal(cleared.body.draft.charge, undefined);
+});
+

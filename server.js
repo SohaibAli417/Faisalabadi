@@ -2146,6 +2146,17 @@ async function handleApi(request, response) {
       } else {
         delete draft.delivery;
       }
+      // An optional named charge (title + qty + amount) the cashier put on top of the products. It is
+      // kept beside the items so loading the draft restores the exact box the cashier left behind.
+      if (body.charge && typeof body.charge === 'object' && !Array.isArray(body.charge) && String(body.charge.title || '').trim()) {
+        draft.charge = {
+          title: String(body.charge.title).trim().slice(0, 120),
+          qty: safeRate(body.charge.qty, 0),
+          amount: safeRate(body.charge.amount, 0)
+        };
+      } else {
+        delete draft.charge;
+      }
       await saveDb(db);
       return json(response, 200, { draft });
     }

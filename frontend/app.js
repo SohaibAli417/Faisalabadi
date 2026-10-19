@@ -1,6 +1,6 @@
 /* global React, ReactDOM */
-const APP_VERSION = 'v64';
-const APP_CHECKSUM = 'khata-print-button-v40';
+const APP_VERSION = 'v65';
+const APP_CHECKSUM = 'extra-charge-serial-qty-v41';
 (function() {
   var stored = null;
   try { stored = localStorage.getItem('faislabadi-pos-version'); } catch(_) {}
@@ -323,6 +323,8 @@ const STRINGS = {
     partialPayment: 'Partial', udhaarPayment: 'Credit / Udhaar', deliveryInfo: 'Additional / Delivery Information',
     deliveryInfoNote: 'Optional - shown on the printed invoice', deliverTo: 'Deliver To', deliverAddress: 'Deliver Address',
     clearDelivery: 'Clear Delivery',
+    extraCharge: 'Additional Charge', extraChargeNote: 'Optional - a named charge added to the total, the bill and the khata',
+    chargeItemPh: 'Item / charge name', chargeTotalLabel: 'Charge total', clearCharge: 'Clear charge',
     transport: 'Transport', trNo: 'TR #', noCases: 'No. of Cases', freightCharges: 'Freight Charges',
     deliveryDate: 'Delivery Date', orderTaker: 'Order Taker', salesPerson: 'Sales Person', packedBy: 'Packed By',
     preparedBy: 'Prepared By', checkedBy: 'Checked By', locationLabel: 'Location', removeLabel: 'Remove',
@@ -458,6 +460,8 @@ const STRINGS = {
     partialPayment: 'جزوی ادائیگی', udhaarPayment: 'اُدھار', deliveryInfo: 'اضافی / ڈیلیوری معلومات',
     deliveryInfoNote: 'اختیاری - پرنٹ شدہ بل پر دکھائی جائے گی', deliverTo: 'ڈیلیور کس کو', deliverAddress: 'ڈیلیوری کا پتہ',
     clearDelivery: 'ڈیلیوری صاف کریں',
+    extraCharge: 'اضافی چارج', extraChargeNote: 'اختیاری - یہ چارج ٹوٹل، بل اور کھاتے میں شامل ہو جائے گا',
+    chargeItemPh: 'چیز کا نام', chargeTotalLabel: 'چارج کل', clearCharge: 'چارج صاف کریں',
     transport: 'ٹرانسپورٹ', trNo: 'ٹی آر نمبر', noCases: 'کیسز کی تعداد', freightCharges: 'فریٹ چارجز',
     deliveryDate: 'ڈیلیوری کی تاریخ', orderTaker: 'آرڈر لینے والا', salesPerson: 'سیلز پرسن', packedBy: 'پیک کرنے والا',
     preparedBy: 'تیار کرنے والا', checkedBy: 'چیک کرنے والا', locationLabel: 'لوکیشن', removeLabel: 'ہٹائیں',
@@ -2121,7 +2125,10 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
   const [discount, setDiscount] = useState('');
   const [additionalDiscount, setAdditionalDiscount] = useState('');
   const [reference, setReference] = useState('');
-  const [delivery, setDelivery] = useState(EMPTY_DELIVERY());
+  // A free-text extra charge for the bill: a name, a quantity and a per-unit amount. It is added on
+  // top of the products as a normal manual line, so it shows in the total, on the printed bill and in
+  // the customer's khata without any special handling anywhere else.
+  const [extraCharge, setExtraCharge] = useState({ title: '', qty: '1', amount: '' });
   const [manualOpen, setManualOpen] = useState(false);
   const [manual, setManual] = useState({ name: '', price: '', qty: '1', unit: 'pcs' });
   const [receipt, setReceipt] = useState(null);
@@ -2157,7 +2164,16 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
   const shown = q
     ? activeProducts.filter(product => `${product.name} ${product.sku} ${product.barcode || ''} ${product.category || ''} ${product.nameUrdu || ''} ${product.urduName || ''}`.toLowerCase().includes(q))
     : [];
-  const subtotal = cart.reduce((sum, item) => sum + Number(item.price) * Number(item.qty), 0);
+  // The extra charge is folded in as one more line so the grand total, the bill and the khata all see
+  // the same money. Quantity defaults to 1, so typing only an amount is the same as naming a price.
+  const chargeQty = Math.max(0, round3(Number(extraCharge.qty) || 0));
+  const chargeAmount = Math.max(0, round3(Number(extraCharge.amount) || 0));
+  const chargeTotal = round3(chargeQty * chargeAmount);
+  const chargeTitle = String(extraCharge.title || '').trim();
+  const chargeActive = Boolean(chargeTitle) && chargeTotal > 0;
+  const chargeLine = chargeActive ? { productId: null, name: chargeTitle, sku: '', unit: '', qty: chargeQty, price: chargeAmount, manual: true, extra: true } : null;
+  const billItems = chargeLine ? [...cart, chargeLine] : cart;
+  const subtotal = billItems.reduce((sum, item) => sum + Number(item.price) * Number(item.qty), 0);
   const discountNum = Math.max(0, Number(discount) || 0);
   const addDiscNum = Math.max(0, Number(additionalDiscount) || 0);
   const mainD = Math.min(discountNum, subtotal);
@@ -2174,7 +2190,7 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
   const selectedCustomer = data.customers.find(item => item.id === customerId);
   const totalQty = cart.reduce((sum, item) => sum + Number(item.qty), 0);
   const totalPacks = cart.filter(item => ['pack', 'dozen', 'boree'].includes(item.unit)).reduce((sum, item) => sum + Number(item.qty), 0);
-  const hasDelivery = (delivery && Object.keys(delivery).some(key => String(delivery[key] || '').trim() !== '')) || false;
+  const hasCharge = chargeActive;
 
   function flash(text) { setMessage(text); setTimeout(() => { setMessage(m => (m === text ? '' : m)); }, 2600); }
 
@@ -2267,10 +2283,10 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
         && unitDimension(from) && unitDimension(baseUnit) && unitDimension(value)
         && !(unitDimension(value) === unitDimension(baseUnit))) return item;
       const qty = Number(item.qty) || 0;
-      const factor = unitToBase(from, baseUnit, product);
-      const nextFactor = unitToBase(value, baseUnit, product);
-      const isCount = unitDimension(baseUnit) === 'count';
-      const newQty = isCount ? qty : round3(qty * (factor / (nextFactor || 1)));
+      // The number the cashier typed stays exactly as typed when only the unit label changes. Switching
+      // kilo to gram must not silently turn "2" into "2000"; the cashier can add the zeros themselves.
+      // The rate is what moves with the unit, so the line's value stays right either way.
+      const newQty = qty;
       // A typed rate belongs to the unit it was typed in, so lift it to the product's base unit
       // first. Without this, a custom Rs 120/kg typed in kilo would be read as Rs 120 per gram
       // base and jump by a factor of 1000.
@@ -2371,7 +2387,7 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
     setDiscount('');
     setAdditionalDiscount('');
     setReference('');
-    setDelivery(EMPTY_DELIVERY());
+    setExtraCharge({ title: '', qty: '1', amount: '' });
     setManualOpen(false);
     setManual({ name: '', price: '', qty: '1', unit: 'pcs' });
     setSearchOpen(false);
@@ -2392,15 +2408,6 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
     }
   }
 
-  function sanitizedDelivery() {
-    const cleaned = {};
-    DELIVERY_FIELDS.forEach(([key]) => {
-      const value = delivery && delivery[key];
-      if (String(value || '').trim()) cleaned[key] = String(value).trim();
-    });
-    return Object.keys(cleaned).length ? cleaned : null;
-  }
-
   function buildPayload() {
     const payload = {
       // Built once per cart and reused by any retry of that same cart, so the server can recognise a
@@ -2413,10 +2420,10 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
       paymentType: paymentType === 'Partial' ? 'Credit' : paymentType,
       discount: mainD,
       additionalDiscount: extraD,
-      items: cart.map(item => ({ ...item })),
+      items: billItems.map(item => ({ ...item })),
       taxRate: 0,
       reference: reference.trim(),
-      delivery: sanitizedDelivery()
+      delivery: null
     };
     if (isCredit) payload.paidAmount = paidNow;
     return payload;
@@ -2436,7 +2443,7 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
       customerNameAtBilling: (selectedCustomer && selectedCustomer.name) || (customerId === 'cus_walkin' ? walkInName.trim() : ''),
       paymentType,
       source: 'preview',
-      items: cart.map(item => ({ ...item, manual: !item.productId })),
+      items: billItems.map(item => ({ ...item, manual: !item.productId })),
       subtotal: Math.round(subtotal),
       discount: combinedD,
       additionalDiscount: extraD,
@@ -2446,7 +2453,7 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
       paidAmount: isCredit ? paidNow : total,
       dueAmount: isCredit ? dueAmount : 0,
       reference: reference.trim(),
-      delivery: sanitizedDelivery(),
+      delivery: null,
       returnStatus: 'none',
       ...overrides
     };
@@ -2558,7 +2565,7 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
           customerId,
           paymentType,
           source: 'offline',
-          items: cart.map(item => ({ productId: item.productId, name: item.name, sku: item.sku || '', unit: item.unit, qty: Number(item.qty), price: Number(item.price), cost: 0, manual: !item.productId })),
+          items: billItems.map(item => ({ productId: item.productId, name: item.name, sku: item.sku || '', unit: item.unit, qty: Number(item.qty), price: Number(item.price), cost: 0, manual: !item.productId })),
           subtotal: Math.round(subtotal),
           discount: combinedD,
           additionalDiscount: extraD,
@@ -2568,7 +2575,7 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
           paidAmount: isCredit ? paidNow : total,
           dueAmount: isCredit ? dueAmount : 0,
           reference: reference.trim(),
-          delivery: sanitizedDelivery(),
+          delivery: null,
           returnStatus: 'none'
         });
         resetSale();
@@ -2702,7 +2709,7 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
         additionalDiscount: addDiscNum,
         receivedAmount: receivedNum,
         reference,
-        delivery: sanitizedDelivery(),
+        charge: extraCharge,
         items: cart
       });
       const saved = response.draft || response;
@@ -2739,18 +2746,18 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
     setAdditionalDiscount(String(draft.additionalDiscount || ''));
     setReceivedInput(draft.receivedAmount ? String(draft.receivedAmount) : '');
     setReference(draft.reference || '');
-    setDelivery(Object.assign(EMPTY_DELIVERY(), draft.delivery || {}));
+    setExtraCharge(draft.charge ? { title: String(draft.charge.title || ''), qty: String(draft.charge.qty ?? '1'), amount: String(draft.charge.amount ?? '') } : { title: '', qty: '1', amount: '' });
     setDraftsModal(false);
     flash(t('draftLoadedMsg'));
   }
 
-  function setDeliveryField(key, value) {
-    setDelivery(d => ({ ...d, [key]: value }));
+  function setChargeField(key, value) {
+    setExtraCharge(c => ({ ...c, [key]: value }));
   }
 
-  function clearDelivery() {
-    setDelivery(EMPTY_DELIVERY());
-    flash(LANG === 'ur' ? 'ڈیلیوری تفصیل صاف کر دی گئی۔' : 'Delivery details cleared.');
+  function clearCharge() {
+    setExtraCharge({ title: '', qty: '1', amount: '' });
+    flash(LANG === 'ur' ? 'اضافی چارج صاف کر دیا گیا۔' : 'Extra charge cleared.');
   }
 
   function currentBillPreview() {
@@ -2760,7 +2767,7 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
       createdAt: new Date().toISOString(),
       customerName: (selectedCustomer && selectedCustomer.name) || (customerId === 'cus_walkin' ? walkInName.trim() : ''),
       customerNameAtBilling: (selectedCustomer && selectedCustomer.name) || (customerId === 'cus_walkin' ? walkInName.trim() : ''),
-      items: cart.map(item => ({ name: item.name, qty: item.qty, unit: item.unit, price: item.price })),
+      items: billItems.map(item => ({ name: item.name, qty: item.qty, unit: item.unit, price: item.price })),
       subtotal: Math.round(subtotal),
       discount: combinedD,
       total,
@@ -3087,26 +3094,42 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
       h('datalist', { id: 'pos-manual-unit-list' }, MANUAL_UNIT_SUGGESTIONS.map(unit => h('option', { key: unit, value: unit }))),
       h('button', { className: 'primary', type: 'submit' }, t('add'))));
 
+  const chargeRow = chargeLine ? h('div', { className: 'bill-row charge-row' },
+    h('div', { className: 'bill-product' }, h('strong', null, chargeLine.name), h('small', null, t('extraCharge'))),
+    h('div', { className: 'bill-qty' }, h('input', { type: 'number', min: '0', step: 'any', value: extraCharge.qty, title: t('quantityWord'), onChange: e => setChargeField('qty', e.target.value) })),
+    h('div', { className: 'bill-uom' }),
+    h('div', { className: 'bill-rate' }, h('input', { className: 'bill-rate-input', type: 'number', min: '0', step: 'any', value: extraCharge.amount, title: t('rateLabel'), onChange: e => setChargeField('amount', e.target.value) })),
+    h('span', { className: 'bill-total' }, money(chargeTotal)),
+    h('button', { className: 'bill-remove', title: t('removeLabel'), 'aria-label': t('removeLabel'), onClick: clearCharge }, '\u00d7')) : null;
+
   const billSection = h('section', { className: 'bill-section pos-panel', ref: billRef },
     h('div', { className: 'panel-head bill-head' },
-      h('div', null, h('h2', null, t('currentInvoice')), h('p', null, `${cart.length} ${t('itemsShort')}`)),
+      h('div', null, h('h2', null, t('currentInvoice')), h('p', null, `${billItems.length} ${t('itemsShort')}`)),
       h(Badge, { tone: online ? 'success' : 'warning' }, online ? t('synced') : `${loadJson(queueKey, []).length} ${t('queued')}`)),
-    cart.length ? h('div', { className: 'bill-scroller' }, h('div', { className: 'bill-grid' },
+    billItems.length ? h('div', { className: 'bill-scroller' }, h('div', { className: 'bill-grid' },
       h('div', { className: 'bill-grid-head' },
         ...[h('span', { key: 'p' }, t('hProduct')), h('span', { key: 'q' }, t('qtyShort')), h('span', { key: 'u' }, t('unitLabelWord')), h('span', { key: 'r' }, t('rateLabel')), h('span', { key: 't' }, t('totalWord')), h('span', { key: 'x' }, '')]),
-      ...cart.map((item, index) => renderBillRow(item, index))))
+      ...cart.map((item, index) => renderBillRow(item, index)),
+      chargeRow))
       : h('div', { className: 'empty bill-empty' }, h('h3', null, t('cartEmpty')), h('p', null, t('scanOrSelect'))));
 
-  const deliverySection = h('section', { className: 'delivery-section pos-panel' },
+  const chargeSection = h('section', { className: 'delivery-section pos-panel' },
     h('div', { className: 'panel-head' },
-      h('div', null, h('h2', null, t('deliveryInfo')), h('p', null, t('deliveryInfoNote'))),
-      hasDelivery && h('button', { className: 'secondary small delivery-clear', onClick: clearDelivery }, t('clearDelivery'))),
-    h('div', { className: 'delivery-grid' },
-      DELIVERY_FIELDS.map(([key, labelKey]) => h('div', { className: 'delivery-field', key },
-        h('label', null, t(labelKey)),
-        key === 'deliveryDate'
-          ? h('input', { type: 'date', value: delivery[key] || '', onChange: e => setDeliveryField(key, e.target.value) })
-          : h('input', { value: delivery[key] || '', onChange: e => setDeliveryField(key, e.target.value) })))));
+      h('div', null, h('h2', null, t('extraCharge')), h('p', null, t('extraChargeNote'))),
+      hasCharge && h('button', { className: 'secondary small delivery-clear', onClick: clearCharge }, t('clearCharge'))),
+    h('div', { className: 'delivery-grid charge-grid' },
+      h('div', { className: 'delivery-field' },
+        h('label', null, t('chargeItemPh')),
+        h('input', { value: extraCharge.title, onChange: e => setChargeField('title', e.target.value), placeholder: t('chargeItemPh'), maxLength: 80 })),
+      h('div', { className: 'delivery-field' },
+        h('label', null, t('quantityWord')),
+        h('input', { type: 'number', min: '0', step: 'any', value: extraCharge.qty, onChange: e => setChargeField('qty', e.target.value), placeholder: t('qtyShort') })),
+      h('div', { className: 'delivery-field' },
+        h('label', null, t('amountWord')),
+        h('input', { type: 'number', min: '0', step: 'any', value: extraCharge.amount, onChange: e => setChargeField('amount', e.target.value), placeholder: t('amountWord') })),
+      h('div', { className: 'delivery-field charge-total-field' },
+        h('label', null, t('chargeTotalLabel')),
+        h('strong', { className: 'charge-total-value' }, money(chargeTotal)))));
 
   // Declared before checkoutSection because renderCustomerPanel() (used inside it) reads these.
   const canShareBill = customerId !== 'cus_walkin' && Boolean(selectedCustomer && selectedCustomer.phone);
@@ -3155,7 +3178,7 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
       invoiceHeader,
       searchSection,
       billSection,
-      deliverySection,
+      chargeSection,
       checkoutSection,
       actionsSection),
     receipt && h(ReceiptModal, { sale: receipt, customers: data.customers, settings: data.settings, onClose: () => {
@@ -3308,10 +3331,14 @@ function DataPage({ page, data, client, refresh }) {
   }, [page]);
   const title = pages.find(item => item[0] === page)?.[1] || page;
   const allRows = page === 'customers' ? data.customers : data.products;
+  // A stable serial number per customer, taken from the full list order so #3 stays #3 even while a
+  // search narrows the table down. Matching the serial in the search box lets the counter look a
+  // customer up by the number the khata page printed for them.
+  const serialById = new Map((data.customers || []).map((row, index) => [row.id, index + 1]));
   const searchTerm = search.trim().toLowerCase();
   const rows = searchTerm
     ? allRows.filter(row => page === 'customers'
-      ? `${row.name || ''} ${row.phone || ''}`.toLowerCase().includes(searchTerm)
+      ? `${serialById.get(row.id) || ''} ${row.name || ''} ${row.phone || ''}`.toLowerCase().includes(searchTerm)
       : `${row.name || ''} ${row.sku || ''} ${row.barcode || ''} ${row.category || ''}`.toLowerCase().includes(searchTerm))
     : allRows;
   function setProductField(field, value) {
@@ -3351,6 +3378,7 @@ function DataPage({ page, data, client, refresh }) {
     // so a cleared account no longer looks like it is still carrying old credit in the customer list.
     const settled = !(Number(row.balance) > 0);
     return h('tr', { key: row.id },
+      h('td', { className: 'row-serial' }, serialById.get(row.id) || ''),
       h('td', null, h('strong', null, row.name), h('div', { className: 'row-id' }, `#${row.id}`)),
       h('td', null, row.phone || ''),
       h('td', null, row.cnicMasked || ''),
@@ -3458,7 +3486,7 @@ function DataPage({ page, data, client, refresh }) {
     }
   }
   const headers = page === 'customers'
-    ? [t('hName'), t('hPhone'), t('hCnic'), t('hTotalCredit'), t('hTotalPaid'), t('hBalance'), t('hPaymentDate'), t('hPaymentTime'), t('thStatus'), t('hActions')]
+    ? ['#', t('hName'), t('hPhone'), t('hCnic'), t('hTotalCredit'), t('hTotalPaid'), t('hBalance'), t('hPaymentDate'), t('hPaymentTime'), t('thStatus'), t('hActions')]
     : [t('hProduct'), t('hSku'), t('hCategory'), t('hStock'), t('hCost'), t('hProfit'), t('hPrice'), t('thStatus'), t('hActions')];
   const thead = h('thead', null, h('tr', null, headers.map((label, index) => h('th', { key: index }, label))));
   const tbody = h('tbody', null, rows.length ? rows.map(row => (page === 'customers' ? customerRow(row) : productRow(row)))
@@ -3496,7 +3524,7 @@ function DataPage({ page, data, client, refresh }) {
       ]),
     ['products', 'inventory', 'customers'].includes(page) && h('div', { className: 'table-toolbar' },
       h('label', { className: 'search' }, h('input', { type: 'search', value: search, onChange: e => setSearch(e.target.value), placeholder: page === 'customers'
-        ? (LANG === 'ur' ? 'گاہک کا نام تلاش کریں...' : 'Search customers by name...')
+        ? (LANG === 'ur' ? 'گاہک کا نمبر، نام یا فون تلاش کریں...' : 'Search customers by number, name or phone...')
         : (LANG === 'ur' ? 'پروڈکٹ کا نام تلاش کریں...' : 'Search products by name...') })),
       rows.length < allRows.length && h('small', { className: 'muted' }, `${rows.length} / ${allRows.length}`)),
     h('article', { className: 'panel data-panel' }, h('div', { className: 'table-wrap' }, h('table', null, thead, tbody))),

@@ -992,6 +992,11 @@ td {
   font-family: inherit;
   min-width: 0;
 }
+.charge-grid { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
+.charge-total-field { justify-content: flex-start; }
+.charge-total-value { padding: 8px 10px; border: 1px dashed var(--line); border-radius: 6px; font-size: 15px; color: var(--ink); }
+.charge-row { background: rgba(37, 99, 235, 0.06); }
+.charge-row .bill-product small { color: var(--muted); }
 
 /* Checkout column */
 .checkout-section { grid-area: checkout; position: sticky; top: 14px; align-self: start; }
@@ -1992,6 +1997,7 @@ html[dir='rtl'] .metric-card p, html[dir='rtl'] .metric-card h3, html[dir='rtl']
 /* EDITABLE TABLES + EDIT MODALS */
 .muted { color: var(--muted); }
 .row-id { font-size: 11px; color: var(--muted); font-weight: 600; margin-top: 2px; }
+.row-serial { color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 700; width: 44px; }
 .small { padding: 5px 10px !important; font-size: 12px; }
 .payment-form input[type='date'], .payment-form input[type='time'] { flex: 0 0 auto; width: 138px; }
 
