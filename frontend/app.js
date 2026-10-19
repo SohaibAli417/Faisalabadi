@@ -1,6 +1,6 @@
 /* global React, ReactDOM */
-const APP_VERSION = 'v65';
-const APP_CHECKSUM = 'extra-charge-serial-qty-v41';
+const APP_VERSION = 'v66';
+const APP_CHECKSUM = 'charge-amount-total-ref-print-v42';
 (function() {
   var stored = null;
   try { stored = localStorage.getItem('faislabadi-pos-version'); } catch(_) {}
@@ -1824,6 +1824,7 @@ const ledgerEntryToBill = (entry, customer) => {
     customerNameAtBilling: (customer && customer.name) || '',
     paymentType: settled ? 'Cash' : 'Credit',
     paymentOnly: entry.type === 'payment',
+    reference: entry.reference || '',
     paidAmount: settled ? amount : 0,
     receivedAmount: settled ? amount : 0,
     dueAmount: settled ? 0 : amount,
@@ -1867,6 +1868,7 @@ const lookupResultToBill = lookup => {
     customerName: customer ? customer.name : '',
     customerNameAtBilling: customer ? customer.name : '',
     paymentType: sale.paymentType,
+    reference: sale.reference || '',
     subtotal: sale.subtotal,
     discount: sale.discount,
     additionalDiscount: 0,
@@ -2165,13 +2167,14 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
     ? activeProducts.filter(product => `${product.name} ${product.sku} ${product.barcode || ''} ${product.category || ''} ${product.nameUrdu || ''} ${product.urduName || ''}`.toLowerCase().includes(q))
     : [];
   // The extra charge is folded in as one more line so the grand total, the bill and the khata all see
-  // the same money. Quantity defaults to 1, so typing only an amount is the same as naming a price.
+  // the same money. The typed Amount is the whole charge - Qty is only how many of it, so the per-unit
+  // rate is worked out from the two and the line always adds up to exactly the Amount.
   const chargeQty = Math.max(0, round3(Number(extraCharge.qty) || 0));
   const chargeAmount = Math.max(0, round3(Number(extraCharge.amount) || 0));
-  const chargeTotal = round3(chargeQty * chargeAmount);
   const chargeTitle = String(extraCharge.title || '').trim();
-  const chargeActive = Boolean(chargeTitle) && chargeTotal > 0;
-  const chargeLine = chargeActive ? { productId: null, name: chargeTitle, sku: '', unit: '', qty: chargeQty, price: chargeAmount, manual: true, extra: true } : null;
+  const chargeActive = Boolean(chargeTitle) && chargeAmount > 0;
+  const chargeQtyDisplay = chargeQty > 0 ? chargeQty : 1;
+  const chargeLine = chargeActive ? { productId: null, name: chargeTitle, sku: '', unit: '', qty: chargeQtyDisplay, price: round3(chargeAmount / chargeQtyDisplay), manual: true, extra: true } : null;
   const billItems = chargeLine ? [...cart, chargeLine] : cart;
   const subtotal = billItems.reduce((sum, item) => sum + Number(item.price) * Number(item.qty), 0);
   const discountNum = Math.max(0, Number(discount) || 0);
@@ -3098,8 +3101,8 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
     h('div', { className: 'bill-product' }, h('strong', null, chargeLine.name), h('small', null, t('extraCharge'))),
     h('div', { className: 'bill-qty' }, h('input', { type: 'number', min: '0', step: 'any', value: extraCharge.qty, title: t('quantityWord'), onChange: e => setChargeField('qty', e.target.value) })),
     h('div', { className: 'bill-uom' }),
-    h('div', { className: 'bill-rate' }, h('input', { className: 'bill-rate-input', type: 'number', min: '0', step: 'any', value: extraCharge.amount, title: t('rateLabel'), onChange: e => setChargeField('amount', e.target.value) })),
-    h('span', { className: 'bill-total' }, money(chargeTotal)),
+    h('div', { className: 'bill-rate' }, h('input', { className: 'bill-rate-input', type: 'number', min: '0', step: 'any', value: chargeLine.price, title: t('rateLabel'), onChange: e => setChargeField('amount', String(round3(Number(e.target.value) * chargeQtyDisplay))) })),
+    h('span', { className: 'bill-total' }, money(chargeAmount)),
     h('button', { className: 'bill-remove', title: t('removeLabel'), 'aria-label': t('removeLabel'), onClick: clearCharge }, '\u00d7')) : null;
 
   const billSection = h('section', { className: 'bill-section pos-panel', ref: billRef },
@@ -3129,7 +3132,7 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
         h('input', { type: 'number', min: '0', step: 'any', value: extraCharge.amount, onChange: e => setChargeField('amount', e.target.value), placeholder: t('amountWord') })),
       h('div', { className: 'delivery-field charge-total-field' },
         h('label', null, t('chargeTotalLabel')),
-        h('strong', { className: 'charge-total-value' }, money(chargeTotal)))));
+        h('strong', { className: 'charge-total-value' }, money(chargeAmount)))));
 
   // Declared before checkoutSection because renderCustomerPanel() (used inside it) reads these.
   const canShareBill = customerId !== 'cus_walkin' && Boolean(selectedCustomer && selectedCustomer.phone);

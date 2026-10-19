@@ -476,6 +476,39 @@ test('the POS tab takes one named extra charge instead of the delivery form', ()
   assert.ok(/extraCharge: 'Additional Charge'/.test(appJs) && /extraChargeNote:/.test(appJs), 'the box must be titled');
 });
 
+// The typed Amount is the whole charge, not a per-unit rate: Qty 10 with Amount 2 must show Rs 2, never
+// Rs (10 x 0). The line's rate is derived so the bill still adds up to exactly the Amount.
+test('the extra charge total is the amount typed, whatever the quantity', () => {
+  const start = appJs.indexOf('const chargeQty = Math.max');
+  assert.notEqual(start, -1, 'the charge block must exist');
+  const block = appJs.slice(start, appJs.indexOf('const subtotal = billItems.reduce', start));
+  assert.ok(/const chargeActive = Boolean\(chargeTitle\) && chargeAmount > 0;/.test(block),
+    'the charge must be judged by the amount, not qty x amount');
+  assert.ok(/price: round3\(chargeAmount \/ chargeQtyDisplay\)/.test(block),
+    'the per-unit rate must be derived from the amount so the line adds up to the Amount');
+  // The two places the counter reads the figure must show the amount itself.
+  assert.ok(/money\(chargeAmount\)/.test(appJs), 'the charge total must print the amount, not a product');
+  assert.equal(/money\(chargeTotal\)/.test(appJs), false, 'no surface may still multiply qty by amount');
+});
+
+// A bill reprinted from the khata (or the find-bill panel) is rebuilt from the ledger row, so the
+// reference note only reaches that paper if the rebuild carries it across.
+test('a reference note survives when a saved bill is rebuilt for printing', () => {
+  const ledgerStart = appJs.indexOf('const ledgerEntryToBill =');
+  const ledger = new Function(appJs.slice(ledgerStart, appJs.indexOf('\n};', ledgerStart) + 3) + '; return ledgerEntryToBill;')();
+  const bill = ledger({ type: 'sale', id: 's1', at: '2026-10-17T10:00:00.000Z', invoiceNo: 'FS-9', amount: 200, items: [{ name: 'Soap', qty: 2, price: 100, amount: 200 }], reference: 'Order #42' }, { id: 'cus_1', name: 'Ali' });
+  assert.equal(bill.reference, 'Order #42', 'the rebuilt bill must carry the reference note');
+
+  const lookupStart = appJs.indexOf('const lookupResultToBill =');
+  const lookup = new Function(appJs.slice(lookupStart, appJs.indexOf('\n};', lookupStart) + 3) + '; return lookupResultToBill;')();
+  const found = lookup({ sale: { invoiceNo: 'FS-9', reference: 'Order #42', total: 200, subtotal: 200 }, customer: { id: 'cus_1', name: 'Ali' }, items: [] });
+  assert.equal(found.reference, 'Order #42', 'the find-bill view must carry the reference note too');
+
+  const server = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  assert.ok(/reference: entry\.reference \|\| ''/.test(server), 'the ledger endpoint must report the reference');
+  assert.ok(/reference: sale\.reference \|\| ''/.test(server), 'the lookup endpoint must report the reference');
+});
+
 test('the extra charge reaches a draft and comes back with it', () => {
   assert.ok(/charge: extraCharge,/.test(appJs), 'Save must send the charge to the draft endpoint');
   assert.ok(/setExtraCharge\(draft\.charge \?/.test(appJs), 'Load must restore the charge box');

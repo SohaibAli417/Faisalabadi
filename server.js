@@ -2308,6 +2308,7 @@ async function handleApi(request, response) {
           invoiceNo: sale.invoiceNo,
           createdAt: sale.createdAt,
           paymentType: sale.paymentType,
+          reference: sale.reference || '',
           subtotal: sale.subtotal,
           discount: sale.discount,
           tax: sale.tax,
