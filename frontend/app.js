@@ -249,12 +249,12 @@ const STRINGS = {
     fullyPaid: 'Fully paid', total: 'Total', paidNowFull: 'Paid now', full: 'Full', none: 'None',
     selectCustomerForUdhar: 'Select a customer for udhar', chargePayment: 'Charge payment', saveSaleUdhar: 'Save sale - Udhar',
     offlineQueuedBadge: 'queued', management: 'MANAGEMENT',
-    hName: 'Name', hPhone: 'Phone', hCnic: 'CNIC', hTotalCredit: 'Total Credit', hTotalPaid: 'Total Paid', hBalance: 'Balance', creditLimitLabel: 'Credit Limit',
+    hName: 'Name', hPhone: 'Phone', hCnic: 'CNIC', hCustomerCode: 'Fixed ID', hTotalCredit: 'Total Credit', hTotalPaid: 'Total Paid', hBalance: 'Balance', creditLimitLabel: 'Credit Limit',
     hActions: 'Actions', hProduct: 'Product', hSku: 'SKU', hCategory: 'Category', hStock: 'Stock', hCost: 'Cost', hProfit: 'Profit', hPrice: 'Price',
     hPaymentDate: 'Payment Date', hPaymentTime: 'Payment Time', editLabel: 'Edit', saveLabel: 'Save', cancelLabel: 'Cancel',
     khata: 'Khata', payUdhar: 'Pay Udhar', clearShort: 'Clear', udharBadge: 'Udhar', clearBadge: 'Clear', activeBadge: 'Active', inactiveBadge: 'Inactive', lowBadge: 'Low',
     delete: 'Delete', saved: 'Saved.', addCustomer: 'Add customer', addProduct: 'Add product', addSupplier: 'Add supplier',
-    phName: 'Name', phPhone: 'Phone', phCnicOptional: 'CNIC (optional)', phAddressOptional: 'Address (optional)',
+    phName: 'Name', phPhone: 'Phone', phCnicOptional: 'CNIC (optional)', phAddressOptional: 'Address (optional)', phCustomerCode: 'Fixed ID (optional)',
     phProductName: 'Product name', phCategory: 'Category', phCost: 'Purchase price (cost)', profitRs: 'Profit Rs', profitPercent: 'Profit %',
     phOwnerProfit: 'Owner profit', phSalePriceAuto: 'Sale price (auto)', phLowAlertAt: 'Low stock alert at', barcodeLabel: 'Barcode:',
     udharKhataEyebrow: 'UDHAR KHATA', cnicLabel: 'CNIC:', totalCreditPurchases: 'Lifetime credit purchases', totalPaidLabel: 'Lifetime paid', currentOutstandingLabel: 'Current outstanding udhar', lifetimeTotalsNote: 'Lifetime totals stay after a settlement; current outstanding is what is still owed today.',
@@ -386,12 +386,12 @@ const STRINGS = {
     fullyPaid: 'مکمل ادائیگی', total: 'ٹوٹل', paidNowFull: 'ابھی ادائیگی', full: 'پورا', none: 'کچھ نہیں',
     selectCustomerForUdhar: 'اُدھار کے لیے گاہک منتخب کریں', chargePayment: 'ادائیگی وصول کریں', saveSaleUdhar: 'سیل محفوظ کریں - اُدھار',
     offlineQueuedBadge: 'زیرِ انتظار', management: 'انتظامیہ',
-    hName: 'نام', hPhone: 'موبائل', hCnic: 'شناختی نمبر', hTotalCredit: 'کل اُدھار', hTotalPaid: 'کل ادائیگی', hBalance: 'بقیہ', creditLimitLabel: 'ادھار کی حد',
+    hName: 'نام', hPhone: 'موبائل', hCnic: 'شناختی نمبر', hCustomerCode: 'مستقل آئی ڈی', hTotalCredit: 'کل اُدھار', hTotalPaid: 'کل ادائیگی', hBalance: 'بقیہ', creditLimitLabel: 'ادھار کی حد',
     hActions: 'ایکشن', hProduct: 'پروڈکٹ', hSku: 'کوڈ', hCategory: 'قسم', hStock: 'اسٹاک', hCost: 'لاگت', hProfit: 'منافع', hPrice: 'قیمت',
     hPaymentDate: 'ادائیگی کی تاریخ', hPaymentTime: 'ادائیگی کا وقت', editLabel: 'ترمیم', saveLabel: 'محفوظ', cancelLabel: 'منسوخ',
     khata: 'کھاتہ', payUdhar: 'اُدھار وصول', clearShort: 'کلیر', udharBadge: 'اُدھار', clearBadge: 'صاف', activeBadge: 'فعال', inactiveBadge: 'بند', lowBadge: 'کم',
     delete: 'ڈیلیٹ', saved: 'محفوظ ہو گیا۔', addCustomer: 'گاہک شامل کریں', addProduct: 'پروڈکٹ شامل کریں', addSupplier: 'سپلائر شامل کریں',
-    phName: 'نام', phPhone: 'موبائل', phCnicOptional: 'شناختی نمبر (اختیاری)', phAddressOptional: 'پتہ (اختیاری)',
+    phName: 'نام', phPhone: 'موبائل', phCnicOptional: 'شناختی نمبر (اختیاری)', phAddressOptional: 'پتہ (اختیاری)', phCustomerCode: 'مستقل شناختی کارڈ (اختیاری)',
     phProductName: 'پروڈکٹ کا نام', phCategory: 'قسم', phCost: 'خرید قیمت (لاگت)', profitRs: 'منافع روپے', profitPercent: 'منافع فیصد',
     phOwnerProfit: 'مالکانہ منافع', phSalePriceAuto: 'فروخت قیمت (خود بخود)', phLowAlertAt: 'کم اسٹاک الرٹ پر', barcodeLabel: 'بارکوڈ:',
     udharKhataEyebrow: 'اُدھار کھاتہ', cnicLabel: 'شناختی کارڈ:', totalCreditPurchases: 'کل اُدھار خریداری (اب تک)', totalPaidLabel: 'کل ادا شدہ (اب تک)', currentOutstandingLabel: 'موجودہ بقایا اُدھار', lifetimeTotalsNote: 'کل (اب تک) کے اعداد تصفیے کے بعد بھی رہتے ہیں؛ موجودہ بقایا آج واجب الادا رقم ہے۔',
@@ -3341,7 +3341,7 @@ function DataPage({ page, data, client, refresh }) {
   const searchTerm = search.trim().toLowerCase();
   const rows = searchTerm
     ? allRows.filter(row => page === 'customers'
-      ? `${serialById.get(row.id) || ''} ${row.name || ''} ${row.phone || ''}`.toLowerCase().includes(searchTerm)
+      ? `${serialById.get(row.id) || ''} ${row.name || ''} ${row.phone || ''} ${row.customerCode || ''}`.toLowerCase().includes(searchTerm)
       : `${row.name || ''} ${row.sku || ''} ${row.barcode || ''} ${row.category || ''}`.toLowerCase().includes(searchTerm))
     : allRows;
   function setProductField(field, value) {
@@ -3377,6 +3377,7 @@ function DataPage({ page, data, client, refresh }) {
 
   function customerRow(row) {
     const canManageUdhar = data.user.role === 'Admin' || data.user.role === 'Manager';
+    const canDeleteCustomers = data.user.role === 'Admin' || data.user.role === 'Manager';
     // Same rule as the khata itself: once nothing is owed the lifetime figures read as zero here too,
     // so a cleared account no longer looks like it is still carrying old credit in the customer list.
     const settled = !(Number(row.balance) > 0);
@@ -3385,18 +3386,20 @@ function DataPage({ page, data, client, refresh }) {
       h('td', null, h('strong', null, row.name), h('div', { className: 'row-id' }, `#${row.id}`)),
       h('td', null, row.phone || ''),
       h('td', null, row.cnicMasked || ''),
+      h('td', null, row.customerCode || ''),
       h('td', null, money(settled ? 0 : row.creditPurchases)),
       h('td', null, money(settled ? 0 : row.totalPaid)),
       h('td', null, h('strong', { style: Number(row.balance) > 0 ? { color: '#c0392b' } : null }, money(row.balance))),
       h('td', null, row.lastPaymentAt ? toDateInputValue(row.lastPaymentAt) : h('span', { className: 'muted' }, '-')),
       h('td', null, row.lastPaymentAt ? toTimeInputValue(row.lastPaymentAt) : h('span', { className: 'muted' }, '-')),
       h('td', null, Number(row.balance) > 0 ? h(Badge, { tone: 'warning' }, t('udharBadge')) : h(Badge, { tone: 'success' }, t('clearBadge'))),
-      h('td', null,
-        h('button', { className: 'secondary khata-btn', onClick: () => setKhata(row) }, t('khata')),
-        h('button', { className: 'secondary khata-btn', onClick: () => setEditCustomer(row) }, t('editLabel')),
-        canManageUdhar && Number(row.balance) > 0 && h('button', { className: 'secondary khata-btn pay-btn', onClick: () => setKhata(row) }, t('payUdhar')),
-        canManageUdhar && Number(row.balance) > 0 && h('button', { className: 'secondary khata-btn danger-btn small', onClick: () => confirmClearUdhar(row) }, t('clearShort')),
-        h('button', { className: 'secondary khata-btn danger-btn small', onClick: () => confirmDeleteCustomer(row) }, t('delete'))));
+      h('td', { className: 'action-cell' },
+        h('div', { className: 'action-group' },
+          h('button', { className: 'secondary khata-btn', onClick: () => setKhata(row) }, t('khata')),
+          h('button', { className: 'secondary khata-btn', onClick: () => setEditCustomer(row) }, t('editLabel')),
+          canManageUdhar && Number(row.balance) > 0 && h('button', { className: 'secondary khata-btn pay-btn', onClick: () => setKhata(row) }, t('payUdhar')),
+          canManageUdhar && Number(row.balance) > 0 && h('button', { className: 'secondary khata-btn danger-btn small', onClick: () => confirmClearUdhar(row) }, t('clearShort')),
+          canDeleteCustomers && h('button', { className: 'secondary khata-btn danger-btn small', onClick: () => confirmDeleteCustomer(row) }, t('delete')))));
   }
   async function confirmDeleteCustomer(row) {
     const ok = await askConfirm(LANG === 'ur'
@@ -3489,7 +3492,7 @@ function DataPage({ page, data, client, refresh }) {
     }
   }
   const headers = page === 'customers'
-    ? ['#', t('hName'), t('hPhone'), t('hCnic'), t('hTotalCredit'), t('hTotalPaid'), t('hBalance'), t('hPaymentDate'), t('hPaymentTime'), t('thStatus'), t('hActions')]
+    ? ['#', t('hName'), t('hPhone'), t('hCnic'), t('phCustomerCode'), t('hTotalCredit'), t('hTotalPaid'), t('hBalance'), t('hPaymentDate'), t('hPaymentTime'), t('thStatus'), t('hActions')]
     : [t('hProduct'), t('hSku'), t('hCategory'), t('hStock'), t('hCost'), t('hProfit'), t('hPrice'), t('thStatus'), t('hActions')];
   const thead = h('thead', null, h('tr', null, headers.map((label, index) => h('th', { key: index }, label))));
   const tbody = h('tbody', null, rows.length ? rows.map(row => (page === 'customers' ? customerRow(row) : productRow(row)))
@@ -3507,6 +3510,7 @@ function DataPage({ page, data, client, refresh }) {
         h('input', { key: 'phone', placeholder: t('phPhone'), value: form.phone || '', onChange: e => setForm({ ...form, phone: e.target.value }) }),
         h('input', { key: 'cnic', placeholder: t('phCnicOptional'), value: form.cnic || '', onChange: e => setForm({ ...form, cnic: e.target.value }) }),
         h('input', { key: 'address', placeholder: t('phAddressOptional'), value: form.address || '', onChange: e => setForm({ ...form, address: e.target.value }) }),
+        h('input', { key: 'customerCode', placeholder: t('phCustomerCode'), value: form.customerCode || '', onChange: e => setForm({ ...form, customerCode: e.target.value }) }),
         h('button', { key: 'save', className: 'primary' }, t('addCustomer'))
       ] : [
         h('input', { key: 'name', placeholder: t('phProductName'), value: form.name || '', onChange: e => setProductField('name', e.target.value), required: true }),
@@ -4159,6 +4163,7 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
   const init = {
     name: customer.name || '',
     phone: customer.phone || '',
+    customerCode: customer.customerCode || '',
     cnic: '',
     address: customer.address || '',
     creditLimit: customer.creditLimit || 0,
@@ -4359,7 +4364,7 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
     setMessage('');
     setBusy(true);
     // Built before the request so the same edit can be queued if there is no network.
-    const payload = { name: form.name, phone: form.phone, address: form.address, creditLimit: Number(form.creditLimit || 0) };
+    const payload = { name: form.name, customerCode: form.customerCode || '', phone: form.phone, address: form.address, creditLimit: Number(form.creditLimit || 0) };
     if (form.cnic.trim()) payload.cnic = form.cnic.trim();
     if (canEditUdhar) {
       if (Number(form.udhaarTotal) !== init.udhaarTotal || Number(form.udhaarPaid) !== init.udhaarPaid) {
@@ -4523,7 +4528,8 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
         h('div', { className: 'edit-form-row' },
           h('div', null, h('label', null, t('hName')), h('input', { value: form.name, onChange: e => setForm({ ...form, name: e.target.value }), required: true })),
           h('div', null, h('label', null, t('hPhone')), h('input', { value: form.phone, onChange: e => setForm({ ...form, phone: e.target.value }) })),
-          h('div', null, h('label', null, t('hCnic')), h('input', { value: form.cnic, placeholder: customer.cnicMasked || t('phCnicOptional'), onChange: e => setForm({ ...form, cnic: e.target.value }) }))),
+          h('div', null, h('label', null, t('hCnic')), h('input', { value: form.cnic, placeholder: customer.cnicMasked || t('phCnicOptional'), onChange: e => setForm({ ...form, cnic: e.target.value }) })),
+          h('div', null, h('label', null, t('phCustomerCode')), h('input', { value: form.customerCode, placeholder: t('phCustomerCode'), onChange: e => setForm({ ...form, customerCode: e.target.value }) }))),
         h('div', { className: 'edit-form-row' },
           h('div', null, h('label', null, t('phAddressOptional')), h('input', { value: form.address, onChange: e => setForm({ ...form, address: e.target.value }) })),
           h('div', null, h('label', null, t('creditLimitLabel')), h('input', { type: 'number', min: '0', value: form.creditLimit, onChange: e => setForm({ ...form, creditLimit: e.target.value }) }))),

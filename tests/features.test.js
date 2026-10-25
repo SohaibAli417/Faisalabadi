@@ -210,7 +210,7 @@ test('supplier create/update/delete works, audited, and delete is blocked once p
   assert.equal(can(admin, 'purchases'), true);
 });
 
-test('customer create/delete works, audited, and delete is blocked once billing or udhaar history exists', () => {
+test('customer create/delete works, audited, and delete succeeds even with billing or udhaar history', () => {
   const { db, admin } = fixture();
   db.customers.unshift({ id: 'cus_new', name: 'Temp Buyer', phone: '0300-1234567', balance: 0, active: true });
   deleteCustomer(db, 'cus_new', admin);
@@ -218,11 +218,11 @@ test('customer create/delete works, audited, and delete is blocked once billing 
   assert.equal(db.auditLogs.some(log => log.entity === 'customer' && log.action === 'delete'), true);
   db.customers.unshift({ id: 'cus_keep', name: 'Has History', balance: 0, active: true });
   db.sales = [{ id: 'sal_x', customerId: 'cus_keep', items: [], total: 50 }];
-  assert.throws(() => deleteCustomer(db, 'cus_keep', admin), /billing or udhaar history/);
+  assert.equal(deleteCustomer(db, 'cus_keep', admin).ok, true);
   db.sales = [];
   db.customers = db.customers.filter(item => item.id !== 'cus_keep');
   db.customers.unshift({ id: 'cus_debt', name: 'Owes Money', balance: 250, active: true });
-  assert.throws(() => deleteCustomer(db, 'cus_debt', admin), /billing or udhaar history/);
+  assert.equal(deleteCustomer(db, 'cus_debt', admin).ok, true);
 });
 
 test('clear udhar zeroes the balance and preserves every history record', () => {

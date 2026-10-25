@@ -197,6 +197,7 @@ function ensureSchema(db) {
   for (const customer of db.customers) {
     if (!('address' in customer)) { customer.address = ''; changed = true; }
     if (!('active' in customer)) { customer.active = true; changed = true; }
+    if (!('customerCode' in customer) || !customer.customerCode) { customer.customerCode = ''; changed = true; }
   }
   for (const product of db.products) {
     if (!('barcode' in product)) { product.barcode = ''; changed = true; }
@@ -976,6 +977,7 @@ function decorateCustomer(db, customer, totalsMap) {
     ...customer,
     cnicMasked: maskCnic(customer.cnic),
     cnic: undefined,
+    customerCode: customer.customerCode || '',
     creditPurchases,
     totalPaid,
     balance,
@@ -1173,7 +1175,15 @@ function receiveUdharPayment(db, customerId, amountInput, actor, options = {}) {
   // Paying the udhar off in full closes the book on that stretch of the khata. The timestamp lets the
   // ledger hide the settled history once the customer borrows again - nothing is deleted, the old rows
   // are simply not part of the new running total.
-  if (money(customer.balance) <= 0) customer.khataClearedAt = at;
+  if (money(customer.balance) <= 0) {
+    customer.khataClearedAt = at;
+    // Cleared in full: lifetime figures restart from zero so new udhar does not carry old lifetime
+    // credit. The sale/payment/udhar rows themselves stay intact for month-wise history.
+    if (customer.recordedTotal !== undefined && customer.recordedPaid !== undefined) {
+      customer.recordedTotal = 0;
+      customer.recordedPaid = 0;
+    }
+  }
   if (customer.recordedPaid !== undefined && customer.recordedPaid !== null && customer.recordedPaid !== '') {
     customer.recordedPaid = money(Number(customer.recordedPaid) + amount);
   }
@@ -1286,7 +1296,7 @@ function updateCustomer(db, id, body, actor) {
       throw new Error(`Credit limit exceeded. ${customer.name} can take Rs ${money(limit - projectedBalance)} more udhar.`);
     }
   }
-  for (const field of ['name', 'phone', 'cnic', 'address', 'creditLimit']) {
+  for (const field of ['name', 'phone', 'cnic', 'address', 'creditLimit', 'customerCode']) {
     if (body[field] !== undefined) customer[field] = field === 'creditLimit' ? money(body[field]) : String(body[field]).trim();
   }
   if (Array.isArray(body.products)) {
@@ -1398,12 +1408,7 @@ function deleteSupplier(db, id, actor) {
 function deleteCustomer(db, id, actor) {
   const customer = db.customers.find(item => item.id === id);
   if (!customer) throw new Error('Customer not found');
-  const hasSales = (db.sales || []).some(sale => sale.customerId === id && !sale.voided);
-  const hasPayments = (db.payments || []).some(payment => payment.customerId === id && !payment.voided);
-  const hasBalance = Number(customer.balance || 0) > 0;
-  if (hasSales || hasPayments || hasBalance) {
-    throw new Error('This customer has billing or udhaar history and cannot be deleted');
-  }
+  if (id === 'cus_walkin') throw new Error('Walk-in customer cannot be deleted');
   db.customers = db.customers.filter(item => item.id !== id);
   audit(db, actor, 'delete', 'customer', id, { name: customer.name });
   return { ok: true };
@@ -1865,7 +1870,7 @@ async function handleApi(request, response) {
       if (!can(actor, 'customers')) return json(response, 403, { error: 'Permission denied' });
       const body = await parseBody(request);
       if (!body.name || !String(body.name).trim()) return json(response, 400, { error: 'Customer name is required' });
-      const customer = { id: uid('cus'), name: String(body.name).trim(), phone: String(body.phone || '').trim(), cnic: String(body.cnic || '').trim(), address: String(body.address || '').trim(), creditLimit: money(body.creditLimit), balance: money(body.balance), active: true, _updatedAt: now() };
+      const customer = { id: uid('cus'), name: String(body.name).trim(), customerCode: String(body.customerCode || '').trim(), phone: String(body.phone || '').trim(), cnic: String(body.cnic || '').trim(), address: String(body.address || '').trim(), creditLimit: money(body.creditLimit), balance: money(body.balance), active: true, _updatedAt: now() };
       const productList = [];
       if (Array.isArray(body.products)) {
         for (const item of body.products) {

@@ -419,6 +419,17 @@ td {
 
 .khata-btn { padding: 6px 12px !important; font-size: 12px; }
 
+/* Customer row action buttons: equal size, responsive wrap */
+.action-cell { white-space: nowrap; }
+.action-group { display: inline-flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.action-group .khata-btn { flex: none; }
+
+@media (max-width: 760px) {
+  .action-cell { white-space: normal; }
+  .action-group { width: 100%; }
+  .action-group .khata-btn { flex: 1 1 48%; min-width: 78px; }
+}
+
 /* CUSTOMER PROFILE */
 .profile-head { margin-bottom: 12px; }
 .profile-top { display: flex; align-items: center; gap: 12px; }
