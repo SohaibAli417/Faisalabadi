@@ -1903,6 +1903,10 @@ td {
 
   #print-root .receipt::before { background: #000 !important; height: 1px !important; }
 
+  /* Every printed line is bold so the thermal print stays readable. */
+  #print-root .receipt,
+  #print-root .receipt * { font-weight: 700 !important; }
+
   /* Tight, print-only spacing: the old 6mm page margin plus 5-8mm receipt padding left a large blank
      strip above the shop name. A 2mm inset is enough to keep the first line off the paper edge. */
   #print-root .receipt-header { padding: 0 0 3px !important; }
@@ -1952,7 +1956,7 @@ td {
 
   /* 58mm roll - a 7mm safe edge on both sides keeps the last column inside the print head,
      which is usually only about 48mm wide on a 58mm roll. */
-  #print-root .receipt.paper-58 { width: 58mm !important; max-width: 58mm !important; padding: 2mm 7mm 3mm !important; font-size: 10px !important; }
+  #print-root .receipt.paper-58 { width: 58mm !important; max-width: 58mm !important; padding: 4mm 7mm 3mm !important; font-size: 10px !important; }
   #print-root .receipt.paper-58 h2 { font-size: 14px !important; }
   #print-root .receipt.paper-58 .receipt-info { font-size: 9px !important; }
   #print-root .receipt.paper-58 .receipt-row { font-size: 10px !important; }
@@ -1968,7 +1972,7 @@ td {
   #print-root .receipt.paper-58 .receipt-credit .credit-phone { font-size: 9px !important; }
 
   /* 80mm roll - 6mm safe edges leave 68mm inside the usual 72mm print head. */
-  #print-root .receipt.paper-80 { width: 80mm !important; max-width: 80mm !important; padding: 2mm 6mm 3mm !important; font-size: 11px !important; }
+  #print-root .receipt.paper-80 { width: 80mm !important; max-width: 80mm !important; padding: 4mm 6mm 3mm !important; font-size: 11px !important; }
   #print-root .receipt.paper-80 h2 { font-size: 16px !important; }
   #print-root .receipt.paper-80 .receipt-info { font-size: 10px !important; }
   #print-root .receipt.paper-80 .receipt-row { font-size: 11px !important; }

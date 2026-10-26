@@ -1,5 +1,5 @@
 /* global React, ReactDOM */
-const APP_VERSION = 'v68';
+const APP_VERSION = 'v69';
 const APP_CHECKSUM = 'charge-amount-total-ref-print-v42';
 (function() {
   var stored = null;
@@ -1203,6 +1203,7 @@ function drawBillImage(sale, settings, customer, labels, options) {
   const sizeOf = value => Math.max(1, Math.round((Number(value) || 17) * printScale));
   const stepOf = value => Math.max(1, Math.round((Number(value) || 20) * printScale));
   const pad = printMode ? 30 : BILL_PAD;
+  const topPad = printMode ? 80 : BILL_PAD;
   const ink = colour => (printMode ? '#000' : (colour || '#111'));
 
   // Measured in two passes: lay the bill out on a throwaway canvas to learn its height, then draw
@@ -1211,8 +1212,9 @@ function drawBillImage(sale, settings, customer, labels, options) {
   const canvas = document.createElement('canvas');
   canvas.width = BILL_WIDTH;
   const build = ctx => {
-    let y = pad;
-    const fontFor = (size, weight) => `${weight || '400'} ${sizeOf(size || 17)}px "Segoe UI", system-ui, sans-serif`;
+    let y = topPad;
+    // Every line on a printed bill is bold, as requested for the thermal printer.
+    const fontFor = (size, weight) => `${printMode ? '700' : (weight || '400')} ${sizeOf(size || 17)}px "Segoe UI", system-ui, sans-serif`;
     // `align` is passed in because every helper below needs to right-align against a column edge,
     // and the canvas keeps whatever align it was last given.
     const text = (value, size, weight, colour, indent = 0, align = 'left') => {
@@ -1570,6 +1572,7 @@ function drawKhataStatementImage(customer, entries, balance, settings, options) 
   const sizeOf = value => Math.max(1, Math.round((Number(value) || 17) * printScale));
   const stepOf = value => Math.max(1, Math.round((Number(value) || 20) * printScale));
   const pad = printMode ? 30 : BILL_PAD;
+  const topPad = printMode ? 80 : BILL_PAD;
   const ink = colour => (printMode ? '#000' : (colour || '#111'));
   const L = {
     title: ur ? 'اُدھار کھاتہ' : 'UDHAR KHATA',
@@ -1590,8 +1593,9 @@ function drawKhataStatementImage(customer, entries, balance, settings, options) 
   const canvas = document.createElement('canvas');
   canvas.width = BILL_WIDTH;
   const build = ctx => {
-    let y = pad;
-    const font = (size, weight) => `${weight || '400'} ${sizeOf(size || 17)}px "Segoe UI", system-ui, sans-serif`;
+    let y = topPad;
+    // Every line on a printed statement is bold, as requested for the thermal printer.
+    const font = (size, weight) => `${printMode ? '700' : (weight || '400')} ${sizeOf(size || 17)}px "Segoe UI", system-ui, sans-serif`;
     const text = (value, size, weight, colour, indent, align) => {
       ctx.font = font(size, weight);
       ctx.fillStyle = ink(colour);
