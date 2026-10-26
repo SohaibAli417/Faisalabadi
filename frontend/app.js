@@ -1,5 +1,5 @@
 /* global React, ReactDOM */
-const APP_VERSION = 'v67';
+const APP_VERSION = 'v68';
 const APP_CHECKSUM = 'charge-amount-total-ref-print-v42';
 (function() {
   var stored = null;

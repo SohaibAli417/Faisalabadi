@@ -1908,11 +1908,14 @@ td {
   #print-root .receipt-header { padding: 0 0 3px !important; }
   #print-root .receipt-brand { margin-bottom: 2px !important; gap: 4px !important; }
   #print-root .receipt-logo { width: 26px !important; height: 26px !important; border-radius: 0 !important; }
-  #print-root .receipt h2 { letter-spacing: 0 !important; margin: 0 0 2px !important; }
-  #print-root .receipt-info { color: #000 !important; margin: 0 !important; line-height: 1.3 !important; }
+  #print-root .receipt h2 { letter-spacing: 0 !important; margin: 0 0 2px !important; overflow-wrap: anywhere !important; }
+  #print-root .receipt-info { color: #000 !important; margin: 0 !important; line-height: 1.3 !important; overflow-wrap: anywhere !important; }
   #print-root .receipt-divider { border-color: #000 !important; border-top-width: 1px !important; margin: 4px 0 !important; }
   #print-root .receipt-meta { padding: 0 !important; }
-  #print-root .receipt-row { padding: 1px 0 !important; line-height: 1.35 !important; }
+  #print-root .receipt-row { padding: 1px 0 !important; line-height: 1.35 !important; gap: 2mm !important; align-items: flex-start !important; }
+  #print-root .receipt-row span { min-width: 0 !important; }
+  #print-root .receipt-row span:first-child { flex: 0 0 auto !important; }
+  #print-root .receipt-row span:last-child { flex: 0 1 auto !important; text-align: right !important; overflow-wrap: anywhere !important; word-break: break-word !important; }
   #print-root .receipt-row span:first-child,
   #print-root .receipt-row span:last-child { color: #000 !important; }
   #print-root .receipt-items-header {
@@ -1929,24 +1932,27 @@ td {
   #print-root .receipt-paytype { padding: 3px 0 !important; }
   #print-root .receipt-badge { border: 1px solid #000 !important; background: #fff !important; color: #000 !important; padding: 1px 10px !important; }
   #print-root .receipt-footer { padding: 4px 0 2px !important; border-top-color: #000 !important; }
-  #print-root .receipt-footer p { margin: 1px 0 !important; color: #000 !important; }
+  #print-root .receipt-footer p { margin: 1px 0 !important; color: #000 !important; overflow-wrap: anywhere !important; }
   #print-root .receipt-footer p:first-child { color: #000 !important; }
   #print-root .receipt-credit { margin-top: 3px !important; padding: 3px 0 0 !important; border-top-color: #000 !important; }
   #print-root .receipt-credit .credit-title { color: #000 !important; letter-spacing: 1px !important; }
   #print-root .receipt-credit .credit-name,
-  #print-root .receipt-credit .credit-phone { color: #000 !important; }
+  #print-root .receipt-credit .credit-phone { color: #000 !important; overflow-wrap: anywhere !important; }
   #print-root .receipt-credit .credit-phone { background: none !important; border: 0 !important; padding: 0 !important; border-radius: 0 !important; }
   #print-root .no-print { display: none !important; }
 
   /* Percentage columns keep the amount columns inside the printable width at every paper size, and
      long product names wrap instead of pushing the rightmost total off the edge. */
+  #print-root .receipt .receipt-items-header span,
+  #print-root .receipt .receipt-item span { min-width: 0 !important; }
   #print-root .receipt .ri-name { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
   #print-root .receipt .ri-qty { flex: 0 0 16%; white-space: nowrap; text-align: center; }
   #print-root .receipt .ri-price { flex: 0 0 22%; white-space: nowrap; text-align: right; }
   #print-root .receipt .ri-total { flex: 0 0 30%; white-space: nowrap; text-align: right; }
 
-  /* 58mm roll - larger type than before, but still inside a 3.5mm safe edge. */
-  #print-root .receipt.paper-58 { width: 58mm !important; max-width: 58mm !important; padding: 2mm 5mm 3mm !important; font-size: 10px !important; }
+  /* 58mm roll - a 7mm safe edge on both sides keeps the last column inside the print head,
+     which is usually only about 48mm wide on a 58mm roll. */
+  #print-root .receipt.paper-58 { width: 58mm !important; max-width: 58mm !important; padding: 2mm 7mm 3mm !important; font-size: 10px !important; }
   #print-root .receipt.paper-58 h2 { font-size: 14px !important; }
   #print-root .receipt.paper-58 .receipt-info { font-size: 9px !important; }
   #print-root .receipt.paper-58 .receipt-row { font-size: 10px !important; }
@@ -1961,8 +1967,8 @@ td {
   #print-root .receipt.paper-58 .receipt-credit .credit-name { font-size: 10px !important; }
   #print-root .receipt.paper-58 .receipt-credit .credit-phone { font-size: 9px !important; }
 
-  /* 80mm roll */
-  #print-root .receipt.paper-80 { width: 80mm !important; max-width: 80mm !important; padding: 2mm 4mm 3mm !important; font-size: 11px !important; }
+  /* 80mm roll - 6mm safe edges leave 68mm inside the usual 72mm print head. */
+  #print-root .receipt.paper-80 { width: 80mm !important; max-width: 80mm !important; padding: 2mm 6mm 3mm !important; font-size: 11px !important; }
   #print-root .receipt.paper-80 h2 { font-size: 16px !important; }
   #print-root .receipt.paper-80 .receipt-info { font-size: 10px !important; }
   #print-root .receipt.paper-80 .receipt-row { font-size: 11px !important; }
@@ -1995,8 +2001,8 @@ td {
     padding: 0 !important;
     border: none !important;
   }
-  #print-root .bill-print-image.paper-58 { width: 48mm !important; }
-  #print-root .bill-print-image.paper-80 { width: 72mm !important; }
+  #print-root .bill-print-image.paper-58 { width: 44mm !important; }
+  #print-root .bill-print-image.paper-80 { width: 68mm !important; }
   #print-root .bill-print-image.paper-a4 { width: 100% !important; max-width: 190mm !important; }
 }
 
