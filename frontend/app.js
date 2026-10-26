@@ -1,5 +1,5 @@
 /* global React, ReactDOM */
-const APP_VERSION = 'v66';
+const APP_VERSION = 'v67';
 const APP_CHECKSUM = 'charge-amount-total-ref-print-v42';
 (function() {
   var stored = null;
@@ -1133,7 +1133,7 @@ function ellipsize(ctx, text, maxWidth) {
   return cut.trimEnd() + '...';
 }
 
-function drawBillImage(sale, settings, customer, labels) {
+function drawBillImage(sale, settings, customer, labels, options) {
   const t = key => (labels && labels[key] != null ? labels[key] : key);
   const storeName = (settings && settings.storeName) || 'Faislabadi General Store';
   const storePhone = (settings && settings.phone) || '';
@@ -1194,36 +1194,48 @@ function drawBillImage(sale, settings, customer, labels) {
   const accountFinal = Number.isFinite(Number(sale.finalBalance)) ? Number(sale.finalBalance) : baseBalance + accountPurchase - accountPayment;
   const showAccount = sale.paymentOnly || baseBalance > 0 || due > 0;
 
+  // Printing uses its own scale and a two-line item row so the same bill is legible on a 58mm roll
+  // without squeezing the price columns off the right edge. The WhatsApp picture keeps its original
+  // layout, so sharing is unchanged.
+  const printMode = !!(options && options.print);
+  const printPaper = String((options && options.paper) || '80');
+  const printScale = printMode ? (printPaper === '58' ? 2.45 : printPaper === 'a4' ? 1.1 : 2) : 1;
+  const sizeOf = value => Math.max(1, Math.round((Number(value) || 17) * printScale));
+  const stepOf = value => Math.max(1, Math.round((Number(value) || 20) * printScale));
+  const pad = printMode ? 30 : BILL_PAD;
+  const ink = colour => (printMode ? '#000' : (colour || '#111'));
+
   // Measured in two passes: lay the bill out on a throwaway canvas to learn its height, then draw
   // it for real on a canvas of exactly that size. No guessing, so nothing is ever cut off.
   const measure = document.createElement('canvas').getContext('2d');
   const canvas = document.createElement('canvas');
   canvas.width = BILL_WIDTH;
   const build = ctx => {
-    let y = BILL_PAD;
+    let y = pad;
+    const fontFor = (size, weight) => `${weight || '400'} ${sizeOf(size || 17)}px "Segoe UI", system-ui, sans-serif`;
     // `align` is passed in because every helper below needs to right-align against a column edge,
     // and the canvas keeps whatever align it was last given.
     const text = (value, size, weight, colour, indent = 0, align = 'left') => {
-      ctx.font = `${weight || '400'} ${size || 17}px "Segoe UI", system-ui, sans-serif`;
-      ctx.fillStyle = colour || '#111';
+      ctx.font = fontFor(size, weight);
+      ctx.fillStyle = ink(colour);
       ctx.textAlign = align;
       ctx.textBaseline = 'alphabetic';
-      ctx.fillText(value, BILL_PAD + indent, y);
+      ctx.fillText(String(value == null ? '' : value), pad + indent, y);
     };
-    const rightMargin = BILL_WIDTH - BILL_PAD * 2;
+    const rightMargin = BILL_WIDTH - pad * 2;
     const centred = (value, size, weight, colour) => {
-      ctx.font = `${weight || '400'} ${size || 17}px "Segoe UI", system-ui, sans-serif`;
-      ctx.fillStyle = colour || '#111';
+      ctx.font = fontFor(size, weight);
+      ctx.fillStyle = ink(colour);
       ctx.textAlign = 'center';
       ctx.textBaseline = 'alphabetic';
-      ctx.fillText(value, BILL_WIDTH / 2, y);
+      ctx.fillText(String(value == null ? '' : value), BILL_WIDTH / 2, y);
       ctx.textAlign = 'left';
     };
     // Centred text that is wider than the paper is split into several lines instead of running off
     // the edge, and each line steps down the page so the lines cannot sit on top of one another.
     const centredLines = (value, size, weight, colour, lineStep) => {
-      const step = lineStep || Math.round((size || 17) * 1.45);
-      ctx.font = `${weight || '400'} ${size || 17}px "Segoe UI", system-ui, sans-serif`;
+      const step = stepOf(lineStep || Math.round((size || 17) * 1.45));
+      ctx.font = fontFor(size, weight);
       const maxWidth = rightMargin;
       const lines = [];
       for (const paragraph of String(value == null ? '' : value).split('\n')) {
@@ -1244,42 +1256,164 @@ function drawBillImage(sale, settings, customer, labels) {
         y += step;
       }
     };
+    // A long product name wraps in print mode rather than being cut off or covering the amount.
+    const wrapped = (value, size, weight, colour, indent, maxWidth) => {
+      const step = stepOf(Math.round((size || 17) * 1.5));
+      ctx.font = fontFor(size, weight);
+      ctx.fillStyle = ink(colour);
+      ctx.textAlign = 'left';
+      const lines = [];
+      for (const paragraph of String(value == null ? '' : value).split('\n')) {
+        let current = '';
+        for (const word of paragraph.split(/\s+/).filter(Boolean)) {
+          const next = current ? current + ' ' + word : word;
+          if (current && ctx.measureText(next).width > maxWidth) {
+            lines.push(current);
+            current = word;
+          } else {
+            current = next;
+          }
+        }
+        if (current) lines.push(current);
+      }
+      for (let index = 0; index < lines.length; index += 1) {
+        ctx.fillText(lines[index], pad + (indent || 0), y);
+        if (index < lines.length - 1) y += step;
+      }
+      ctx.textAlign = 'left';
+    };
+    // Footer and long values wrap inside the paper instead of running past either edge.
+    const centredWrapped = (value, size, weight, colour) => {
+      const step = stepOf(Math.round((size || 17) * 1.45));
+      ctx.font = fontFor(size, weight);
+      const lines = [];
+      for (const paragraph of String(value == null ? '' : value).split('\n')) {
+        let current = '';
+        for (const word of paragraph.split(/\s+/).filter(Boolean)) {
+          const next = current ? current + ' ' + word : word;
+          if (current && ctx.measureText(next).width > rightMargin) {
+            lines.push(current);
+            current = word;
+          } else {
+            current = next;
+          }
+        }
+        if (current) lines.push(current);
+      }
+      for (let index = 0; index < lines.length; index += 1) {
+        if (lines[index]) centred(lines[index], size, weight, colour);
+        if (index < lines.length - 1) y += step;
+      }
+    };
+    const rightWrapped = (value, size, weight, colour) => {
+      const step = stepOf(Math.round((size || 17) * 1.5));
+      ctx.font = fontFor(size, weight);
+      const lines = [];
+      for (const paragraph of String(value == null ? '' : value).split('\n')) {
+        let current = '';
+        for (const word of paragraph.split(/\s+/).filter(Boolean)) {
+          const next = current ? current + ' ' + word : word;
+          if (current && ctx.measureText(next).width > rightMargin) {
+            lines.push(current);
+            current = word;
+          } else {
+            current = next;
+          }
+        }
+        if (current) lines.push(current);
+      }
+      // Hard-break a single unbroken value (a long reference number) that is wider than the paper.
+      const fitted = [];
+      for (const line of lines) {
+        if (ctx.measureText(line).width <= rightMargin) { fitted.push(line); continue; }
+        let chunk = '';
+        for (const character of line) {
+          const next = chunk + character;
+          if (chunk && ctx.measureText(next).width > rightMargin) { fitted.push(chunk); chunk = character; }
+          else chunk = next;
+        }
+        if (chunk) fitted.push(chunk);
+      }
+      for (let index = 0; index < fitted.length; index += 1) {
+        if (fitted[index]) text(fitted[index], size, weight, colour, rightMargin, 'right');
+        if (index < fitted.length - 1) y += step;
+      }
+    };
     const divider = () => {
-      ctx.strokeStyle = '#d8d8d8';
+      ctx.strokeStyle = printMode ? '#000' : '#d8d8d8';
       ctx.lineWidth = 1;
       ctx.setLineDash([5, 4]);
       ctx.beginPath();
-      ctx.moveTo(BILL_PAD, Math.round(y) + 0.5);
-      ctx.lineTo(BILL_WIDTH - BILL_PAD, Math.round(y) + 0.5);
+      ctx.moveTo(pad, Math.round(y) + 0.5);
+      ctx.lineTo(BILL_WIDTH - pad, Math.round(y) + 0.5);
       ctx.stroke();
       ctx.setLineDash([]);
-      y += 18;
+      y += stepOf(18);
     };
     const pair = (left, right, size, weight, colour) => {
-      y += size || 20;
-      text(left, size, weight, colour);
-      text(right, size, weight, colour, rightMargin, 'right');
+      y += stepOf(size || 20);
+      ctx.font = fontFor(size, weight);
+      const leftText = String(left == null ? '' : left);
+      const rightText = String(right == null ? '' : right);
+      // A long value (a customer name, a reference note) drops to the next line in print mode
+      // instead of overlapping its label, and wraps further if it is wider than the paper.
+      const leftWidth = ctx.measureText(leftText).width;
+      const rightWidth = ctx.measureText(rightText).width;
+      if (printMode && leftText && leftWidth + rightWidth + 20 > rightMargin) {
+        text(leftText, size, weight, colour);
+        y += stepOf(Math.round((size || 17) * 1.15));
+        rightWrapped(rightText, size, weight, colour);
+      } else if (printMode && rightWidth > rightMargin) {
+        rightWrapped(rightText, size, weight, colour);
+      } else {
+        text(leftText, size, weight, colour);
+        text(rightText, size, weight, colour, rightMargin, 'right');
+      }
+    };
+    const leftRight = (left, right, size, weight, colour) => {
+      ctx.font = fontFor(size, weight);
+      const rightText = String(right == null ? '' : right);
+      const maxLeft = Math.max(40, rightMargin - ctx.measureText(rightText).width - 12);
+      text(ellipsize(ctx, left, maxLeft), size, weight, colour);
+      text(rightText, size, weight, colour, rightMargin, 'right');
     };
 
     // Header
     centredLines(storeName, 27, '700', '#111', 34);
     if (storeAddress) centredLines(storeAddress, 15, '400', '#444', 21);
     if (storePhone) centredLines(storePhone, 15, '400', '#444', 21);
-    y += 12;
+    y += stepOf(12);
     divider();
 
     // Meta
     for (const [left, right] of meta) pair(left, right, 18, '400', '#111');
-    y += 6;
+    y += stepOf(6);
     divider();
 
     // Item columns
-    const nameX = BILL_PAD;
-    const qtyX = BILL_PAD + 330;
-    const priceX = BILL_PAD + 430;
-    const totalX = BILL_WIDTH - BILL_PAD;
-    y += 20;
-    if (sale.summaryOnly) {
+    const nameX = pad;
+    const qtyX = pad + 330;
+    const priceX = pad + 430;
+    const totalX = BILL_WIDTH - pad;
+    y += stepOf(20);
+    if (printMode) {
+      // A thermal slip has no room for four narrow columns at a readable size, so each product gets
+      // its own name line and a second line for quantity, rate and amount. Nothing is truncated.
+      text(t('hProduct'), 15, '700', '#111');
+      y += stepOf(4);
+      divider();
+      for (const item of items) {
+        y += stepOf(18);
+        wrapped(item.name, 17, '600', '#111', 0, rightMargin);
+        y += stepOf(18);
+        if (sale.summaryOnly) {
+          if (item.qty) text(`${item.qty} ${item.unit}`.trim(), 17, '400', '#111', rightMargin, 'right');
+        } else {
+          leftRight(`${item.qty} ${item.unit} x ${moneyRate(item.price)}`, moneyRate(item.line), 15, '400', '#111');
+        }
+        y += stepOf(8);
+      }
+    } else if (sale.summaryOnly) {
       // A khata entry only knows the bill as one figure, so no per-line rate or line total is invented
       // here - the products are listed and the real total comes from the totals block below.
       text(t('hProduct'), 15, '700', '#333');
@@ -1310,12 +1444,14 @@ function drawBillImage(sale, settings, customer, labels) {
         if (ctx.measureText(String(item.name)).width > 320) y += 21;
       }
     }
-    y += 8;
+    y += stepOf(8);
     divider();
 
     // Totals
-    for (const [left, right] of totals) pair(left, right, 18, left === t('grandTotalLabel') ? '700' : '400');
-    y += 6;
+    for (const [left, right] of totals) {
+      pair(left, right, printMode && left === t('grandTotalLabel') ? 20 : 18, left === t('grandTotalLabel') ? '700' : '400');
+    }
+    y += stepOf(6);
     divider();
 
     // Account movement: previous balance -> this purchase / this payment -> final outstanding.
@@ -1323,10 +1459,10 @@ function drawBillImage(sale, settings, customer, labels) {
       pair(t('previousBalance'), money(baseBalance), 17, '400', '#333');
       if (accountPurchase > 0) pair(t('newPurchaseLabel'), '+ ' + money(accountPurchase), 17, '400', '#333');
       if (accountPayment > 0) pair(t('paymentReceived'), '- ' + money(accountPayment), 17, '400', '#333');
-      y += 6;
+      y += stepOf(6);
       divider();
       pair(t('finalOutstandingLabel'), money(accountFinal), 19, '700');
-      y += 6;
+      y += stepOf(6);
       divider();
     }
 
@@ -1336,22 +1472,26 @@ function drawBillImage(sale, settings, customer, labels) {
       for (const [key, labelKey] of DELIVERY_FIELDS) {
         if (delivery[key]) pair(t(labelKey), delivery[key], 17, '400', '#333');
       }
-      y += 6;
+      y += stepOf(6);
       divider();
     }
 
     // Footer, same wording as the printed bill
-    y += 22;
-    centred('Thank you for shopping with us!', 17, '400');
-    y += 24;
-    centred('Goods once sold will not be exchanged or returned', 15, '400', '#444');
-    y += 30;
-    centred('Designed and Developed By', 14, '400', '#777');
-    y += 20;
-    centred('Sohaib Ali', 16, '700', '#333');
-    y += 20;
-    centred('Mobile No: 03074224449', 14, '400', '#777');
-    y += BILL_PAD;
+    const footerLine = (value, size, weight, colour) => {
+      if (printMode) centredWrapped(value, size, weight, colour);
+      else centred(value, size, weight, colour);
+    };
+    y += stepOf(22);
+    footerLine('Thank you for shopping with us!', 17, '400');
+    y += stepOf(24);
+    footerLine('Goods once sold will not be exchanged or returned', 15, '400', '#444');
+    y += stepOf(30);
+    footerLine('Designed and Developed By', 14, '400', '#777');
+    y += stepOf(20);
+    footerLine('Sohaib Ali', 16, '700', '#333');
+    y += stepOf(20);
+    footerLine('Mobile No: 03074224449', 14, '400', '#777');
+    y += pad;
     return y;
   };
 
@@ -1405,7 +1545,7 @@ function udharRowDescription(entry, ur) {
 // The customer's whole khata on one picture: every udhar still owed, oldest first, and the one figure
 // that matters - what is left to pay. Cleared money is not on the list, so the customer is never asked
 // for a rupee they have already settled. Drawn the same two-pass way as the bill so nothing is cut off.
-function drawKhataStatementImage(customer, entries, balance, settings) {
+function drawKhataStatementImage(customer, entries, balance, settings, options) {
   const ur = LANG === 'ur';
   const storeName = (settings && settings.storeName) || 'Faislabadi General Store';
   const storePhone = (settings && settings.phone) || '';
@@ -1422,6 +1562,15 @@ function drawKhataStatementImage(customer, entries, balance, settings) {
     const d = new Date(at);
     return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-PK', { day: '2-digit', month: 'short', year: 'numeric' });
   };
+  // The printed statement gets the same larger print scale as the printed bill. Sharing on WhatsApp
+  // keeps the original layout and sizing.
+  const printMode = !!(options && options.print);
+  const printPaper = String((options && options.paper) || '80');
+  const printScale = printMode ? (printPaper === '58' ? 2.45 : printPaper === 'a4' ? 1.1 : 2) : 1;
+  const sizeOf = value => Math.max(1, Math.round((Number(value) || 17) * printScale));
+  const stepOf = value => Math.max(1, Math.round((Number(value) || 20) * printScale));
+  const pad = printMode ? 30 : BILL_PAD;
+  const ink = colour => (printMode ? '#000' : (colour || '#111'));
   const L = {
     title: ur ? 'اُدھار کھاتہ' : 'UDHAR KHATA',
     customer: ur ? 'گاہک' : 'Customer',
@@ -1441,20 +1590,20 @@ function drawKhataStatementImage(customer, entries, balance, settings) {
   const canvas = document.createElement('canvas');
   canvas.width = BILL_WIDTH;
   const build = ctx => {
-    let y = BILL_PAD;
-    const font = (size, weight) => `${weight || '400'} ${size || 17}px "Segoe UI", system-ui, sans-serif`;
+    let y = pad;
+    const font = (size, weight) => `${weight || '400'} ${sizeOf(size || 17)}px "Segoe UI", system-ui, sans-serif`;
     const text = (value, size, weight, colour, indent, align) => {
       ctx.font = font(size, weight);
-      ctx.fillStyle = colour || '#111';
+      ctx.fillStyle = ink(colour);
       ctx.textAlign = align || 'left';
       ctx.textBaseline = 'alphabetic';
-      ctx.fillText(String(value == null ? '' : value), BILL_PAD + (indent || 0), y);
+      ctx.fillText(String(value == null ? '' : value), pad + (indent || 0), y);
       ctx.textAlign = 'left';
     };
-    const rightEdge = BILL_WIDTH - BILL_PAD;
+    const rightEdge = BILL_WIDTH - pad;
     const rhs = (value, size, weight, colour) => {
       ctx.font = font(size, weight);
-      ctx.fillStyle = colour || '#111';
+      ctx.fillStyle = ink(colour);
       ctx.textAlign = 'right';
       ctx.textBaseline = 'alphabetic';
       ctx.fillText(String(value == null ? '' : value), rightEdge, y);
@@ -1462,15 +1611,16 @@ function drawKhataStatementImage(customer, entries, balance, settings) {
     };
     const centred = (value, size, weight, colour) => {
       ctx.font = font(size, weight);
-      ctx.fillStyle = colour || '#111';
+      ctx.fillStyle = ink(colour);
       ctx.textAlign = 'center';
       ctx.textBaseline = 'alphabetic';
       ctx.fillText(String(value == null ? '' : value), BILL_WIDTH / 2, y);
       ctx.textAlign = 'left';
     };
     const wrap = (value, size, weight, colour, indent, maxWidth, step, align) => {
+      const lineStep = stepOf(step || Math.round((size || 17) * 1.4));
       ctx.font = font(size, weight);
-      ctx.fillStyle = colour || '#111';
+      ctx.fillStyle = ink(colour);
       ctx.textAlign = align || 'left';
       const lines = [];
       for (const paragraph of String(value == null ? '' : value).split('\n')) {
@@ -1485,105 +1635,150 @@ function drawKhataStatementImage(customer, entries, balance, settings) {
       for (const line of lines) {
         if (line) {
           if (align === 'center') ctx.fillText(line, BILL_WIDTH / 2, y);
-          else ctx.fillText(line, BILL_PAD + (indent || 0), y);
+          else ctx.fillText(line, pad + (indent || 0), y);
         }
-        y += step;
+        y += lineStep;
       }
       ctx.textAlign = 'left';
     };
+    const rightWrapped = (value, size, weight, colour) => {
+      const lineStep = stepOf(Math.round((size || 17) * 1.5));
+      ctx.font = font(size, weight);
+      const lines = [];
+      for (const paragraph of String(value == null ? '' : value).split('\n')) {
+        let current = '';
+        for (const word of paragraph.split(/\s+/).filter(Boolean)) {
+          const next = current ? current + ' ' + word : word;
+          if (current && ctx.measureText(next).width > rightEdge - pad) { lines.push(current); current = word; }
+          else current = next;
+        }
+        if (current) lines.push(current);
+      }
+      // Hard-break a single unbroken value (a long reference number) that is wider than the paper.
+      const fitted = [];
+      for (const line of lines) {
+        if (ctx.measureText(line).width <= rightEdge - pad) { fitted.push(line); continue; }
+        let chunk = '';
+        for (const character of line) {
+          const next = chunk + character;
+          if (chunk && ctx.measureText(next).width > rightEdge - pad) { fitted.push(chunk); chunk = character; }
+          else chunk = next;
+        }
+        if (chunk) fitted.push(chunk);
+      }
+      for (let index = 0; index < fitted.length; index += 1) {
+        if (fitted[index]) rhs(fitted[index], size, weight, colour);
+        if (index < fitted.length - 1) y += lineStep;
+      }
+    };
     const divider = () => {
-      ctx.strokeStyle = '#d8d8d8';
+      ctx.strokeStyle = printMode ? '#000' : '#d8d8d8';
       ctx.lineWidth = 1;
       ctx.setLineDash([5, 4]);
       ctx.beginPath();
-      ctx.moveTo(BILL_PAD, Math.round(y) + 0.5);
+      ctx.moveTo(pad, Math.round(y) + 0.5);
       ctx.lineTo(rightEdge, Math.round(y) + 0.5);
       ctx.stroke();
       ctx.setLineDash([]);
-      y += 18;
+      y += stepOf(18);
     };
     const pair = (left, rightValue, size, weight, colour) => {
-      y += size || 20;
-      text(left, size, weight, colour);
-      rhs(rightValue, size, weight, colour);
+      y += stepOf(size || 20);
+      ctx.font = font(size, weight);
+      const leftText = String(left == null ? '' : left);
+      const rightText = String(rightValue == null ? '' : rightValue);
+      // Long customer details drop to a second line rather than overlapping their label, and wrap
+      // further if a single value is wider than the paper.
+      const leftWidth = ctx.measureText(leftText).width;
+      const rightWidth = ctx.measureText(rightText).width;
+      if (printMode && leftText && leftWidth + rightWidth + 20 > rightEdge - pad) {
+        text(leftText, size, weight, colour);
+        y += stepOf(Math.round((size || 17) * 1.15));
+        rightWrapped(rightText, size, weight, colour);
+      } else if (printMode && rightWidth > rightEdge - pad) {
+        rightWrapped(rightText, size, weight, colour);
+      } else {
+        text(leftText, size, weight, colour);
+        rhs(rightText, size, weight, colour);
+      }
     };
 
     // Header
-    wrap(storeName, 27, '700', '#111', 0, rightEdge - BILL_PAD, 34, 'center');
-    if (storeAddress) wrap(storeAddress, 15, '400', '#444', 0, rightEdge - BILL_PAD, 21, 'center');
-    if (storePhone) wrap(storePhone, 15, '400', '#444', 0, rightEdge - BILL_PAD, 21, 'center');
-    y += 12;
+    wrap(storeName, 27, '700', '#111', 0, rightEdge - pad, 34, 'center');
+    if (storeAddress) wrap(storeAddress, 15, '400', '#444', 0, rightEdge - pad, 21, 'center');
+    if (storePhone) wrap(storePhone, 15, '400', '#444', 0, rightEdge - pad, 21, 'center');
+    y += stepOf(12);
     divider();
 
     // Who this khata belongs to
     centred(L.title, 22, '700', '#111');
-    y += 30;
+    y += stepOf(30);
     pair(L.customer, customerName, 18, '600');
     if (customerPhone) pair(L.mobile, customerPhone, 17, '400', '#333');
     if (customerId) pair(L.custId, '#' + customerId, 17, '400', '#333');
     pair(L.date, today, 17, '400', '#333');
-    y += 6;
+    y += stepOf(6);
     divider();
 
     // The udhar still owed, oldest first
-    y += 4;
+    y += stepOf(4);
     centred(L.section, 18, '700', '#111');
-    y += 26;
+    y += stepOf(26);
     text(L.colDate, 15, '700', '#333');
     rhs(L.colAmount, 15, '700', '#333');
-    y += 4;
+    y += stepOf(4);
     divider();
     if (!owed.length) {
-      y += 20;
+      y += stepOf(20);
       centred(L.none, 17, '400', '#555');
-      y += 8;
+      y += stepOf(8);
     } else {
       owed.slice().reverse().forEach(row => {
-        y += 24;
+        y += stepOf(24);
         text(rowDate(row.entry.at), 17, '600', '#111');
         rhs(money(row.owed), 17, '700', '#111');
-        y += 20;
-        wrap(udharRowDescription(row.entry, ur), 15, '400', '#444', 16, rightEdge - BILL_PAD - 16, 19);
+        y += stepOf(20);
+        wrap(udharRowDescription(row.entry, ur), 15, '400', '#444', 16, rightEdge - pad - 16, 19);
       });
     }
-    y += 8;
+    y += stepOf(8);
     divider();
 
     // Money already handed over, listed for the record so the bill is never silent about a payment
     // that was made. The figures below still add up to what is left to pay.
     if (paid.length) {
-      y += 4;
+      y += stepOf(4);
       centred(L.paidSection, 18, '700', '#111');
-      y += 26;
+      y += stepOf(26);
       text(L.colDate, 15, '700', '#333');
       rhs(L.colAmount, 15, '700', '#333');
-      y += 4;
+      y += stepOf(4);
       divider();
       paid.slice().reverse().forEach(row => {
-        y += 24;
+        y += stepOf(24);
         text(rowDate(row.entry.at), 17, '600', '#111');
         rhs('- ' + money(row.paid), 17, '700', '#267152');
       });
-      y += 8;
+      y += stepOf(8);
       divider();
     }
 
     // The figures that matter
     if (totalPaid > 0) pair(L.totalPaid, money(totalPaid), 18, '600', '#267152');
     pair(L.total, money(remaining), 21, '700', '#111');
-    y += 6;
+    y += stepOf(6);
     divider();
 
     // Footer, same wording as the bill
-    y += 22;
+    y += stepOf(22);
     centred(L.thanks, 16, '400');
-    y += 26;
+    y += stepOf(26);
     centred('Designed and Developed By', 14, '400', '#777');
-    y += 20;
+    y += stepOf(20);
     centred('Sohaib Ali', 16, '700', '#333');
-    y += 20;
+    y += stepOf(20);
     centred('Mobile No: 03074224449', 14, '400', '#777');
-    y += BILL_PAD;
+    y += pad;
     return y;
   };
   const height = build(measure);
@@ -1688,6 +1883,12 @@ async function shareKhataStatement(customer, entries, balance, settings, report)
 // modal is a fixed overlay and the print rules hide the whole app except #print-root. So the receipt is
 // copied into that hidden #print-root and only the copy goes on paper. Every print button and the F4 key
 // go through here, so a bill can never be printed from an empty page again.
+function printPaperSize() {
+  const config = loadJson(printerConfigKey, { autoPrint: false, paperSize: '80' });
+  const size = String((config && config.paperSize) || '80');
+  return ['58', '80', 'a4'].includes(size) ? size : '80';
+}
+
 function printReceiptNow(node) {
   const printRoot = document.getElementById('print-root');
   if (!printRoot) { window.print(); return; }
@@ -1711,12 +1912,13 @@ function printReceiptNow(node) {
 // receipt, with no popup and nothing extra installed.
 function printBillImage(sale, settings, customer, report) {
   try {
-    const canvas = drawBillImage(sale, settings, customer, STRINGS[LANG] || STRINGS.en);
+    const paper = printPaperSize();
+    const canvas = drawBillImage(sale, settings, customer, STRINGS[LANG] || STRINGS.en, { print: true, paper });
     const printRoot = document.getElementById('print-root');
     if (!printRoot) throw new Error('Printing is not available on this device');
     printRoot.innerHTML = '';
     const img = document.createElement('img');
-    img.className = 'bill-print-image';
+    img.className = 'bill-print-image paper-' + paper;
     img.src = canvas.toDataURL('image/png');
     printRoot.appendChild(img);
     requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -1731,12 +1933,13 @@ function printBillImage(sale, settings, customer, report) {
 
 function printKhataStatement(customer, entries, balance, settings, report) {
   try {
-    const canvas = drawKhataStatementImage(customer, entries, balance, settings);
+    const paper = printPaperSize();
+    const canvas = drawKhataStatementImage(customer, entries, balance, settings, { print: true, paper });
     const printRoot = document.getElementById('print-root');
     if (!printRoot) throw new Error('Printing is not available on this device');
     printRoot.innerHTML = '';
     const img = document.createElement('img');
-    img.className = 'bill-print-image';
+    img.className = 'bill-print-image paper-' + paper;
     img.src = canvas.toDataURL('image/png');
     printRoot.appendChild(img);
     requestAnimationFrame(() => requestAnimationFrame(() => {
