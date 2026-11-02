@@ -262,7 +262,7 @@ const STRINGS = {
     payFullAmount: 'Pay full amount', udharNeedsManager: 'Only Admin or Manager can receive or clear udhar. Ask them to record this payment.',
     addLabel: 'Add',     addNewUdhaar: 'Add New Udhaar', udhaarAmount: 'Amount', udhaarNote: 'Description / Note',
     udhaarReference: 'Reference (optional)', udhaarSaved: 'New udhaar added to the khata.', previousBalance: 'Previous balance', newPurchaseLabel: 'New purchase', finalOutstandingLabel: 'Final outstanding',
-    newBalance: 'New balance', remainingUdhar: 'Remaining Udhar', newUdharAmount: 'New Udhar Amount', udhaarEntry: 'Udhaar', prevBillLabel: 'Previous bill', dateTimeLabel: 'Date / Time',
+    newBalance: 'New balance', remainingUdhar: 'Remaining Udhar', newUdharAmount: 'New Udhar Amount', udhaarEntry: 'Udhaar', prevBillLabel: 'Previous bill', dateTimeLabel: 'Date / Time', clearStatus: 'CLEAR',
     creditSaleEntry: 'Credit sale', paymentReceived: 'Payment received', close: 'Close',
     addNewUdhar: 'Add New Udhaar', closeAddUdhar: 'Close', saveUdharBtn: 'Save Udhaar',
     udharAmountPh: 'Udhar amount (Rs)', udharNotePh: 'What was taken / note',
@@ -399,7 +399,7 @@ const STRINGS = {
     payFullAmount: 'پوری رقم دیں', udharNeedsManager: 'اُدھار وصول یا کلیر صرف ایڈمن یا منیجر کر سکتا ہے۔ ان سے کہیں کہ ادائیگی درج کریں۔',
     addLabel: 'شامل کریں', addNewUdhaar: 'نیا اُدھار درج کریں', udhaarAmount: 'رقم', udhaarNote: 'تفصیل / نوٹ',
     udhaarReference: 'حوالہ (اختیاری)', udhaarSaved: 'نیا اُدھار کھاتے میں شامل ہو گیا۔', previousBalance: 'پچھلا بیلنس', newPurchaseLabel: 'نئی خریداری', finalOutstandingLabel: 'آخری بقایا',
-    newBalance: 'نیا بیلنس', remainingUdhar: 'بقایا اُدھار', newUdharAmount: 'نیا اُدھار', udhaarEntry: 'اُدھار', prevBillLabel: 'پچھلا بل', dateTimeLabel: 'تاریخ / وقت',
+    newBalance: 'نیا بیلنس', remainingUdhar: 'بقایا اُدھار', newUdharAmount: 'نیا اُدھار', udhaarEntry: 'اُدھار', prevBillLabel: 'پچھلا بل', dateTimeLabel: 'تاریخ / وقت', clearStatus: 'کلیر',
     creditSaleEntry: 'اُدھار سیل', paymentReceived: 'ادائیگی موصول', close: 'بند کریں',
     addNewUdhar: 'نیا اُدھار درج کریں', closeAddUdhar: 'بند کریں', saveUdharBtn: 'اُدھار محفوظ کریں',
     udharAmountPh: 'اُدھار کی رقم (روپے)', udharNotePh: 'کیا لیا / تفصیل',
@@ -1475,11 +1475,12 @@ function drawBillImage(sale, settings, customer, labels, options) {
     // Account movement: previous balance -> this purchase / this payment -> final outstanding.
     if (baseBalance > 0 || accountPurchase > 0) {
       if (baseBalance > 0) pair(t('remainingUdhar'), money(baseBalance), 17, '400', '#333');
+      if (baseBalance === 0) pair(t('clearStatus'), t('clearBadge'), 17, '400', '#333');
       if (accountPurchase > 0) pair(t('newUdharAmount'), '+ ' + money(accountPurchase), 17, '400', '#333');
       if (accountPayment > 0) pair(t('paymentReceived'), '- ' + money(accountPayment), 17, '400', '#333');
       y += stepOf(6);
       divider();
-      if (baseBalance > 0) pair(t('newBalance'), money(accountFinal), 19, '700');
+      pair(t('newBalance'), money(accountFinal), 19, '700');
       y += stepOf(6);
       divider();
     }
@@ -3562,9 +3563,9 @@ function ReceiptModal({ sale, customers, settings, onClose }) {
         handed > 0 && h('div', { className: 'receipt-row' }, h('span', null, t('amountReceived')), h('span', null, money(handed))),
         change > 0 && h('div', { className: 'receipt-row receipt-change' }, h('span', null, t('changeLabel')), h('span', null, money(change))),
         due > 0 && h('div', { className: 'receipt-row receipt-due' }, h('span', null, t('udharRemaining')), h('span', null, money(due))),
-        baseBalance > 0 && h('div', { className: 'receipt-row' }, h('span', null, t('remainingUdhar')), h('span', null, money(baseBalance))),
-        due > 0 && baseBalance > 0 && h('div', { className: 'receipt-row receipt-credit' }, h('span', null, t('newUdharAmount')), h('span', null, money(due))),
-        baseBalance > 0 && h('div', { className: 'receipt-row receipt-grand' }, h('span', null, t('newBalance')), h('span', null, money(newBalanceValue)))),
+        baseBalance > 0 ? h('div', { className: 'receipt-row' }, h('span', null, t('remainingUdhar')), h('span', null, money(baseBalance))) : h('div', { className: 'receipt-row' }, h('span', null, t('clearStatus')), h('span', null, t('clearBadge'))),
+        due > 0 && h('div', { className: 'receipt-row receipt-credit' }, h('span', null, t('newUdharAmount')), h('span', null, money(due))),
+        (baseBalance > 0 || due > 0) && h('div', { className: 'receipt-row receipt-grand' }, h('span', null, t('newBalance')), h('span', null, money(newBalanceValue)))),
       delivery && h('div', { className: 'receipt-delivery' },
         h('div', { className: 'receipt-row receipt-delivery-head' }, h('span', null, t('deliveryInfo')), h('span', null, '')),
         DELIVERY_FIELDS.filter(([key]) => delivery[key]).map(function([key, labelKey]) {
@@ -3668,7 +3669,7 @@ function DataPage({ page, data, client, refresh }) {
           // counter asked for: open the khata, edit the customer, delete the customer.
           h('button', { className: 'secondary khata-btn', onClick: () => setKhata(row) }, t('khata')),
           h('button', { className: 'secondary khata-btn', onClick: () => setEditCustomer(row) }, t('editLabel')),
-          canDeleteCustomers && h('button', { className: 'secondary khata-btn danger-btn small', onClick: () => confirmDeleteCustomer(row) }, t('delete')))));
+          canDeleteCustomers && h('button', { className: 'secondary khata-btn danger-btn', onClick: () => confirmDeleteCustomer(row) }, t('delete')))));
   }
   async function confirmDeleteCustomer(row) {
     const ok = await askConfirm(LANG === 'ur'
@@ -4091,7 +4092,6 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
       // receipt of the payment is not stuck waiting on a second, much bigger list request.
       setSummary(current => ({ ...current, totalPaid: Number(current.totalPaid || 0) + Number(result.payment.amount || 0) }));
       setMessage(LANG === 'ur' ? `${money(result.payment.amount)} وصول ہوئے۔ بقایا اُدھار: ${money(result.balance)}۔` : `Payment of ${money(result.payment.amount)} received. Remaining udhar: ${money(result.balance)}.`);
-      await loadLedger();
       refresh();
     } catch (err) {
       if (isNetworkFailure(err)) {
@@ -4140,7 +4140,6 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
       setMessage(LANG === 'ur'
         ? `${money(result.entry.amount)} نیا اُدھار درج ہو گیا۔ کل بیلنس: ${money(result.balance)}۔`
         : `New udhar of ${money(result.entry.amount)} recorded. New balance: ${money(result.balance)}.`);
-      await loadLedger();
       refresh();
     } catch (err) {
       if (isNetworkFailure(err)) {
@@ -4174,7 +4173,6 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
       // Clearing starts a fresh book, so the lifetime totals on this screen restart from zero too.
       setSummary({ creditPurchases: 0, totalPaid: 0 });
       setMessage(LANG === 'ur' ? `اُدھار کلیر۔ ${money(result.previousBalance)} طے ہوئے۔ تاریخ محفوظ۔` : `Udhar cleared. ${money(result.previousBalance)} was settled. History preserved.`);
-      await loadLedger();
       refresh();
     } catch (err) {
       setMessage(friendlyError(err));
