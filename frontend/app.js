@@ -839,7 +839,7 @@ function StockAddModal({ product, client, refresh, onClose }) {
     setMessage('');
     try {
       await client.post(`/api/products/${product.id}/stock`, { qty: qtyNum, convert, mode, note: note.trim() });
-      await refresh();
+      refresh();
       onClose();
     } catch (err) {
       setMessage(friendlyError(err));
@@ -924,7 +924,7 @@ function ReverseBillModal({ sale, customers, settings, client, refresh, onClose 
         : `${record.invoiceNo} reversed. Refund ${money(record.total)}. Stock and udhar updated.`);
       setQuantities({});
       setLookup(await client.get(`/api/sales/lookup?saleId=${encodeURIComponent(lookup.sale.id)}`));
-      await refresh();
+      refresh();
     } catch (err) {
       if (isNetworkFailure(err)) {
         // The return is kept on this device and sent when the network is back. Stock and udhar are
@@ -948,7 +948,7 @@ function ReverseBillModal({ sale, customers, settings, client, refresh, onClose 
       await client.post(`/api/sales/${lookup.sale.id}/void`, {});
       setMessage(t('voidBillSuccess'));
       setLookup(await client.get(`/api/sales/lookup?saleId=${encodeURIComponent(lookup.sale.id)}`));
-      await refresh();
+      refresh();
     } catch (err) {
       setMessage(friendlyError(err));
     } finally {
@@ -2642,7 +2642,7 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
       await client.post('/api/sync', { sales: queued });
       saveJson(queueKey, []);
       flash(LANG === 'ur' ? 'آف لائن سیلز سنک ہو گئیں۔' : 'Offline sales synced.');
-      await refresh();
+      refresh();
     } catch (_) {
       setOnline(false);
     }
@@ -2959,7 +2959,7 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
       const saved = response.draft || response;
       setDraftId(saved.id);
       flash(t('draftSavedMsg'));
-      await refresh();
+      refresh();
     } catch (err) {
       setMessage(friendlyError(err));
     }
@@ -2971,7 +2971,7 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
     try {
       await client.del(`/api/drafts/${draft.id}`);
       if (draftId === draft.id) setDraftId(null);
-      await refresh();
+      refresh();
       flash(t('draftDeletedMsg'));
     } catch (err) {
       setMessage(friendlyError(err));
@@ -3634,7 +3634,7 @@ function DataPage({ page, data, client, refresh }) {
       if (page === 'products' || page === 'inventory') await client.post('/api/products', form);
       if (page === 'customers') await client.post('/api/customers', form);
       setForm({});
-      await refresh();
+      refresh();
       setMessage(t('saved'));
     } catch (err) {
       setMessage(friendlyError(err));
@@ -3682,7 +3682,7 @@ function DataPage({ page, data, client, refresh }) {
     try {
       await client.del(`/api/customers/${row.id}`);
       setMessage(LANG === 'ur' ? `"${row.name}" ڈیلیٹ ہو گیا۔` : `"${row.name}" deleted.`);
-      await refresh();
+      refresh();
     } catch (err) {
       const msg = String((err && err.error) || (err && err.message) || '');
       if (/CUSTOMER_IN_USE/i.test(msg) || /billing or udhaar history/i.test(msg)) {
@@ -3705,7 +3705,7 @@ function DataPage({ page, data, client, refresh }) {
     try {
       await client.post(`/api/customers/${row.id}/clear-udhar`, {});
       setMessage(LANG === 'ur' ? `${row.name} کا اُدھار کلیر ہو گیا۔ تاریخ محفوظ ہے۔` : `${row.name}'s udhar cleared. History preserved.`);
-      await refresh();
+      refresh();
     } catch (err) {
       setMessage(friendlyError(err));
     }
@@ -3737,7 +3737,7 @@ function DataPage({ page, data, client, refresh }) {
     try {
       await client.del(`/api/products/${row.id}`);
       setMessage(LANG === 'ur' ? `"${row.name}" انوینٹری سے ڈیلیٹ ہو گئی۔` : `"${row.name}" deleted from inventory.`);
-      await refresh();
+      refresh();
     } catch (err) {
       const msg = String((err && err.message) || '');
       if (/PRODUCT_IN_USE/i.test(msg) || /billing history/i.test(msg)) {
@@ -4623,7 +4623,7 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
       setMessage(LANG === 'ur'
         ? `${money(result.entry.amount)} نیا اُدھار درج ہو گیا۔ کل بیلنس: ${money(result.balance)}۔`
         : `New udhar of ${money(result.entry.amount)} recorded. New balance: ${money(result.balance)}.`);
-      await refresh();
+      refresh();
     } catch (err) {
       if (isNetworkFailure(err)) {
         queueAction('udhar', { customerId: customer.id, ...payload });
@@ -4937,7 +4937,7 @@ function ProductEditModal({ product, client, refresh, onClose }) {
         status: form.active ? 'active' : 'inactive'
       });
       setMessage(LANG === 'ur' ? 'محفوظ ہو گیا۔' : 'Saved.');
-      await refresh();
+      refresh();
       onClose();
     } catch (err) {
       setMessage(friendlyError(err));
@@ -5089,7 +5089,7 @@ function SupplierEditModal({ supplier, client, refresh, onClose }) {
         status: form.active ? 'active' : 'inactive'
       });
       setMessage(LANG === 'ur' ? 'محفوظ ہو گیا۔' : 'Saved.');
-      await refresh();
+      refresh();
       onClose();
     } catch (err) {
       setMessage(friendlyError(err));
@@ -5331,7 +5331,7 @@ function Purchases({ data, client, refresh }) {
     event.preventDefault();
     try {
       await client.post('/api/purchases', { supplierId: item.supplierId, items: [{ productId: item.productId, qty: Number(item.qty), cost: Number(item.cost) }] });
-      await refresh();
+      refresh();
       setMessage(t('purchaseDone'));
     } catch (err) {
       setMessage(err.message);
@@ -5343,7 +5343,7 @@ function Purchases({ data, client, refresh }) {
     try {
       await client.post('/api/suppliers', supp);
       setSupp({ name: '', phone: '', address: '' });
-      await refresh();
+      refresh();
       setSuppMessage(LANG === 'ur' ? 'سپلائر شامل ہو گیا۔' : 'Supplier added.');
     } catch (err) {
       setSuppMessage(friendlyError(err));
@@ -5358,7 +5358,7 @@ function Purchases({ data, client, refresh }) {
     setSuppMessage('');
     try {
       await client.del(`/api/suppliers/${row.id}`);
-      await refresh();
+      refresh();
       setSuppMessage(LANG === 'ur' ? `"${row.name}" ڈیلیٹ ہو گیا۔` : `"${row.name}" deleted.`);
     } catch (err) {
       setSuppMessage(friendlyError(err));
@@ -5674,7 +5674,7 @@ function App() {
       if (stopped) return;
       if (done.synced > 0) {
         setSyncNotice(LANG === 'ur' ? `${done.synced} آف لائن اندراج سنک ہو گیا۔` : `${done.synced} offline entr${done.synced === 1 ? 'y' : 'ies'} synced.`);
-        await refresh();
+        refresh();
       }
       if (done.errors.length) setSyncNotice(friendlyErrorQueued(0, done.errors));
     }
