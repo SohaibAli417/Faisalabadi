@@ -2114,7 +2114,7 @@ async function handleApi(request, response) {
       // including the recorded-total legacy customers - rather than being recalculated here.
       const totalsMap = customerTotals(db);
       const billed = db.customers.find(row => row.id === sale.customerId);
-      return json(response, 201, { ...sale, customer: billed ? decorateCustomer(db, billed, totalsMap) : null });
+      return json(response, 201, { ...sale, finalBalance: billed ? money(billed.balance) : undefined, customer: billed ? decorateCustomer(db, billed, totalsMap) : null });
     }
 
     if (method === 'GET' && url.pathname === '/api/drafts') {

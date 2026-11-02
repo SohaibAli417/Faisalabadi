@@ -262,7 +262,7 @@ const STRINGS = {
     payFullAmount: 'Pay full amount', udharNeedsManager: 'Only Admin or Manager can receive or clear udhar. Ask them to record this payment.',
     addLabel: 'Add',     addNewUdhaar: 'Add New Udhaar', udhaarAmount: 'Amount', udhaarNote: 'Description / Note',
     udhaarReference: 'Reference (optional)', udhaarSaved: 'New udhaar added to the khata.', previousBalance: 'Previous balance', newPurchaseLabel: 'New purchase', finalOutstandingLabel: 'Final outstanding',
-    newBalance: 'New balance', udhaarEntry: 'Udhaar', prevBillLabel: 'Previous bill', dateTimeLabel: 'Date / Time',
+    newBalance: 'New balance', remainingUdhar: 'Remaining Udhar', newUdharAmount: 'New Udhar Amount', udhaarEntry: 'Udhaar', prevBillLabel: 'Previous bill', dateTimeLabel: 'Date / Time',
     creditSaleEntry: 'Credit sale', paymentReceived: 'Payment received', close: 'Close',
     addNewUdhar: 'Add New Udhaar', closeAddUdhar: 'Close', saveUdharBtn: 'Save Udhaar',
     udharAmountPh: 'Udhar amount (Rs)', udharNotePh: 'What was taken / note',
@@ -399,7 +399,7 @@ const STRINGS = {
     payFullAmount: 'پوری رقم دیں', udharNeedsManager: 'اُدھار وصول یا کلیر صرف ایڈمن یا منیجر کر سکتا ہے۔ ان سے کہیں کہ ادائیگی درج کریں۔',
     addLabel: 'شامل کریں', addNewUdhaar: 'نیا اُدھار درج کریں', udhaarAmount: 'رقم', udhaarNote: 'تفصیل / نوٹ',
     udhaarReference: 'حوالہ (اختیاری)', udhaarSaved: 'نیا اُدھار کھاتے میں شامل ہو گیا۔', previousBalance: 'پچھلا بیلنس', newPurchaseLabel: 'نئی خریداری', finalOutstandingLabel: 'آخری بقایا',
-    newBalance: 'نیا بیلنس', udhaarEntry: 'اُدھار', prevBillLabel: 'پچھلا بل', dateTimeLabel: 'تاریخ / وقت',
+    newBalance: 'نیا بیلنس', remainingUdhar: 'بقایا اُدھار', newUdharAmount: 'نیا اُدھار', udhaarEntry: 'اُدھار', prevBillLabel: 'پچھلا بل', dateTimeLabel: 'تاریخ / وقت',
     creditSaleEntry: 'اُدھار سیل', paymentReceived: 'ادائیگی موصول', close: 'بند کریں',
     addNewUdhar: 'نیا اُدھار درج کریں', closeAddUdhar: 'بند کریں', saveUdharBtn: 'اُدھار محفوظ کریں',
     udharAmountPh: 'اُدھار کی رقم (روپے)', udharNotePh: 'کیا لیا / تفصیل',
@@ -1473,13 +1473,13 @@ function drawBillImage(sale, settings, customer, labels, options) {
     divider();
 
     // Account movement: previous balance -> this purchase / this payment -> final outstanding.
-    if (showAccount) {
-      pair(t('previousBalance'), money(baseBalance), 17, '400', '#333');
-      if (accountPurchase > 0) pair(t('newPurchaseLabel'), '+ ' + money(accountPurchase), 17, '400', '#333');
+    if (baseBalance > 0 || accountPurchase > 0) {
+      if (baseBalance > 0) pair(t('remainingUdhar'), money(baseBalance), 17, '400', '#333');
+      if (accountPurchase > 0) pair(t('newUdharAmount'), '+ ' + money(accountPurchase), 17, '400', '#333');
       if (accountPayment > 0) pair(t('paymentReceived'), '- ' + money(accountPayment), 17, '400', '#333');
       y += stepOf(6);
       divider();
-      pair(t('newBalance'), money(accountFinal), 19, '700');
+      if (baseBalance > 0) pair(t('newBalance'), money(accountFinal), 19, '700');
       y += stepOf(6);
       divider();
     }
@@ -2151,8 +2151,9 @@ function saleBillText(sale, settings) {
   if (handed > 0) rows.push(waRow(t('amountReceived'), money(handed)));
   if (change > 0) rows.push(waRow(t('changeLabel'), money(change)));
   if (due > 0) rows.push(waRow(t('udharRemaining'), money(due)));
-  if (due > 0 && !Number.isNaN(prevBalance)) {
-    rows.push(waRow(t('previousBalance'), money(prevBalance)));
+  if (Number.isFinite(prevBalance) && prevBalance > 0) {
+    rows.push(waRow(t('remainingUdhar'), money(prevBalance)));
+    rows.push(waRow('*' + t('newUdharAmount') + '*', '*' + money(due) + '*'));
     rows.push(waRow('*' + t('newBalance') + '*', '*' + money(prevBalance + due) + '*'));
   }
   if (sale.delivery && typeof sale.delivery === 'object') {
@@ -2758,8 +2759,12 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
       // the khata only need the invoice, so the extra row is kept out of the stored sale.
       const sale = response.customer ? { ...response, customer: undefined } : response;
       // Snapshot the balance from before the bill, so the invoice and the WhatsApp bill can show
-      // previous balance / new balance without any extra request.
-      const prevBalance = Number((selectedCustomer && selectedCustomer.balance) || 0);
+      // previous balance / new balance without any extra request. Prefer the server's final balance
+      // minus this bill's due so the figure is never stale even if the customer list hasn't reloaded
+      // yet (for example right after a khata payment cleared the balance to zero).
+      const prevBalance = Number.isFinite(Number(sale.finalBalance))
+        ? Math.max(0, Number(sale.finalBalance) - Number(sale.dueAmount || 0))
+        : Number((selectedCustomer && selectedCustomer.balance) || 0);
       // Keep the customer on the bill after a completed sale, whether or not udhar was left. Dropping them
       // back to Walk-in meant the next bill for the same person went nowhere near their khata.
       const keepCustomerId = customerId !== 'cus_walkin' ? customerId : null;
@@ -3557,8 +3562,9 @@ function ReceiptModal({ sale, customers, settings, onClose }) {
         handed > 0 && h('div', { className: 'receipt-row' }, h('span', null, t('amountReceived')), h('span', null, money(handed))),
         change > 0 && h('div', { className: 'receipt-row receipt-change' }, h('span', null, t('changeLabel')), h('span', null, money(change))),
         due > 0 && h('div', { className: 'receipt-row receipt-due' }, h('span', null, t('udharRemaining')), h('span', null, money(due))),
-        showAccount && h('div', { className: 'receipt-row' }, h('span', null, t('previousBalance')), h('span', null, money(baseBalance))),
-        showAccount && h('div', { className: 'receipt-row' }, h('span', null, t('newBalance')), h('span', null, money(newBalanceValue)))),
+        baseBalance > 0 && h('div', { className: 'receipt-row' }, h('span', null, t('remainingUdhar')), h('span', null, money(baseBalance))),
+        due > 0 && baseBalance > 0 && h('div', { className: 'receipt-row receipt-credit' }, h('span', null, t('newUdharAmount')), h('span', null, money(due))),
+        baseBalance > 0 && h('div', { className: 'receipt-row receipt-grand' }, h('span', null, t('newBalance')), h('span', null, money(newBalanceValue)))),
       delivery && h('div', { className: 'receipt-delivery' },
         h('div', { className: 'receipt-row receipt-delivery-head' }, h('span', null, t('deliveryInfo')), h('span', null, '')),
         DELIVERY_FIELDS.filter(([key]) => delivery[key]).map(function([key, labelKey]) {
