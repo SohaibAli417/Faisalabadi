@@ -1,6 +1,6 @@
 /* global React, ReactDOM */
-const APP_VERSION = 'v69';
-const APP_CHECKSUM = 'charge-amount-total-ref-print-v42';
+const APP_VERSION = 'v70';
+const APP_CHECKSUM = 'cart-persist-scan-history-bill-v43';
 (function() {
   var stored = null;
   try { stored = localStorage.getItem('faislabadi-pos-version'); } catch(_) {}
@@ -514,6 +514,20 @@ const loadJson = (key, fallback) => {
   try { return JSON.parse(localStorage.getItem(key)) || fallback; } catch (_) { return fallback; }
 };
 const saveJson = (key, value) => localStorage.setItem(key, JSON.stringify(value));
+
+// The POS tab is unmounted when the cashier moves to another page, which used to throw away the open
+// bill. The bill is mirrored into localStorage so switching to Products and back brings the same cart
+// and customer with it. It is cleared by Complete, New Sale and Cancel Sale, so a finished bill never
+// comes back on its own.
+const posDraftKey = 'faislabadi-pos-open-bill-v1';
+function readPosDraft() {
+  const draft = loadJson(posDraftKey, null);
+  return draft && typeof draft === 'object' ? draft : null;
+}
+// The khata popup is opened over and over for the same customers, so the last ledger is kept in memory
+// for the session. The popup paints that copy at once and refreshes it in the background, instead of
+// showing "loading" while the same rows come down the wire again.
+const khataLedgerCache = {};
 
 // --- Offline queue for udhaar payments, new udhaar entries and returns -----------------
 // These are recorded on the device while the internet is down, kept here, and handed to /api/sync
@@ -1404,9 +1418,9 @@ function drawBillImage(sale, settings, customer, labels, options) {
       text(t('hProduct'), 15, '700', '#111');
       y += stepOf(4);
       divider();
-      for (const item of items) {
+      items.forEach((item, itemIndex) => {
         y += stepOf(18);
-        wrapped(item.name, 17, '600', '#111', 0, rightMargin);
+        wrapped(`${itemIndex + 1}. ${item.name}`, 17, '600', '#111', 0, rightMargin);
         y += stepOf(18);
         if (sale.summaryOnly) {
           if (item.qty) text(`${item.qty} ${item.unit}`.trim(), 17, '400', '#111', rightMargin, 'right');
@@ -1414,21 +1428,22 @@ function drawBillImage(sale, settings, customer, labels, options) {
           leftRight(`${item.qty} ${item.unit} x ${moneyRate(item.price)}`, moneyRate(item.line), 15, '400', '#111');
         }
         y += stepOf(8);
-      }
+      });
     } else if (sale.summaryOnly) {
       // A khata entry only knows the bill as one figure, so no per-line rate or line total is invented
       // here - the products are listed and the real total comes from the totals block below.
       text(t('hProduct'), 15, '700', '#333');
       y += 4;
       divider();
-      for (const item of items) {
+      items.forEach((item, itemIndex) => {
+        const label = `${itemIndex + 1}. ${item.name}`;
         y += 24;
-        text(ellipsize(ctx, item.name, 470), 17, '400');
+        text(ellipsize(ctx, label, 470), 17, '400');
         if (item.qty) {
           text(`${item.qty} ${item.unit}`.trim(), 17, '400', '#333', totalX - nameX, 'right');
         }
-        if (ctx.measureText(String(item.name)).width > 470) y += 21;
-      }
+        if (ctx.measureText(label).width > 470) y += 21;
+      });
     } else {
       text(t('hProduct'), 15, '700', '#333');
       text(t('qtyShort'), 15, '700', '#333', qtyX - nameX, 'right');
@@ -1436,15 +1451,16 @@ function drawBillImage(sale, settings, customer, labels, options) {
       text(t('totalWord'), 15, '700', '#333', totalX - nameX, 'right');
       y += 4;
       divider();
-      for (const item of items) {
+      items.forEach((item, itemIndex) => {
+        const label = `${itemIndex + 1}. ${item.name}`;
         y += 24;
-        text(ellipsize(ctx, item.name, 320), 17, '400');
+        text(ellipsize(ctx, label, 320), 17, '400');
         text(`${item.qty} ${item.unit}`, 17, '400', '#333', qtyX - nameX, 'right');
         text(moneyRate(item.price), 17, '400', '#333', priceX - nameX, 'right');
         text(moneyRate(item.line), 17, '600', '#111', totalX - nameX, 'right');
         // A long name is given its own line rather than being squeezed into the columns.
-        if (ctx.measureText(String(item.name)).width > 320) y += 21;
-      }
+        if (ctx.measureText(label).width > 320) y += 21;
+      });
     }
     y += stepOf(8);
     divider();
@@ -1463,7 +1479,7 @@ function drawBillImage(sale, settings, customer, labels, options) {
       if (accountPayment > 0) pair(t('paymentReceived'), '- ' + money(accountPayment), 17, '400', '#333');
       y += stepOf(6);
       divider();
-      pair(t('finalOutstandingLabel'), money(accountFinal), 19, '700');
+      pair(t('newBalance'), money(accountFinal), 19, '700');
       y += stepOf(6);
       divider();
     }
@@ -1748,25 +1764,8 @@ function drawKhataStatementImage(customer, entries, balance, settings, options) 
     y += stepOf(8);
     divider();
 
-    // Money already handed over, listed for the record so the bill is never silent about a payment
-    // that was made. The figures below still add up to what is left to pay.
-    if (paid.length) {
-      y += stepOf(4);
-      centred(L.paidSection, 18, '700', '#111');
-      y += stepOf(26);
-      text(L.colDate, 15, '700', '#333');
-      rhs(L.colAmount, 15, '700', '#333');
-      y += stepOf(4);
-      divider();
-      paid.slice().reverse().forEach(row => {
-        y += stepOf(24);
-        text(rowDate(row.entry.at), 17, '600', '#111');
-        rhs('- ' + money(row.paid), 17, '700', '#267152');
-      });
-      y += stepOf(8);
-      divider();
-    }
-
+    // The customer is shown what was paid in total, never the date of each payment. The dated rows are
+    // deliberately left out of both the printed statement and the shared picture.
     // The figures that matter
     if (totalPaid > 0) pair(L.totalPaid, money(totalPaid), 18, '600', '#267152');
     pair(L.total, money(remaining), 21, '700', '#111');
@@ -2134,11 +2133,11 @@ function saleBillText(sale, settings) {
   rows.push(waRow('  ' + t('hProduct'), t('qtyShort')));
   rows.push(waRow('  ' + t('rateLabel'), t('totalWord')));
   rows.push(waRule('-'));
-  (sale.items || []).forEach(item => {
+  (sale.items || []).forEach((item, itemIndex) => {
     const qty = Number(item.qty) || 0;
     const price = Number(item.price) || 0;
     const amount = item.amount != null ? Number(item.amount) : qty * price;
-    rows.push(waRow('  ' + plain(item.name), `${qty}${item.unit ? ' ' + unitName(item.unit) : ''}`));
+    rows.push(waRow('  ' + (itemIndex + 1) + '. ' + plain(item.name), `${qty}${item.unit ? ' ' + unitName(item.unit) : ''}`));
     rows.push(waRow(`    @ ${moneyRate(price)}`, moneyRate(amount)));
   });
   rows.push(waRule('-'));
@@ -2200,15 +2199,7 @@ function khataStatementText(customer, entries, balance, settings) {
     });
   }
   rows.push(waRule('-'));
-  if (paid.length) {
-    rows.push(waCenter('*' + (ur ? 'وصول شدہ رقوم' : 'PAYMENTS RECEIVED') + '*'));
-    rows.push(waRow(ur ? 'تاریخ' : 'Date', ur ? 'رقم' : 'Amount'));
-    rows.push(waRule('-'));
-    paid.forEach(row => {
-      rows.push(waRow('  ' + waDate(row.entry.at), '- ' + money(row.paid)));
-    });
-    rows.push(waRule('-'));
-  }
+  // Only the total paid is shown to the customer; the date of each payment stays out of the shared bill.
   if (totalPaid > 0) rows.push(waRow(ur ? 'کل وصول شدہ' : 'TOTAL PAID', money(totalPaid)));
   rows.push(waRow('*' + (ur ? 'کل باقی اُدھار' : 'TOTAL REMAINING') + '*', '*' + money(balance) + '*'));
   rows.push(...waFooter(settings));
@@ -2306,6 +2297,15 @@ function DraftsModal({ drafts, customers, onLoad, onDelete, onClose }) {
 }
 
 function POS({ client, data, refresh, applySale, applyCustomer, online, setOnline, go }) {
+  const restoredRef = React.useRef(null);
+  if (restoredRef.current === null) restoredRef.current = readPosDraft() || {};
+  const restored = restoredRef.current;
+  const restoredCustomerId = restored.customerId && (restored.customerId === 'cus_walkin' || (data.customers || []).some(row => row.id === restored.customerId))
+    ? restored.customerId
+    : 'cus_walkin';
+  const restoredCustomerName = restoredCustomerId === 'cus_walkin'
+    ? ''
+    : ((data.customers || []).find(row => row.id === restoredCustomerId) || {}).name || '';
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchIndex, setSearchIndex] = useState(-1);
@@ -2313,31 +2313,42 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
   // searchIndex is the real keyboard selection, so moving the mouse can never make a row look
   // selected - and Enter always acts on the keyboard selection only.
   const [searchHover, setSearchHover] = useState(-1);
-  const [cart, setCart] = useState([]);
+  const [cart, setCart] = useState(Array.isArray(restored.cart) ? restored.cart : []);
   // Which bill row the pointer/focus is on. Visual only - it never changes what is billed.
   const [focusIndex, setFocusIndex] = useState(-1);
-  const [draftId, setDraftId] = useState(null);
-  const [customerSearch, setCustomerSearch] = useState('');
+  const [draftId, setDraftId] = useState(restored.draftId || null);
+  const [customerSearch, setCustomerSearch] = useState(restoredCustomerName);
   const [customerOpen, setCustomerOpen] = useState(false);
   const [customerIdx, setCustomerIdx] = useState(-1);
   const [customerHover, setCustomerHover] = useState(-1);
-  const [customerId, setCustomerId] = useState('cus_walkin');
+  const [customerId, setCustomerId] = useState(restoredCustomerId);
   // A walk-in bill can still carry a name - "Ahmed from the corner shop" - so the printed and WhatsApp
   // bill reads like a real receipt without the shop having to create a customer account for a one-off
   // buyer. It is free text stored on the bill only, never on the customer list.
-  const [walkInName, setWalkInName] = useState('');
+  const [walkInName, setWalkInName] = useState(restored.walkInName || '');
   // The name the cashier typed into the customer box that did not match anyone. Offered as a
   // one-tap "add this customer" so billing never has to stop and go to the customers page.
   const [newCustomerOpen, setNewCustomerOpen] = useState(false);
-  const [paymentType, setPaymentType] = useState('Cash');
-  const [receivedInput, setReceivedInput] = useState('');
-  const [discount, setDiscount] = useState('');
-  const [additionalDiscount, setAdditionalDiscount] = useState('');
-  const [reference, setReference] = useState('');
+  const [paymentType, setPaymentType] = useState(restored.paymentType || 'Cash');
+  const [receivedInput, setReceivedInput] = useState(restored.receivedInput != null ? String(restored.receivedInput) : '');
+  const [discount, setDiscount] = useState(restored.discount != null ? String(restored.discount) : '');
+  const [additionalDiscount, setAdditionalDiscount] = useState(restored.additionalDiscount != null ? String(restored.additionalDiscount) : '');
+  const [reference, setReference] = useState(restored.reference || '');
   // A free-text extra charge for the bill: a name, a quantity and a per-unit amount. It is added on
   // top of the products as a normal manual line, so it shows in the total, on the printed bill and in
   // the customer's khata without any special handling anywhere else.
   const [extraCharge, setExtraCharge] = useState({ title: '', qty: '1', amount: '' });
+  // The charge box is filled from the saved bill after the first paint, so the default state above
+  // stays the single obvious starting point for a brand-new bill.
+  useEffect(() => {
+    if (restored.extraCharge && typeof restored.extraCharge === 'object') {
+      setExtraCharge({
+        title: String(restored.extraCharge.title || ''),
+        qty: String(restored.extraCharge.qty ?? '1'),
+        amount: String(restored.extraCharge.amount ?? '')
+      });
+    }
+  }, []);
   const [manualOpen, setManualOpen] = useState(false);
   const [manual, setManual] = useState({ name: '', price: '', qty: '1', unit: 'pcs' });
   const [receipt, setReceipt] = useState(null);
@@ -2371,7 +2382,7 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
   }, [data.products]);
   const q = query.trim().toLowerCase();
   const shown = q
-    ? activeProducts.filter(product => `${product.name} ${product.sku} ${product.barcode || ''} ${product.category || ''} ${product.nameUrdu || ''} ${product.urduName || ''}`.toLowerCase().includes(q))
+    ? activeProducts.filter(product => `${product.name || ''} ${product.sku || ''} ${product.barcode || ''} ${product.category || ''} ${product.nameUrdu || ''} ${product.urduName || ''}`.toLowerCase().includes(q))
     : [];
   // The extra charge is folded in as one more line so the grand total, the bill and the khata all see
   // the same money. The typed Amount is the whole charge - Qty is only how many of it, so the per-unit
@@ -2603,6 +2614,23 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
     setSearchOpen(false);
     setSearchIndex(-1);
     setQuery('');
+    // Clear the saved bill straight away as well as through the effect below. If the cashier changes
+    // tab while the sale is still saving, this component is already unmounted when the answer comes
+    // back, so the effect cannot run - and the completed bill would otherwise reappear next time.
+    try {
+      saveJson(posDraftKey, {
+        cart: [],
+        customerId: keepCustomerId,
+        walkInName: '',
+        paymentType: keepCustomerId === 'cus_walkin' ? 'Cash' : 'Credit',
+        receivedInput: keepCustomerId === 'cus_walkin' ? '' : '0',
+        discount: '',
+        additionalDiscount: '',
+        reference: '',
+        extraCharge: { title: '', qty: '1', amount: '' },
+        draftId: null
+      });
+    } catch (_) {}
   }
 
   async function syncQueuedSales() {
@@ -3001,6 +3029,11 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
     if (scroller) scroller.scrollTop = scroller.scrollHeight;
   }, [cart.length]);
 
+  // Keep the open bill on the device, so changing tab and coming back never loses a half-entered sale.
+  useEffect(() => {
+    saveJson(posDraftKey, { cart, customerId, walkInName, paymentType, receivedInput, discount, additionalDiscount, reference, extraCharge, draftId });
+  }, [cart, customerId, walkInName, paymentType, receivedInput, discount, additionalDiscount, reference, extraCharge, draftId]);
+
   useEffect(() => {
     let buffer = '';
     let bufferTimer = null;
@@ -3045,9 +3078,27 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
       if (!shown.length) return;
       setSearchIndex(i => (i - 1 + shown.length) % shown.length);
     } else if (e.key === 'Enter') {
-      if (searchOpen && shown.length && searchIndex >= 0 && searchIndex < shown.length) {
-        e.preventDefault();
-        addFromSearch(shown[searchIndex]);
+      // A handheld scanner types the code and then Enter into whatever box has focus. After a product
+      // was picked, focus sits in this search box, so the old "only add when an arrow-key row is
+      // selected" rule made every scan after the first one do nothing. The typed value is read from the
+      // input itself (not from React state, which may still be one keystroke behind), and an exact
+      // barcode/SKU match or a single search result is added straight away.
+      const typed = String((e.target && e.target.value) || '').trim().toLowerCase();
+      if (typed) {
+        const exact = barcodeMap[typed] || null;
+        const matches = exact ? [exact] : activeProducts.filter(product =>
+          `${product.name || ''} ${product.sku || ''} ${product.barcode || ''} ${product.category || ''} ${product.nameUrdu || ''} ${product.urduName || ''}`.toLowerCase().includes(typed));
+        // An exact barcode/SKU scan always wins over a row that was only highlighted with the arrows,
+        // so scanning after picking a product never adds the old highlighted row by mistake.
+        const pick = exact
+          || (searchIndex >= 0 && shown[searchIndex])
+          || (matches.length === 1 ? matches[0] : null)
+          || (shown.length === 1 ? shown[0] : null);
+        if (pick) {
+          e.preventDefault();
+          addFromSearch(pick);
+          return;
+        }
       }
       setSearchOpen(false);
     } else if (e.key === 'Escape') {
@@ -3448,7 +3499,12 @@ function ReceiptModal({ sale, customers, settings, onClose }) {
   const baseBalance = Number.isFinite(Number(sale.previousBalance))
     ? Number(sale.previousBalance)
     : (Number(customer && customer.balance) || 0);
-  const closingBalance = due > 0 ? money(baseBalance + (sale.preview ? due : 0)) : null;
+  const accountPurchase = sale.paymentOnly ? 0 : (Number(sale.total) || 0);
+  const accountPayment = Number(sale.paidAmount) || 0;
+  const newBalanceValue = Number.isFinite(Number(sale.finalBalance))
+    ? Number(sale.finalBalance)
+    : Math.max(0, baseBalance + accountPurchase - accountPayment);
+  const showAccount = sale.paymentOnly || due > 0 || baseBalance > 0 || (isCredit && sale.customerId && sale.customerId !== 'cus_walkin');
     useEffect(() => {
       function handlePrintKey(e) { if (e.key === 'F4') { e.preventDefault(); printReceiptNow(); } }
       window.addEventListener('keydown', handlePrintKey);
@@ -3484,9 +3540,9 @@ function ReceiptModal({ sale, customers, settings, onClose }) {
         h('span', { className: 'ri-price' }, t('rateLabel')),
         h('span', { className: 'ri-total' }, t('totalWord'))),
       h('div', { className: 'receipt-items' },
-        sale.items.map(function(item) {
-          return h('div', { className: 'receipt-item', key: item.name + '-' + item.qty },
-            h('span', { className: 'ri-name' }, item.name),
+        sale.items.map(function(item, itemIndex) {
+          return h('div', { className: 'receipt-item', key: itemIndex + '-' + item.name },
+            h('span', { className: 'ri-name' }, `${itemIndex + 1}. ${item.name}`),
             h('span', { className: 'ri-qty' }, `${item.qty} ${unitLabel(item.unit)}`),
             h('span', { className: 'ri-price' }, moneyRate(item.price)),
             h('span', { className: 'ri-total' }, moneyRate(item.price * item.qty)));
@@ -3501,7 +3557,8 @@ function ReceiptModal({ sale, customers, settings, onClose }) {
         handed > 0 && h('div', { className: 'receipt-row' }, h('span', null, t('amountReceived')), h('span', null, money(handed))),
         change > 0 && h('div', { className: 'receipt-row receipt-change' }, h('span', null, t('changeLabel')), h('span', null, money(change))),
         due > 0 && h('div', { className: 'receipt-row receipt-due' }, h('span', null, t('udharRemaining')), h('span', null, money(due))),
-        closingBalance && h('div', { className: 'receipt-row' }, h('span', null, t('balanceForCustomer')), h('span', null, closingBalance))),
+        showAccount && h('div', { className: 'receipt-row' }, h('span', null, t('previousBalance')), h('span', null, money(baseBalance))),
+        showAccount && h('div', { className: 'receipt-row' }, h('span', null, t('newBalance')), h('span', null, money(newBalanceValue)))),
       delivery && h('div', { className: 'receipt-delivery' },
         h('div', { className: 'receipt-row receipt-delivery-head' }, h('span', null, t('deliveryInfo')), h('span', null, '')),
         DELIVERY_FIELDS.filter(([key]) => delivery[key]).map(function([key, labelKey]) {
@@ -3583,7 +3640,6 @@ function DataPage({ page, data, client, refresh }) {
   if (page === 'settings') return h(Settings, { data, client });
 
   function customerRow(row) {
-    const canManageUdhar = data.user.role === 'Admin' || data.user.role === 'Manager';
     const canDeleteCustomers = data.user.role === 'Admin' || data.user.role === 'Manager';
     // Same rule as the khata itself: once nothing is owed the lifetime figures read as zero here too,
     // so a cleared account no longer looks like it is still carrying old credit in the customer list.
@@ -3602,10 +3658,10 @@ function DataPage({ page, data, client, refresh }) {
       h('td', null, Number(row.balance) > 0 ? h(Badge, { tone: 'warning' }, t('udharBadge')) : h(Badge, { tone: 'success' }, t('clearBadge'))),
       h('td', { className: 'action-cell' },
         h('div', { className: 'action-group' },
+          // Paying and clearing live inside the khata, so the list keeps only the three actions the
+          // counter asked for: open the khata, edit the customer, delete the customer.
           h('button', { className: 'secondary khata-btn', onClick: () => setKhata(row) }, t('khata')),
           h('button', { className: 'secondary khata-btn', onClick: () => setEditCustomer(row) }, t('editLabel')),
-          canManageUdhar && Number(row.balance) > 0 && h('button', { className: 'secondary khata-btn pay-btn', onClick: () => setKhata(row) }, t('payUdhar')),
-          canManageUdhar && Number(row.balance) > 0 && h('button', { className: 'secondary khata-btn danger-btn small', onClick: () => confirmClearUdhar(row) }, t('clearShort')),
           canDeleteCustomers && h('button', { className: 'secondary khata-btn danger-btn small', onClick: () => confirmDeleteCustomer(row) }, t('delete')))));
   }
   async function confirmDeleteCustomer(row) {
@@ -3959,16 +4015,19 @@ function WarehousePage({ data, client, refresh }) {
 }
 
 function KhataModal({ customer, client, settings, user, onClose, refresh }) {
-  const [entries, setEntries] = useState(null);
-  const [balanceAfter, setBalanceAfter] = useState({});
-  const [clearedAt, setClearedAt] = useState(null);
+  // Paint the last ledger for this customer immediately, then refresh it in the background. Opening the
+  // same khata a second time no longer waits on the network just to show rows that have not changed.
+  const cachedLedger = khataLedgerCache[customer.id];
+  const [entries, setEntries] = useState(cachedLedger ? cachedLedger.entries : null);
+  const [balanceAfter, setBalanceAfter] = useState(cachedLedger ? cachedLedger.balanceAfter : {});
+  const [clearedAt, setClearedAt] = useState(cachedLedger ? cachedLedger.clearedAt : null);
   const [monthFilter, setMonthFilter] = useState('all');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [fromTime, setFromTime] = useState('');
   const [toTime, setToTime] = useState('');
   const [summary, setSummary] = useState({ creditPurchases: customer.creditPurchases || 0, totalPaid: customer.totalPaid || 0 });
-  const [balance, setBalance] = useState(customer.balance);
+  const [balance, setBalance] = useState(cachedLedger ? cachedLedger.balance : customer.balance);
   const [amount, setAmount] = useState('');
   const [payDate, setPayDate] = useState(toDateInputValue(new Date().toISOString()));
   const [payTime, setPayTime] = useState(toTimeInputValue(new Date().toISOString()));
@@ -3986,10 +4045,15 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
       // The server sends the current book as `entries` and the whole history as `history`. The khata
       // popup keeps the full history on hand so an old month can still be opened, then hides anything
       // at or before the last clearing in the default view.
+      const nextEntries = payload.history || payload.entries;
+      const nextBalanceAfter = payload.historyBalanceAfter || payload.balanceAfter || {};
+      const nextClearedAt = payload.clearedAt || (payload.customer && payload.customer.khataClearedAt) || null;
+      const nextBalance = payload.customer.balance;
       setEntries(payload.history || payload.entries);
       setBalanceAfter(payload.historyBalanceAfter || payload.balanceAfter || {});
       setClearedAt(payload.clearedAt || (payload.customer && payload.customer.khataClearedAt) || null);
       setBalance(payload.customer.balance);
+      khataLedgerCache[customer.id] = { entries: nextEntries, balanceAfter: nextBalanceAfter, clearedAt: nextClearedAt, balance: nextBalance };
     } catch (err) {
       setMessage(friendlyError(err));
     }
@@ -4017,9 +4081,11 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
       const result = await client.post(`/api/customers/${customer.id}/payments`, payload);
       setBalance(result.balance);
       setAmount('');
+      // The lifetime paid figure is updated here instead of re-downloading every customer, so the
+      // receipt of the payment is not stuck waiting on a second, much bigger list request.
+      setSummary(current => ({ ...current, totalPaid: Number(current.totalPaid || 0) + Number(result.payment.amount || 0) }));
       setMessage(LANG === 'ur' ? `${money(result.payment.amount)} وصول ہوئے۔ بقایا اُدھار: ${money(result.balance)}۔` : `Payment of ${money(result.payment.amount)} received. Remaining udhar: ${money(result.balance)}.`);
       await loadLedger();
-      await loadSummary();
       refresh();
     } catch (err) {
       if (isNetworkFailure(err)) {
@@ -4060,6 +4126,7 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
       }
       const result = await client.post(`/api/customers/${customer.id}/udhar`, payload);
       setBalance(result.balance);
+      setSummary(current => ({ ...current, creditPurchases: Number(current.creditPurchases || 0) + Number(result.entry.amount || 0) }));
       setUdharForm({ amount: '', note: '', reference: '' });
       setUdharDate(toDateInputValue(new Date().toISOString()));
       setUdharTime(toTimeInputValue(new Date().toISOString()));
@@ -4068,7 +4135,6 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
         ? `${money(result.entry.amount)} نیا اُدھار درج ہو گیا۔ کل بیلنس: ${money(result.balance)}۔`
         : `New udhar of ${money(result.entry.amount)} recorded. New balance: ${money(result.balance)}.`);
       await loadLedger();
-      await loadSummary();
       refresh();
     } catch (err) {
       if (isNetworkFailure(err)) {
@@ -4099,9 +4165,10 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
     try {
       const result = await client.post(`/api/customers/${customer.id}/clear-udhar`, {});
       setBalance(0);
+      // Clearing starts a fresh book, so the lifetime totals on this screen restart from zero too.
+      setSummary({ creditPurchases: 0, totalPaid: 0 });
       setMessage(LANG === 'ur' ? `اُدھار کلیر۔ ${money(result.previousBalance)} طے ہوئے۔ تاریخ محفوظ۔` : `Udhar cleared. ${money(result.previousBalance)} was settled. History preserved.`);
       await loadLedger();
-      await loadSummary();
       refresh();
     } catch (err) {
       setMessage(friendlyError(err));
@@ -4143,7 +4210,9 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
       }
       setMessage(LANG === 'ur' ? `${verb} مکمل۔ بیلنس دوبارہ حساب ہو گیا۔` : `${verb} done. Balance recalculated.`);
       await loadLedger();
-      await loadSummary();
+      // Reversing is rare; the lifetime totals can catch up in the background without holding the
+      // screen after the balance and ledger already show the result.
+      loadSummary();
       refresh();
     } catch (err) {
       setMessage(friendlyError(err));

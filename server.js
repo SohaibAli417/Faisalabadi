@@ -55,21 +55,25 @@ async function syncWithCloud() {
       cloudSync.lastError = `Cloud unreachable, will retry (${error.message})`;
       return;
     }
+    // Merging and the local write are quick and stay under the lock. The cloud upload is moved out of
+    // it: a slow or retrying 20-second cloud write used to hold the lock, so a bill completed during a
+    // sync waited for the sync to finish. The local file is already saved before the lock is released,
+    // and the next sync pushes anything that changed while the upload was in flight.
+    let toCloud = null;
     await withDbLock(async () => {
       const local = await readLocalDb();
       if (!local) return;
       if (!cloud) {
-        await writeCloudDb(local);
-        cloudSync.lastSuccessAt = now();
-        cloudSync.lastError = null;
+        toCloud = local;
         return;
       }
       const { merged, localChanged, cloudChanged } = mergeDbs(local, cloud, { sessionTtlMs: SESSION_TTL_MS });
       if (localChanged) await writeLocalDb(merged);
-      if (localChanged || cloudChanged) await writeCloudDb(merged);
-      cloudSync.lastSuccessAt = now();
-      cloudSync.lastError = null;
+      if (localChanged || cloudChanged) toCloud = merged;
     });
+    if (toCloud) await writeCloudDb(toCloud);
+    cloudSync.lastSuccessAt = now();
+    cloudSync.lastError = null;
   } catch (error) {
     cloudSync.lastError = error.message;
   } finally {

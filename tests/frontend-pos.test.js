@@ -221,10 +221,11 @@ test('the POS is two columns on a phone, with the khata beside the search box', 
 });
 
 test('the hamburger is hidden on the desktop too', () => {
-  const desktop = stylesCss.slice(
-    stylesCss.indexOf('@media (min-width: 761px)'),
-    stylesCss.indexOf('@media (max-width: 760px)')
-  );
+  // Start at the desktop block and stop at the next phone block after it. Searching for the first
+  // phone block from the top of the file lands before the desktop block and slices out nothing.
+  const desktopStart = stylesCss.indexOf('@media (min-width: 761px)');
+  const desktopEnd = stylesCss.indexOf('@media (max-width: 760px)', desktopStart);
+  const desktop = stylesCss.slice(desktopStart, desktopEnd === -1 ? undefined : desktopEnd);
   assert.ok(/\.menu-btn \{ display: none !important; \}/.test(desktop), 'the desktop hamburger must stay hidden');
   // Hiding it is only safe while the sidebar itself is still on screen.
   assert.equal(/pos-hidden/.test(appJs), false, 'nothing hides the desktop sidebar, so navigation is never lost');
