@@ -4060,6 +4060,25 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
       setBalanceAfter(payload.historyBalanceAfter || payload.balanceAfter || {});
       setClearedAt(payload.clearedAt || (payload.customer && payload.customer.khataClearedAt) || null);
       setBalance(payload.customer.balance);
+      // Recompute the lifetime totals from the current book's ledger entries so they always match
+      // the customer table (which decorates from the same source of truth). Entries at or before the
+      // last clearing belong to a closed book and are excluded.
+      const clearedAtMs = nextClearedAt ? new Date(nextClearedAt).getTime() : null;
+      const inCurrentBook = (entry) => {
+        if (!clearedAtMs) return true;
+        return new Date(entry.at || entry.createdAt || 0).getTime() > clearedAtMs;
+      };
+      const currentBookEntries = (payload.history || payload.entries || []).filter(inCurrentBook);
+      const computedCredit = currentBookEntries.reduce((sum, entry) => {
+        if (entry.type === 'sale') return sum + Number(entry.udharAdded || 0);
+        if (entry.type === 'udhar') return sum + Number(entry.amount || 0);
+        return sum;
+      }, 0);
+      const computedPaid = currentBookEntries.reduce((sum, entry) => {
+        if (entry.type === 'payment') return sum + Number(entry.amount || 0);
+        return sum;
+      }, 0);
+      setSummary({ creditPurchases: round3(computedCredit), totalPaid: round3(computedPaid) });
       khataLedgerCache[customer.id] = { entries: nextEntries, balanceAfter: nextBalanceAfter, clearedAt: nextClearedAt, balance: nextBalance };
     } catch (err) {
       setMessage(friendlyError(err));

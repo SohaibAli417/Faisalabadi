@@ -1187,8 +1187,10 @@ function receiveUdharPayment(db, customerId, amountInput, actor, options = {}) {
       customer.recordedTotal = 0;
       customer.recordedPaid = 0;
     }
-  }
-  if (customer.recordedPaid !== undefined && customer.recordedPaid !== null && customer.recordedPaid !== '') {
+    // recordedPaid restarts at 0 for the new book. The clearing payment belongs to the closed book
+    // and is already stored in db.payments; do not carry it into recordedPaid, otherwise the next
+    // book's balance (recordedTotal - recordedPaid) reads as settled when the customer still owes.
+  } else if (customer.recordedPaid !== undefined && customer.recordedPaid !== null && customer.recordedPaid !== '') {
     customer.recordedPaid = money(Number(customer.recordedPaid) + amount);
   }
   const payment = { id: uid('pay'), customerId, amount, at, createdBy: cashierNameOf(actor.id, actor.name), createdById: actor.id, saleId: options.saleId || null, note: options.note || '', clientId: clientId || undefined, _updatedAt: now() };
