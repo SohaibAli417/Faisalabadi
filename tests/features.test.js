@@ -181,6 +181,7 @@ test('decorateCustomer honors recordedTotal/recordedPaid overrides and masks cni
   customer.cnic = '35202-1234567-1';
   customer.recordedTotal = 12000;
   customer.recordedPaid = 4500;
+  customer.balance = 7500;
   const view = decorateCustomer(db, customer, customerTotals(db));
   assert.equal(view.creditPurchases, 12000);
   assert.equal(view.totalPaid, 4500);
@@ -188,6 +189,7 @@ test('decorateCustomer honors recordedTotal/recordedPaid overrides and masks cni
   assert.equal(view.cnic, undefined);
   assert.ok(view.cnicMasked);
   customer.recordedPaid = 15000;
+  customer.balance = 0;
   assert.equal(decorateCustomer(db, customer, customerTotals(db)).balance, 0);
 });
 

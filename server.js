@@ -940,10 +940,13 @@ function decorateCustomer(db, customer, totalsMap) {
   const totals = totalsMap[customer.id] || { creditPurchases: 0, totalPaid: 0, lastPaymentAt: null };
   let creditPurchases = money(totals.creditPurchases);
   let totalPaid = money(totals.totalPaid);
+  // Balance always comes from customer.balance (the source of truth - updated by every sale,
+  // payment, udhar entry and clear operation). Recorded totals are only used for lifetime display
+  // figures; they must never override the actual balance, because a stale recordedPaid from a
+  // previous cleared book could otherwise read the account as settled when it still has outstanding.
   let balance = money(customer.balance);
   if (hasRecordedValue(customer.recordedTotal)) creditPurchases = money(customer.recordedTotal);
   if (hasRecordedValue(customer.recordedPaid)) totalPaid = money(customer.recordedPaid);
-  if (hasRecordedValue(customer.recordedTotal) && hasRecordedValue(customer.recordedPaid)) balance = Math.max(0, creditPurchases - totalPaid);
   let productList = [];
   if (Array.isArray(customer.products) && customer.products.length) {
     for (const item of customer.products) {
