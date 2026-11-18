@@ -4113,9 +4113,10 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
   async function loadFullHistory() {
     if (khataLedgerCache[customer.id]?.history) {
       setHistory(khataLedgerCache[customer.id].history);
-      return;
+      return khataLedgerCache[customer.id].history;
     }
     await loadLedger(false);
+    return khataLedgerCache[customer.id]?.history || [];
   }
   // Print a single month's khata: month name at the top, that month's credit sales and payments, the
   // carried-over balance from before the month, and the closing balance at month-end. Previous month's
@@ -4125,7 +4126,7 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
       setBusy(true);
       // Need full history to compute carried-in balance from before the month.
       await loadFullHistory();
-      const all = history || [];
+      const all = khataLedgerCache[customer.id]?.history || [];
       const monthEntries = all.filter(e => monthKeyOf(e.at || e.createdAt || 0) === monthKey);
       if (monthEntries.length === 0) {
         setMessage(LANG === 'ur' ? `اس ماہ میں کوئی ریکارڈ نہیں۔` : `No entries for this month.`);
