@@ -4163,6 +4163,13 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
     }
   }
   useEffect(() => { loadLedger(true); }, [client, customer.id]);
+  // Load full history when the cashier picks a specific month, so old months are visible too.
+  useEffect(() => {
+    if (monthFilter !== 'all' && !khataLedgerCache[customer.id]?.history) {
+      loadFullHistory();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [monthFilter]);
   async function receivePayment(event) {
     if (event) event.preventDefault();
     setMessage('');
@@ -4380,14 +4387,14 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
           Number(balance) > 0
             ? h('button', { className: 'secondary', disabled: busy, onClick: () => printKhataStatement(customer, currentBook, balance, settings, setMessage) }, LANG === 'ur' ? 'کھاتہ پرنٹ' : 'Print khata')
             : null,
-          Number(balance) > 0 && monthKeys(history || currentBook || []).length > 0
+          Number(balance) > 0 && monthKeys(history.length > 0 ? history : currentBook || []).length > 0
             ? h('div', { className: 'print-month-row' },
               h('select', {
                 value: printMonth,
                 onChange: e => setPrintMonth(e.target.value),
                 className: 'print-month-select'
               }, h('option', { value: '', disabled: true }, LANG === 'ur' ? 'ماہ منتخب کریں' : 'Select month'),
-                monthKeys(history || currentBook || []).map(monthKey => h('option', { key: monthKey, value: monthKey },
+                monthKeys(history.length > 0 ? history : currentBook || []).map(monthKey => h('option', { key: monthKey, value: monthKey },
                   new Date(monthKey + '-01').toLocaleDateString('en-PK', { month: 'long', year: 'numeric' })))),
               h('button', { className: 'secondary', disabled: busy || !printMonth, onClick: () => printMonthStatement(printMonth) }, LANG === 'ur' ? 'ماہ پرنٹ کریں' : 'Print month'))
             : null,
