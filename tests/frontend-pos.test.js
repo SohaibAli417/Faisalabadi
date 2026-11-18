@@ -419,15 +419,17 @@ test('the khata header offers the latest bill on WhatsApp, like the POS tab, plu
 // moment a month (or a date/time range) is picked.
 test('a cleared khata hides old money by default but a chosen month still opens its history', () => {
   const body = appJs.slice(appJs.indexOf('function KhataModal('), appJs.indexOf('function QuickAddCustomerModal('));
-  assert.ok(/setEntries\(payload\.history \|\| payload\.entries\)/.test(body),
-    'the popup must keep the full history the server sends');
+  assert.ok(/setEntries\(payload\.entries \|\| \[\]\)/.test(body),
+    'the popup stores current book entries separately');
+  assert.ok(/setHistory\(payload\.history \|\| \[\]\)/.test(body),
+    'the popup keeps the full history the server sends');
   assert.ok(/setBalanceAfter\(payload\.historyBalanceAfter \|\| payload\.balanceAfter \|\| \{\}\)/.test(body),
     'running balances must come from the history map when present');
   assert.ok(/setClearedAt\(payload\.clearedAt/.test(body),
     'the clearing moment must be remembered so old money can be hidden');
   assert.ok(/const inCurrentBook = entry => clearedMs == null \|\| new Date\(entry\.at\)\.getTime\(\) > clearedMs/.test(body),
     'the current book is everything after the last clearing');
-  assert.ok(/entries\.filter\(entry => passesFilters\(entry\) && \(hasFilters \|\| inCurrentBook\(entry\)\)\)/.test(body),
+  assert.ok(/monthFilter !== 'all' \? history\.filter\(entry => passesFilters\(entry\)\) : entries\.filter\(entry => passesFilters\(entry\) && \(hasFilters \|\| inCurrentBook\(entry\)\)\)/.test(body),
     'the default view is the current book; a filter opens all matching history');
 });
 

@@ -1929,6 +1929,7 @@ async function handleApi(request, response) {
       const id = url.pathname.split('/')[3];
       const customer = db.customers.find(item => item.id === id);
       if (!customer) return json(response, 404, { error: 'Customer not found' });
+      const currentOnly = String(url.searchParams.get('current') || '').toLowerCase() === '1';
       // Every invoice to this customer belongs on their khata, not just the ones that left udhar -
       // the cashier wants one place that shows what this customer actually bought. A bill settled in
       // full still shows up, it simply moves the balance by nothing.
@@ -1956,7 +1957,7 @@ async function handleApi(request, response) {
           })),
           createdBy: cashierNameOf(sale.createdBy, sale.createdByName)
         }));
-// The money taken at the counter is already carried on the bill's own row as "paid at billing", so
+      // The money taken at the counter is already carried on the bill's own row as "paid at billing", so
       // counting its payment row again in the running balance used to subtract the same rupees twice
       // and left the statement reading lower than what the customer actually owes. The row stays on
       // the khata for the record - it is flagged and simply does not move the balance.
@@ -1975,7 +1976,7 @@ async function handleApi(request, response) {
             note: payment.note || '',
             createdBy: cashierNameOf(payment.createdById, payment.createdBy)
           };
-});
+        });
       const udharEntries = (db.udharEntries || [])
         .filter(entry => entry.customerId === id && !entry.voided)
         .map(entry => ({
@@ -2006,6 +2007,13 @@ async function handleApi(request, response) {
         else running += money(entry.amount);
         balanceAfter[entry.id] = money(running);
       }
+      const entries = periodEntries.reverse();
+      // When the caller only wants the current book (fast initial khata open), skip the full-history
+      // computation entirely. The running totals and balance-before/after maps for every historical
+      // entry are expensive to build for long-standing customers with thousands of rows.
+      if (currentOnly) {
+        return json(response, 200, { customer: { ...customer, cnicMasked: maskCnic(customer.cnic), cnic: undefined }, entries, balanceAfter, balanceBefore, clearedAt: customer.khataClearedAt || null, current: true });
+      }
       // The full history is sent alongside the current book, so a settled khata can still be read back
       // month by month without the counter's default view ever showing money that was already cleared.
       // The running balance restarts at the clearing moment, so each book keeps its own figures and an
@@ -2022,7 +2030,6 @@ async function handleApi(request, response) {
         else historyRunning += money(entry.amount);
         historyBalanceAfter[entry.id] = money(historyRunning);
       }
-      const entries = periodEntries.reverse();
       const history = allEntries.slice().reverse();
       return json(response, 200, { customer: { ...customer, cnicMasked: maskCnic(customer.cnic), cnic: undefined }, entries, balanceAfter, balanceBefore, history, historyBalanceAfter, historyBalanceBefore, clearedAt: customer.khataClearedAt || null });
     }

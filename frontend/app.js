@@ -1581,8 +1581,6 @@ function drawKhataStatementImage(customer, entries, balance, settings, options) 
     const d = new Date(at);
     return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-PK', { day: '2-digit', month: 'short', year: 'numeric' });
   };
-  // The printed statement gets the same larger print scale as the printed bill. Sharing on WhatsApp
-  // keeps the original layout and sizing.
   const printMode = !!(options && options.print);
   const printPaper = String((options && options.paper) || '80');
   const printScale = printMode ? (printPaper === '58' ? 2.45 : printPaper === 'a4' ? 1.1 : 2) : 1;
@@ -1591,7 +1589,12 @@ function drawKhataStatementImage(customer, entries, balance, settings, options) 
   const pad = printMode ? 30 : BILL_PAD;
   const topPad = printMode ? 80 : BILL_PAD;
   const ink = colour => (printMode ? '#000' : (colour || '#111'));
-  const L = {
+  const monthLabel = (options && options.monthLabel) || '';
+  const carriedIn = (options && options.carriedIn != null) ? Number(options.carriedIn) : 0;
+  const monthCredit = (options && options.monthCredit != null) ? Number(options.monthCredit) : 0;
+  const monthPaid = (options && options.monthPaid != null) ? Number(options.monthPaid) : 0;
+  const isMonthPrint = !!monthLabel;
+    const L = {
     title: ur ? 'اُدھار کھاتہ' : 'UDHAR KHATA',
     customer: ur ? 'گاہک' : 'Customer',
     mobile: ur ? 'موبائل' : 'Mobile',
@@ -1604,7 +1607,12 @@ function drawKhataStatementImage(customer, entries, balance, settings, options) 
     totalPaid: ur ? 'کل وصول شدہ' : 'TOTAL PAID',
     total: ur ? 'کل باقی اُدھار' : 'TOTAL REMAINING',
     none: ur ? 'کوئی باقی اُدھار نہیں' : 'No udhar pending',
-    thanks: ur ? 'شکریہ! دوبارہ تشریف لائیں۔' : 'Thank you! Please visit again.'
+    thanks: ur ? 'شکریہ! دوبارہ تشریف لائیں۔' : 'Thank you! Please visit again.',
+    monthLabel: ur ? 'ماہ' : 'MONTH',
+    carriedIn: ur ? 'پچھلے ماہ کا بقایا' : 'CARRIED-IN BALANCE',
+    monthCredit: ur ? 'اس ماہ کی خریداری' : 'THIS MONTH CREDIT',
+    monthPaid: ur ? 'اس ماہ کی وصولی' : 'THIS MONTH PAID',
+    closingBalance: ur ? 'ماہ کا اختتامی بیلنس' : 'MONTH CLOSING BALANCE'
   };
   const measure = document.createElement('canvas').getContext('2d');
   const canvas = document.createElement('canvas');
@@ -1738,8 +1746,21 @@ function drawKhataStatementImage(customer, entries, balance, settings, options) 
     if (customerPhone) pair(L.mobile, customerPhone, 17, '400', '#333');
     if (customerId) pair(L.custId, '#' + customerId, 17, '400', '#333');
     pair(L.date, today, 17, '400', '#333');
-    y += stepOf(6);
-    divider();
+    if (isMonthPrint) {
+      y += stepOf(6);
+      divider();
+      centred(monthLabel, 20, '700', '#111');
+      y += stepOf(26);
+      pair(L.carriedIn, money(carriedIn), 18, '600', '#333');
+      pair(L.monthCredit, '+' + money(monthCredit), 18, '600', '#267152');
+      pair(L.monthPaid, '-' + money(monthPaid), 18, '600', '#c0392b');
+      pair(L.closingBalance, money(remaining), 20, '700', '#111');
+      y += stepOf(6);
+      divider();
+    } else {
+      y += stepOf(6);
+      divider();
+    }
 
     // The udhar still owed, oldest first
     y += stepOf(4);
@@ -4026,9 +4047,11 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
   // same khata a second time no longer waits on the network just to show rows that have not changed.
   const cachedLedger = khataLedgerCache[customer.id];
   const [entries, setEntries] = useState(cachedLedger ? cachedLedger.entries : null);
+  const [history, setHistory] = useState(cachedLedger ? cachedLedger.history : []);
   const [balanceAfter, setBalanceAfter] = useState(cachedLedger ? cachedLedger.balanceAfter : {});
   const [clearedAt, setClearedAt] = useState(cachedLedger ? cachedLedger.clearedAt : null);
   const [monthFilter, setMonthFilter] = useState('all');
+  const [printMonth, setPrintMonth] = useState('');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [fromTime, setFromTime] = useState('');
@@ -4046,9 +4069,9 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
   const [udharTime, setUdharTime] = useState(toTimeInputValue(new Date().toISOString()));
   // The server only lets Admin/Manager record or clear udhar, so do not show controls that will 403.
   const canManageUdhar = !user || user.role === 'Admin' || user.role === 'Manager';
-  async function loadLedger() {
+  async function loadLedger(currentOnly = true) {
     try {
-      const payload = await client.get(`/api/customers/${customer.id}/ledger`);
+      const payload = await client.get(`/api/customers/${customer.id}/ledger${currentOnly ? '?current=1' : ''}`);
       // The server sends the current book as `entries` and the whole history as `history`. The khata
       // popup keeps the full history on hand so an old month can still be opened, then hides anything
       // at or before the last clearing in the default view.
@@ -4056,7 +4079,8 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
       const nextBalanceAfter = payload.historyBalanceAfter || payload.balanceAfter || {};
       const nextClearedAt = payload.clearedAt || (payload.customer && payload.customer.khataClearedAt) || null;
       const nextBalance = payload.customer.balance;
-      setEntries(payload.history || payload.entries);
+      setEntries(payload.entries || []);
+      setHistory(payload.history || []);
       setBalanceAfter(payload.historyBalanceAfter || payload.balanceAfter || {});
       setClearedAt(payload.clearedAt || (payload.customer && payload.customer.khataClearedAt) || null);
       setBalance(payload.customer.balance);
@@ -4068,7 +4092,7 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
         if (!clearedAtMs) return true;
         return new Date(entry.at || entry.createdAt || 0).getTime() > clearedAtMs;
       };
-      const currentBookEntries = (payload.history || payload.entries || []).filter(inCurrentBook);
+      const currentBookEntries = (payload.entries || []).filter(inCurrentBook);
       const computedCredit = currentBookEntries.reduce((sum, entry) => {
         if (entry.type === 'sale') return sum + Number(entry.udharAdded || 0);
         if (entry.type === 'udhar') return sum + Number(entry.amount || 0);
@@ -4079,12 +4103,65 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
         return sum;
       }, 0);
       setSummary({ creditPurchases: round3(computedCredit), totalPaid: round3(computedPaid) });
-      khataLedgerCache[customer.id] = { entries: nextEntries, balanceAfter: nextBalanceAfter, clearedAt: nextClearedAt, balance: nextBalance };
+      khataLedgerCache[customer.id] = { entries: nextEntries, history: payload.history, balanceAfter: nextBalanceAfter, clearedAt: nextClearedAt, balance: nextBalance };
     } catch (err) {
       setMessage(friendlyError(err));
     }
   }
-  useEffect(() => { loadLedger(); }, [client, customer.id]);
+  // Load the full history (not just the current book) when the cashier picks an old month to print or
+  // view. Called on demand so the khata popup still opens fast.
+  async function loadFullHistory() {
+    if (khataLedgerCache[customer.id]?.history) {
+      setHistory(khataLedgerCache[customer.id].history);
+      return;
+    }
+    await loadLedger(false);
+  }
+  // Print a single month's khata: month name at the top, that month's credit sales and payments, the
+  // carried-over balance from before the month, and the closing balance at month-end. Previous month's
+  // dues are shown so the customer sees exactly what was outstanding going into this month.
+  async function printMonthStatement(monthKey) {
+    try {
+      setBusy(true);
+      // Need full history to compute carried-in balance from before the month.
+      await loadFullHistory();
+      const all = history || [];
+      const monthEntries = all.filter(e => monthKeyOf(e.at || e.createdAt || 0) === monthKey);
+      if (monthEntries.length === 0) {
+        setMessage(LANG === 'ur' ? `اس ماہ میں کوئی ریکارڈ نہیں۔` : `No entries for this month.`);
+        setBusy(false);
+        return;
+      }
+      const sorted = monthEntries.slice().sort((a, b) => new Date(a.at || a.createdAt || 0).getTime() - new Date(b.at || b.createdAt || 0).getTime());
+      const monthLabel = new Date(monthKey + '-01').toLocaleDateString('en-PK', { month: 'long', year: 'numeric' });
+      // Carried-in balance: balance after the last entry before this month started.
+      const monthStart = new Date(monthKey + '-01').getTime();
+      const before = all.filter(e => new Date(e.at || e.createdAt || 0).getTime() < monthStart && !e.voided);
+      const carriedIn = before.length > 0 ? Number(before[before.length - 1].balanceAfter || balance) : Number(balance);
+      const monthCredit = round3(monthEntries.reduce((s, e) => (e.type === 'sale' || e.type === 'udhar') ? s + Number(e.udharAdded != null ? e.udharAdded : e.amount || 0) : s, 0));
+      const monthPaid = round3(monthEntries.reduce((s, e) => e.type === 'payment' && !e.paidAtBilling ? s + Number(e.amount || 0) : s, 0));
+      const closing = round3(Math.max(0, carriedIn + monthCredit - monthPaid));
+      const paper = printPaperSize();
+      const canvas = drawKhataStatementImage(customer, monthEntries, closing, settings, { print: true, paper, monthLabel, carriedIn, monthCredit, monthPaid });
+      const printRoot = document.getElementById('print-root');
+      if (!printRoot) throw new Error('Printing is not available on this device');
+      printRoot.innerHTML = '';
+      const img = document.createElement('img');
+      img.className = 'bill-print-image paper-' + paper;
+      img.src = canvas.toDataURL('image/png');
+      printRoot.appendChild(img);
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        window.print();
+        setTimeout(() => { printRoot.innerHTML = ''; }, 1000);
+      }));
+      setMessage(LANG === 'ur' ? `${monthLabel} کا کھاتہ پرنٹ کے لیے بھیج دیا گیا۔` : `${monthLabel} statement sent to the printer.`);
+    } catch (err) {
+      setMessage(friendlyError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+  useEffect(() => { loadLedger(true); }, [client, customer.id]);
   async function receivePayment(event) {
     if (event) event.preventDefault();
     setMessage('');
@@ -4263,7 +4340,7 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
     if (toTime && time && time > toTime) return false;
     return true;
   };
-  const visibleEntries = entries ? entries.filter(entry => passesFilters(entry) && (hasFilters || inCurrentBook(entry))) : [];
+  const visibleEntries = entries ? (monthFilter !== 'all' ? history.filter(entry => passesFilters(entry)) : entries.filter(entry => passesFilters(entry) && (hasFilters || inCurrentBook(entry)))) : [];
   const clearFilters = () => { setMonthFilter('all'); setFromDate(''); setToDate(''); setFromTime(''); setToTime(''); };
   const monthCount = monthKey => visibleEntries.filter(e => monthKeyOf(e.at) === monthKey).length;
   // Once the customer has nothing left to pay, the whole khata reads as clear: the running totals are
@@ -4301,6 +4378,17 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
             : null,
           Number(balance) > 0
             ? h('button', { className: 'secondary', disabled: busy, onClick: () => printKhataStatement(customer, currentBook, balance, settings, setMessage) }, LANG === 'ur' ? 'کھاتہ پرنٹ' : 'Print khata')
+            : null,
+          Number(balance) > 0 && monthKeys(history || currentBook || []).length > 0
+            ? h('div', { className: 'print-month-row' },
+              h('select', {
+                value: printMonth,
+                onChange: e => setPrintMonth(e.target.value),
+                className: 'print-month-select'
+              }, h('option', { value: '', disabled: true }, LANG === 'ur' ? 'ماہ منتخب کریں' : 'Select month'),
+                monthKeys(history || currentBook || []).map(monthKey => h('option', { key: monthKey, value: monthKey },
+                  new Date(monthKey + '-01').toLocaleDateString('en-PK', { month: 'long', year: 'numeric' })))),
+              h('button', { className: 'secondary', disabled: busy || !printMonth, onClick: () => printMonthStatement(printMonth) }, LANG === 'ur' ? 'ماہ پرنٹ کریں' : 'Print month'))
             : null,
           h('span', { className: `badge ${Number(balance) > 0 ? 'warning' : 'success'}` }, Number(balance) > 0 ? `${t('udharBadge')} ${money(balance)}` : t('clearBadge')))),
       h('div', { className: 'profile-details' },
@@ -4353,7 +4441,7 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
           h('div', { className: 'ledger-filter' },
             h('select', { value: monthFilter, onChange: e => setMonthFilter(e.target.value) },
               h('option', { value: 'all' }, t('allMonths')),
-              monthKeys(entries).map(monthKey => h('option', { key: monthKey, value: monthKey },
+              monthKeys(history || entries).map(monthKey => h('option', { key: monthKey, value: monthKey },
                 new Date(monthKey + '-01').toLocaleDateString('en-PK', { month: 'long', year: 'numeric' })))),
             hasFilters ? h('button', { type: 'button', className: 'secondary small', onClick: clearFilters }, t('clearFiltersBtn')) : null,
             h('span', { className: 'ledger-balance-tip' }, `${t('currentOutstandingLabel')}: ${money(balance)}`)),
@@ -4546,6 +4634,28 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
       setProductSearch('');
       setManualDraft('');
     }
+  // Pressing Enter on the product search either picks the single matching catalogue product, or adds
+  // the typed words as a new manual product line with qty 1 and price 0, so the counter never has to
+  // click a mouse to keep billing.
+  function onProductSearchKeyDown(e) {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const term = productSearch.trim();
+    if (!term) return;
+    if (productHits.length === 1) {
+      addProduct(productHits[0]);
+    } else {
+      setForm(old => ({
+        ...old,
+        manualMode: false,
+        products: old.products.some(p => !p.id && p.manual && p.name.toLowerCase() === term.toLowerCase())
+          ? old.products
+          : [...old.products, { id: null, name: term, manual: true, qty: 1, unit: '', baseUnit: '', price: 0 }]
+      }));
+      setProductSearch('');
+      setManualDraft('');
+    }
+  }
   function openManual() {
     setForm(old => ({ ...old, manualMode: true }));
     setManualDraft('');
@@ -4786,7 +4896,8 @@ function CustomerEditModal({ customer, client, refresh, canEditUdhar, onClose, p
       className: 'product-search',
       placeholder: t('searchProducts'),
       value: productSearch,
-      onChange: e => setProductSearch(e.target.value)
+      onChange: e => setProductSearch(e.target.value),
+      onKeyDown: onProductSearchKeyDown
     }),
     productHits.length > 0 && h('div', { className: 'product-match-list', key: 'matches' }, productHits.map(prod =>
       h('button', {
