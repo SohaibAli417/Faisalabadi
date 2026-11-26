@@ -423,7 +423,8 @@ test('a cleared khata hides old money by default but a chosen month still opens 
     'the popup stores current book entries separately');
   assert.ok(/setHistory\(payload\.history \|\| \[\]\)/.test(body),
     'the popup keeps the full history the server sends');
-  assert.ok(/setBalanceAfter\(payload\.historyBalanceAfter \|\| payload\.balanceAfter \|\| \{\}\)/.test(body),
+  assert.ok(/const nextBalanceAfter = payload\.historyBalanceAfter \|\| payload\.balanceAfter \|\| \{\}/.test(body)
+    && /setBalanceAfter\(nextBalanceAfter\)/.test(body),
     'running balances must come from the history map when present');
   assert.ok(/setClearedAt\(payload\.clearedAt/.test(body),
     'the clearing moment must be remembered so old money can be hidden');
@@ -552,4 +553,31 @@ test('the printed udhar bill reads old balance, new balance, grand total', () =>
   const grandIndex = body.lastIndexOf("pair(t('grandTotalLabel')");
   assert.ok(oldIndex > -1 && newIndex > oldIndex && grandIndex > newIndex,
     'the printed account block must run old balance -> new balance -> grand total');
+});
+
+test('a month print carries in old udhar once instead of doubling the balance', () => {
+  const pad2 = (appJs.match(/const pad2 =[^\n]*/) || [''])[0];
+  const dateValue = appJs.slice(appJs.indexOf('const toDateInputValue ='), appJs.indexOf('\nconst toTimeInputValue ='));
+  const round = (appJs.match(/function round3\([^\n]*/) || [''])[0];
+  const helperStart = appJs.indexOf('function monthStatementTotals(');
+  const helper = appJs.slice(helperStart, appJs.indexOf('\nfunction udharRowDescription(', helperStart));
+  const totalsFor = new Function(`${pad2}\n${dateValue}\n${round}\n${helper}\n; return monthStatementTotals;`)();
+
+  const thisMonth = { id: 'bill', type: 'sale', at: '2026-11-06T10:00:00', amount: 900, udharAdded: 900 };
+  const firstEver = totalsFor([thisMonth], '2026-11', {}, {});
+  assert.deepEqual(firstEver.entries.map(entry => entry.id), ['bill']);
+  assert.equal(firstEver.carriedIn, 0);
+  assert.equal(firstEver.closing, 900);
+
+  const lastMonth = { id: 'old', type: 'udhar', at: '2026-10-05T10:00:00', amount: 900 };
+  const thisMonthBill = { id: 'bill2', type: 'sale', at: '2026-11-06T10:00:00', amount: 500, udharAdded: 500 };
+  const carried = totalsFor([thisMonthBill, lastMonth], '2026-11', { bill2: 900 }, { old: 900 });
+  assert.equal(carried.carriedIn, 900);
+  assert.equal(carried.monthCredit, 500);
+  assert.equal(carried.closing, 1400);
+
+  const olderThisMonth = { id: 'early', type: 'udhar', at: '2026-11-02T10:00:00', amount: 100 };
+  const newerThisMonth = { id: 'late', type: 'sale', at: '2026-11-06T10:00:00', amount: 200, udharAdded: 200 };
+  const ordered = totalsFor([newerThisMonth, olderThisMonth], '2026-11', {}, {});
+  assert.deepEqual(ordered.entries.map(entry => entry.id), ['late', 'early']);
 });
