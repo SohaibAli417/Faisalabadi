@@ -922,6 +922,32 @@ function customerTotals(db) {
 // Normalises a stored customer-profile product line. Keeps the unit it was entered in plus the
 // per-unit rate and the product's own base unit, so the UI can re-price a line (2 kg -> 2000 gram)
 // instead of showing a kilo rate against a gram quantity.
+let bootstrapSummaryCache = { key: '', value: null };
+function bootstrapSummary(db) {
+  const meta = db.meta || {};
+  const key = [
+    meta.updatedAt,
+    meta.invoiceSeq,
+    (db.products || []).length,
+    (db.customers || []).length,
+    (db.sales || []).length,
+    (db.returns || []).length,
+    (db.purchases || []).length
+  ].join('|');
+  if (bootstrapSummaryCache.key === key) return bootstrapSummaryCache.value;
+  const value = {
+    lowStock: lowStock(db),
+    stats: dashboardStats(db),
+    reports: {
+      day: calculateReport(db, 'day'),
+      month: calculateReport(db, 'month'),
+      year: calculateReport(db, 'year')
+    }
+  };
+  bootstrapSummaryCache = { key, value };
+  return value;
+}
+
 function productQtyUnit(item) {
   const qty = Number((item && item.qty) || 1);
   const unit = item && typeof item.unit === 'string' ? item.unit.trim().slice(0, 20) : '';
@@ -1614,6 +1640,7 @@ async function handleApi(request, response) {
 
     if (method === 'GET' && url.pathname === '/api/bootstrap') {
       const totalsMap = customerTotals(db);
+      const summary = bootstrapSummary(db);
       return json(response, 200, {
         user: sanitizeUser(actor),
         settings: db.settings,
@@ -1624,9 +1651,9 @@ async function handleApi(request, response) {
         sales: db.sales.slice(0, 50),
         returns: db.returns.slice(0, 50),
         drafts: (db.drafts || []).slice(0, 50),
-        lowStock: lowStock(db),
-        stats: dashboardStats(db),
-        reports: { day: calculateReport(db, 'day'), month: calculateReport(db, 'month'), year: calculateReport(db, 'year') }
+        lowStock: summary.lowStock,
+        stats: summary.stats,
+        reports: summary.reports
       });
     }
 

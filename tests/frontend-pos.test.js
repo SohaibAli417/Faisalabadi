@@ -12,6 +12,7 @@ const path = require('node:path');
 
 const appJs = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'app.js'), 'utf8');
 const stylesCss = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'styles.css'), 'utf8');
+const serverJs = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
 
 test('every React hook used in app.js is actually available in that file', () => {
   // The one line that decides which React hooks may be called bare.
@@ -74,6 +75,40 @@ test('the product search keeps auto-filling the cart', () => {
   // And the dropdown still offers the presets and the Add button.
   assert.ok(/className: 'qty-preset'/.test(appJs), 'search results keep their qty presets');
   assert.ok(/className: 'qty-preset add-one'/.test(appJs), 'search results keep their Add button');
+});
+
+test('one product word completes the matching product name', () => {
+  const helperStart = appJs.indexOf('function productWordMatch(');
+  const helper = appJs.slice(helperStart, appJs.indexOf('\nfunction monthStatementTotals(', helperStart));
+  const match = new Function(`${helper}\n; return productWordMatch;`)();
+  const products = [
+    { id: 'milo', name: 'Nestle Milo 400g', sku: 'NES-MIL' },
+    { id: 'tea', name: 'Tapal Chai', category: 'tea' },
+    { id: 'choc', name: 'Chocolate Bar' }
+  ];
+  assert.equal(match(products, 'milo').id, 'milo');
+  assert.equal(match(products, 'tapal').id, 'tea');
+  assert.equal(match(products, 'chai').id, 'tea');
+  assert.equal(match(products, 'ch'), null);
+  assert.equal(match(products, 'x'), null);
+  assert.ok(/const pick = exactCode \? null : productWordMatch\(activeProducts, typed\);/.test(appJs), 'the search box must use word completion');
+  assert.ok(/input\.setSelectionRange\(typed\.length, completed\.length\)/.test(appJs), 'completion must leave the rest selected for the next keystroke');
+});
+
+test('a saved bootstrap paints at once while the live data still refreshes', () => {
+  const start = appJs.indexOf('const [data, setData] = useState(() => {');
+  const dataInit = appJs.slice(start, appJs.indexOf('const [page', start));
+  assert.ok(/loadJson\(bootstrapCacheKey, null\)/.test(dataInit), 'cached bootstrap must be read during the first render');
+  assert.ok(/cached\.user\.id === session\.user\.id/.test(dataInit), 'cached data must never be shown to a different user');
+  assert.ok(/useEffect\(\(\) => \{ refresh\(\); \}, \[session\?\.token\]\)/.test(appJs), 'the live fetch must still run in the background');
+});
+
+test('bootstrap reuses dashboard totals until the store changes', () => {
+  assert.ok(/let bootstrapSummaryCache = \{ key: '', value: null \};/.test(serverJs), 'derived totals need a cache');
+  assert.ok(/meta\.updatedAt/.test(serverJs.slice(serverJs.indexOf('function bootstrapSummary('), serverJs.indexOf('\nfunction productQtyUnit('))));
+  assert.ok(/const summary = bootstrapSummary\(db\);/.test(serverJs), 'bootstrap must use the cached summary');
+  assert.ok(/lowStock: summary\.lowStock,/.test(serverJs));
+  assert.ok(/reports: summary\.reports/.test(serverJs));
 });
 
 test('a customer typed into the POS search joins the list and is selected before the reload', () => {

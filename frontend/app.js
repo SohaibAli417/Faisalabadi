@@ -1,5 +1,5 @@
 /* global React, ReactDOM */
-const APP_VERSION = 'v74';
+const APP_VERSION = 'v75';
 const APP_CHECKSUM = 'cart-persist-scan-history-bill-v43';
 (function() {
   var stored = null;
@@ -1553,6 +1553,29 @@ function paidUdhar(entries) {
     .filter(entry => entry && !entry.voided && entry.type === 'payment' && !entry.paidAtBilling)
     .map(entry => ({ entry, paid: Number(entry.amount) || 0 }))
     .filter(row => row.paid > 0);
+}
+
+function productWordMatch(products, rawTerm) {
+  const term = String(rawTerm || '').trim().toLowerCase();
+  if (term.length < 2) return null;
+  const words = term.split(/\s+/);
+  const scored = (products || []).map(product => {
+    const name = String(product.name || '');
+    const searchText = [name, product.nameUrdu, product.urduName, product.sku, product.barcode, product.category]
+      .map(value => String(value || '').toLowerCase())
+      .join(' ');
+    const searchWords = searchText.split(/[\s/_-]+/).filter(Boolean);
+    let score = 0;
+    for (const word of words) {
+      if (searchWords.includes(word)) score += 4;
+      else if (searchWords.some(item => item.startsWith(word))) score += 3;
+      else if (searchText.includes(word)) score += 1;
+      else return null;
+    }
+    return { product, score, name };
+  }).filter(Boolean).sort((a, b) => b.score - a.score);
+  if (!scored.length || (scored.length > 1 && scored[0].score === scored[1].score)) return null;
+  return scored[0].product;
 }
 
 function monthStatementTotals(allEntries, monthKey, clearedAt, anchorBalance) {
@@ -3148,7 +3171,7 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
       // barcode/SKU match or a single search result is added straight away.
       const typed = String((e.target && e.target.value) || '').trim().toLowerCase();
       if (typed) {
-        const exact = barcodeMap[typed] || null;
+        const exact = barcodeMap[typed] || activeProducts.find(product => String(product.name || '').trim().toLowerCase() === typed) || null;
         const matches = exact ? [exact] : activeProducts.filter(product =>
           `${product.name || ''} ${product.sku || ''} ${product.barcode || ''} ${product.category || ''} ${product.nameUrdu || ''} ${product.urduName || ''}`.toLowerCase().includes(typed));
         // An exact barcode/SKU scan always wins over a row that was only highlighted with the arrows,
@@ -3392,7 +3415,24 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
   const searchSection = h('section', { className: 'search-section pos-panel' },
     h('div', { className: 'search-row' },
         h('label', { className: 'search' },
-          h('input', { ref: searchRef, autoFocus: true, value: query, onChange: e => { setQuery(e.target.value); setSearchOpen(true); setSearchIndex(-1); setSearchHover(-1); }, onFocus: () => setSearchOpen(true), onKeyDown: handleSearchKey, placeholder: t('searchPlaceholder'), autoComplete: 'off', autoCapitalize: 'none', autoCorrect: 'off', spellCheck: false })),
+          h('input', { ref: searchRef, autoFocus: true, value: query, onChange: e => {
+            const typed = e.target.value;
+            setQuery(typed);
+            setSearchOpen(true);
+            setSearchIndex(-1);
+            setSearchHover(-1);
+            const exactCode = barcodeMap[typed.trim().toLowerCase()];
+            const pick = exactCode ? null : productWordMatch(activeProducts, typed);
+            if (pick && String(pick.name || '').toLowerCase() !== typed.trim().toLowerCase()) {
+              const completed = String(pick.name || '');
+              setQuery(completed);
+              setSearchIndex(0);
+              requestAnimationFrame(() => {
+                const input = searchRef.current;
+                if (input && input.value === completed) input.setSelectionRange(typed.length, completed.length);
+              });
+            }
+          }, onFocus: () => setSearchOpen(true), onKeyDown: handleSearchKey, placeholder: t('searchPlaceholder'), autoComplete: 'off', autoCapitalize: 'none', autoCorrect: 'off', spellCheck: false })),
       h('button', { className: 'secondary icon-btn', title: t('scanCamera'), onClick: () => setCameraOpen(true) }, cameraGlyph),
       h('button', { className: 'secondary' + (manualOpen ? ' active' : ''), onClick: () => setManualOpen(v => !v) }, t('looseItem')),
       h('button', { className: 'secondary', onClick: () => setDraftsModal(true) }, `${t('draftsLabel')} (${(data.drafts || []).length})`)),
@@ -5704,7 +5744,12 @@ function Settings({ data, client }) {
 
 function App() {
   const [session, setSession] = useState(() => loadJson(stateKey, null));
-  const [data, setData] = useState(null);
+  const [data, setData] = useState(() => {
+    if (!session?.token || !session.user) return null;
+    const cached = loadJson(bootstrapCacheKey, null);
+    if (!cached || !cached.user || !Array.isArray(cached.products)) return null;
+    return cached.user.id === session.user.id ? cached : null;
+  });
   const [page, setPage] = useState('dashboard');
   const [navOpen, setNavOpen] = useState(false);
   const [online, setOnline] = useState(navigator.onLine);
