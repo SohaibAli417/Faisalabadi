@@ -1,5 +1,5 @@
 /* global React, ReactDOM */
-const APP_VERSION = 'v76';
+const APP_VERSION = 'v77';
 const APP_CHECKSUM = 'cart-persist-scan-history-bill-v43';
 (function() {
   var stored = null;
@@ -1555,6 +1555,10 @@ function paidUdhar(entries) {
     .filter(row => row.paid > 0);
 }
 
+function productSearchText(product) {
+  return `${product.name || ''} ${product.sku || ''} ${product.barcode || ''} ${product.category || ''} ${product.nameUrdu || ''} ${product.urduName || ''}`.toLowerCase();
+}
+
 function productWordMatch(products, rawTerm) {
   const term = String(rawTerm || '').trim().toLowerCase();
   if (!term) return null;
@@ -1679,6 +1683,7 @@ function drawKhataStatementImage(customer, entries, balance, settings, options) 
     colAmount: ur ? 'رقم' : 'Amount',
     oldUdhar: ur ? 'پرانا اُدھار' : 'OLD UDHAR',
     newUdhar: ur ? 'نیا اُدھار' : 'NEW UDHAR',
+    totalPaid: ur ? 'کل وصول شدہ' : 'TOTAL PAID',
     total: ur ? 'کل باقی اُدھار' : 'TOTAL',
     none: ur ? 'کوئی باقی اُدھار نہیں' : 'No udhar pending',
     thanks: ur ? 'شکریہ! دوبارہ تشریف لائیں۔' : 'Thank you! Please visit again.',
@@ -1867,6 +1872,7 @@ function drawKhataStatementImage(customer, entries, balance, settings, options) 
 
     pair(L.oldUdhar, money(oldUdhar), 18, '600', '#333');
     pair(L.newUdhar, money(newUdhar), 18, '600', '#267152');
+    pair(L.totalPaid, money(totalPaid), 18, '600', '#c0392b');
     pair(L.total, money(remaining), 21, '700', '#111');
     y += stepOf(6);
     divider();
@@ -2407,6 +2413,8 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
     ? ''
     : ((data.customers || []).find(row => row.id === restoredCustomerId) || {}).name || '';
   const [query, setQuery] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const skipCompletionRef = React.useRef(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchIndex, setSearchIndex] = useState(-1);
   // Hover is a purely visual pointer state and is cleared as soon as the pointer leaves the list.
@@ -2480,9 +2488,9 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
     });
     return map;
   }, [data.products]);
-  const q = query.trim().toLowerCase();
+  const q = searchTerm.trim().toLowerCase();
   const shown = q
-    ? activeProducts.filter(product => `${product.name || ''} ${product.sku || ''} ${product.barcode || ''} ${product.category || ''} ${product.nameUrdu || ''} ${product.urduName || ''}`.toLowerCase().includes(q))
+    ? activeProducts.filter(product => productSearchText(product).includes(q))
     : [];
   // The extra charge is folded in as one more line so the grand total, the bill and the khata all see
   // the same money. The typed Amount is the whole charge - Qty is only how many of it, so the per-unit
@@ -2528,6 +2536,7 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
   function addFromSearch(product) {
     addProduct(product);
     setQuery('');
+    setSearchTerm('');
     setSearchOpen(false);
     setSearchIndex(-1);
     if (searchRef.current) searchRef.current.focus();
@@ -2714,6 +2723,7 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
     setSearchOpen(false);
     setSearchIndex(-1);
     setQuery('');
+    setSearchTerm('');
     // Clear the saved bill straight away as well as through the effect below. If the cashier changes
     // tab while the sale is still saving, this component is already unmounted when the answer comes
     // back, so the effect cannot run - and the completed bill would otherwise reappear next time.
@@ -3022,10 +3032,12 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
     if (target) {
       addProduct(target);
       setQuery('');
+      setSearchTerm('');
       setSearchOpen(false);
       setSearchIndex(-1);
     } else {
       setQuery(String(code));
+      setSearchTerm(String(code));
       setSearchOpen(true);
       flash(LANG === 'ur' ? `${code} نہیں ملی۔` : `${code} not found.`);
     }
@@ -3435,22 +3447,30 @@ function POS({ client, data, refresh, applySale, applyCustomer, online, setOnlin
         h('label', { className: 'search' },
           h('input', { ref: searchRef, autoFocus: true, value: query, onChange: e => {
             const typed = e.target.value;
+            const shouldComplete = !skipCompletionRef.current;
+            skipCompletionRef.current = false;
             setQuery(typed);
+            setSearchTerm(typed);
             setSearchOpen(true);
             setSearchIndex(-1);
             setSearchHover(-1);
             const exactCode = barcodeMap[typed.trim().toLowerCase()];
-            const pick = exactCode ? null : productWordMatch(activeProducts, typed);
+            const pick = exactCode || !shouldComplete ? null : productWordMatch(activeProducts, typed);
             if (pick && String(pick.name || '').toLowerCase() !== typed.trim().toLowerCase()) {
               const completed = String(pick.name || '');
+              const matches = activeProducts.filter(product => productSearchText(product).includes(typed.trim().toLowerCase()));
+              const matchIndex = matches.findIndex(product => product.id === pick.id);
               setQuery(completed);
-              setSearchIndex(0);
+              setSearchIndex(matchIndex >= 0 ? matchIndex : 0);
               requestAnimationFrame(() => {
                 const input = searchRef.current;
                 if (input && input.value === completed) input.setSelectionRange(typed.length, completed.length);
               });
             }
-          }, onFocus: () => setSearchOpen(true), onKeyDown: handleSearchKey, placeholder: t('searchPlaceholder'), autoComplete: 'off', autoCapitalize: 'none', autoCorrect: 'off', spellCheck: false })),
+          }, onFocus: () => setSearchOpen(true), onKeyDown: e => {
+            if (e.key === 'Backspace' || e.key === 'Delete') skipCompletionRef.current = true;
+            handleSearchKey(e);
+          }, onKeyUp: e => { if (e.key === 'Backspace' || e.key === 'Delete') skipCompletionRef.current = false; }, placeholder: t('searchPlaceholder'), autoComplete: 'off', autoCapitalize: 'none', autoCorrect: 'off', spellCheck: false })),
       h('button', { className: 'secondary icon-btn', title: t('scanCamera'), onClick: () => setCameraOpen(true) }, cameraGlyph),
       h('button', { className: 'secondary' + (manualOpen ? ' active' : ''), onClick: () => setManualOpen(v => !v) }, t('looseItem')),
       h('button', { className: 'secondary', onClick: () => setDraftsModal(true) }, `${t('draftsLabel')} (${(data.drafts || []).length})`)),
@@ -4206,7 +4226,7 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
   // Load the full history (not just the current book) when the cashier picks an old month to print or
   // view. Called on demand so the khata popup still opens fast.
   async function loadFullHistory() {
-    if (khataLedgerCache[customer.id]?.history) {
+    if (khataLedgerCache[customer.id]?.history?.length) {
       setHistory(khataLedgerCache[customer.id].history);
       return khataLedgerCache[customer.id].history;
     }
@@ -4254,7 +4274,7 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
   useEffect(() => { loadLedger(true); }, [client, customer.id]);
   // Load full history when the cashier picks a specific month, so old months are visible too.
   useEffect(() => {
-    if (monthFilter !== 'all' && !khataLedgerCache[customer.id]?.history) {
+    if (monthFilter !== 'all' && !khataLedgerCache[customer.id]?.history?.length) {
       loadFullHistory();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

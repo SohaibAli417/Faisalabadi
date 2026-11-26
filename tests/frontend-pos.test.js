@@ -92,8 +92,17 @@ test('one product word completes the matching product name', () => {
   assert.equal(match(products, 'ch').id, 'choc');
   assert.equal(match(products, 'c').id, 'choc');
   assert.equal(match(products, 'x'), null);
-  assert.ok(/const pick = exactCode \? null : productWordMatch\(activeProducts, typed\);/.test(appJs), 'the search box must use word completion');
+  assert.ok(/exactCode \|\| !shouldComplete \? null : productWordMatch\(activeProducts, typed\)/.test(appJs), 'the search box must use word completion');
   assert.ok(/input\.setSelectionRange\(typed\.length, completed\.length\)/.test(appJs), 'completion must leave the rest selected for the next keystroke');
+});
+
+test('completion keeps the full suggestion list and lets backspace delete it', () => {
+  assert.ok(/const \[searchTerm, setSearchTerm\] = useState\(''\);/.test(appJs), 'the dropdown needs its own typed term');
+  assert.ok(/const q = searchTerm\.trim\(\)\.toLowerCase\(\);/.test(appJs), 'the dropdown must filter by the typed term, not the completed input');
+  assert.ok(/setQuery\(typed\);[\s\S]*setSearchTerm\(typed\);/.test(appJs), 'typing updates both the box and the filter');
+  assert.ok(/setQuery\(completed\);(?![\s\S]{0,80}setSearchTerm)/.test(appJs), 'completion must not overwrite the filter term');
+  assert.ok(/if \(e\.key === 'Backspace' \|\| e\.key === 'Delete'\) skipCompletionRef\.current = true;/.test(appJs), 'backspace must suppress the next completion');
+  assert.ok(/const shouldComplete = !skipCompletionRef\.current;/.test(appJs));
 });
 
 test('a saved bootstrap paints at once while the live data still refreshes', () => {
@@ -211,17 +220,18 @@ test('the khata statement also mentions the payments the customer has made', () 
 
   const drawer = appJs.slice(appJs.indexOf('function drawKhataStatementImage('), appJs.indexOf('function shareCanvasAsImage('));
   assert.ok(/paidUdhar\(entries\)/.test(drawer), 'the picture must list the payments received');
-  assert.ok(!/L\.totalPaid/.test(drawer), 'the summary must no longer print a separate total paid line');
+  assert.ok(/L\.totalPaid/.test(drawer), 'the picture must print a total paid line');
 
   const caption = appJs.slice(appJs.indexOf('function khataStatementText('), appJs.indexOf('function ScanCamera('));
   assert.ok(/paidUdhar\(entries\)/.test(caption), 'the caption must list the payments received');
   assert.ok(/TOTAL PAID/.test(caption), 'the caption must print a total paid line');
 });
 
-test('the khata print summary is only old udhar, new udhar and total', () => {
+test('the khata print summary shows old udhar, new udhar, paid and total', () => {
   const drawer = appJs.slice(appJs.indexOf('function drawKhataStatementImage('), appJs.indexOf('function shareCanvasAsImage('));
   assert.ok(/pair\(L\.oldUdhar, money\(oldUdhar\)/.test(drawer));
   assert.ok(/pair\(L\.newUdhar, money\(newUdhar\)/.test(drawer));
+  assert.ok(/pair\(L\.totalPaid, money\(totalPaid\)/.test(drawer));
   assert.ok(/pair\(L\.total, money\(remaining\)/.test(drawer));
   assert.ok(!/L\.carriedIn|L\.monthCredit|L\.monthPaid|L\.closingBalance/.test(drawer));
 
@@ -235,6 +245,7 @@ test('the khata month filter lists real months on the first paint', () => {
   assert.ok(/const nextEntries = payload\.entries \|\| \[\];/.test(modal), 'reopening a khata must not repaint the entire history');
   assert.ok(/payload\.history \|\| \(khataLedgerCache\[customer\.id\] && khataLedgerCache\[customer\.id\]\.history\)/.test(modal), 'a fast refresh must keep the full history already loaded');
   assert.ok(/monthKeys\(history\.length > 0 \? history : entries\)/.test(modal), 'the month select must use current rows until the full history loads');
+  assert.ok(/khataLedgerCache\[customer\.id\]\?\.history\?\.length/.test(modal), 'an empty cached history must not block the full-history load');
 });
 
 test('customer row actions stack in one equal-size column', () => {
