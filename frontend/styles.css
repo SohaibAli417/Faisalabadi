@@ -1313,6 +1313,13 @@ td {
 
 /* POS mode: hide sidebar on desktop, hamburger drawer */
 @media (min-width: 761px) {
+  .app-shell { align-items: flex-start; }
+  .sidebar {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+  }
   .sidebar.pos-hidden { display: none; }
   .sidebar.pos-hidden ~ .main-area { width: 100%; }
 

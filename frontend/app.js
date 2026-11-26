@@ -1,5 +1,5 @@
 /* global React, ReactDOM */
-const APP_VERSION = 'v73';
+const APP_VERSION = 'v74';
 const APP_CHECKSUM = 'cart-persist-scan-history-bill-v43';
 (function() {
   var stored = null;

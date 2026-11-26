@@ -231,6 +231,17 @@ test('the hamburger is hidden on the desktop too', () => {
   assert.equal(/pos-hidden/.test(appJs), false, 'nothing hides the desktop sidebar, so navigation is never lost');
 });
 
+test('the desktop green sidebar stays fixed while the page scrolls', () => {
+  const desktopStart = stylesCss.indexOf('@media (min-width: 761px)');
+  const desktopEnd = stylesCss.indexOf('@media (max-width: 760px)', desktopStart);
+  const desktop = stylesCss.slice(desktopStart, desktopEnd === -1 ? undefined : desktopEnd);
+  assert.ok(/\.app-shell \{ align-items: flex-start; \}/.test(desktop), 'the shell must not stretch the sidebar down the whole page');
+  assert.ok(/\.sidebar \{[^}]*position: sticky;[^}]*top: 0;[^}]*height: 100vh;[^}]*overflow-y: auto;/.test(desktop), 'the desktop sidebar must stay inside the viewport');
+
+  const mobile = stylesCss.slice(stylesCss.indexOf('@media (max-width: 760px)'));
+  assert.ok(/\.sidebar \{[^}]*position: fixed !important;[^}]*bottom: 0 !important;/.test(mobile), 'the phone bottom nav must stay fixed');
+});
+
 test('the cached asset versions all agree', () => {
   const indexHtml = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'index.html'), 'utf8');
   const swJs = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'sw.js'), 'utf8');
