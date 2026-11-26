@@ -1,5 +1,5 @@
 /* global React, ReactDOM */
-const APP_VERSION = 'v70';
+const APP_VERSION = 'v71';
 const APP_CHECKSUM = 'cart-persist-scan-history-bill-v43';
 (function() {
   var stored = null;
@@ -262,7 +262,7 @@ const STRINGS = {
     payFullAmount: 'Pay full amount', udharNeedsManager: 'Only Admin or Manager can receive or clear udhar. Ask them to record this payment.',
     addLabel: 'Add',     addNewUdhaar: 'Add New Udhaar', udhaarAmount: 'Amount', udhaarNote: 'Description / Note',
     udhaarReference: 'Reference (optional)', udhaarSaved: 'New udhaar added to the khata.', previousBalance: 'Previous balance', newPurchaseLabel: 'New purchase', finalOutstandingLabel: 'Final outstanding',
-    newBalance: 'New balance', remainingUdhar: 'Remaining Udhar', newUdharAmount: 'New Udhar Amount', udhaarEntry: 'Udhaar', prevBillLabel: 'Previous bill', dateTimeLabel: 'Date / Time', clearStatus: 'CLEAR',
+    newBalance: 'New balance', oldBalance: 'Old Balance', remainingUdhar: 'Remaining Udhar', newUdharAmount: 'New Udhar Amount', udhaarEntry: 'Udhaar', prevBillLabel: 'Previous bill', dateTimeLabel: 'Date / Time', clearStatus: 'CLEAR',
     creditSaleEntry: 'Credit sale', paymentReceived: 'Payment received', close: 'Close',
     addNewUdhar: 'Add New Udhaar', closeAddUdhar: 'Close', saveUdharBtn: 'Save Udhaar',
     udharAmountPh: 'Udhar amount (Rs)', udharNotePh: 'What was taken / note',
@@ -399,7 +399,7 @@ const STRINGS = {
     payFullAmount: 'پوری رقم دیں', udharNeedsManager: 'اُدھار وصول یا کلیر صرف ایڈمن یا منیجر کر سکتا ہے۔ ان سے کہیں کہ ادائیگی درج کریں۔',
     addLabel: 'شامل کریں', addNewUdhaar: 'نیا اُدھار درج کریں', udhaarAmount: 'رقم', udhaarNote: 'تفصیل / نوٹ',
     udhaarReference: 'حوالہ (اختیاری)', udhaarSaved: 'نیا اُدھار کھاتے میں شامل ہو گیا۔', previousBalance: 'پچھلا بیلنس', newPurchaseLabel: 'نئی خریداری', finalOutstandingLabel: 'آخری بقایا',
-    newBalance: 'نیا بیلنس', remainingUdhar: 'بقایا اُدھار', newUdharAmount: 'نیا اُدھار', udhaarEntry: 'اُدھار', prevBillLabel: 'پچھلا بل', dateTimeLabel: 'تاریخ / وقت', clearStatus: 'کلیر',
+    newBalance: 'نیا بیلنس', oldBalance: 'پرانا بیلنس', remainingUdhar: 'بقایا اُدھار', newUdharAmount: 'نیا اُدھار', udhaarEntry: 'اُدھار', prevBillLabel: 'پچھلا بل', dateTimeLabel: 'تاریخ / وقت', clearStatus: 'کلیر',
     creditSaleEntry: 'اُدھار سیل', paymentReceived: 'ادائیگی موصول', close: 'بند کریں',
     addNewUdhar: 'نیا اُدھار درج کریں', closeAddUdhar: 'بند کریں', saveUdharBtn: 'اُدھار محفوظ کریں',
     udharAmountPh: 'اُدھار کی رقم (روپے)', udharNotePh: 'کیا لیا / تفصیل',
@@ -1466,15 +1466,17 @@ function drawBillImage(sale, settings, customer, labels, options) {
     divider();
 
     // Totals
+    const printBalanceOrder = printMode && showAccount;
     for (const [left, right] of totals) {
+      if (printBalanceOrder && left === t('grandTotalLabel')) continue;
       pair(left, right, printMode && left === t('grandTotalLabel') ? 20 : 18, left === t('grandTotalLabel') ? '700' : '400');
     }
     y += stepOf(6);
     divider();
 
     // Account movement: previous balance -> this purchase / this payment -> final outstanding.
-    if (baseBalance > 0 || accountPurchase > 0) {
-      if (baseBalance > 0) pair(t('remainingUdhar'), money(baseBalance), 17, '400', '#333');
+    if (showAccount) {
+      if (baseBalance > 0) pair(printMode ? t('oldBalance') : t('remainingUdhar'), money(baseBalance), 17, '400', '#333');
       if (baseBalance === 0) pair(t('clearStatus'), t('clearBadge'), 17, '400', '#333');
       if (accountPurchase > 0) pair(t('newUdharAmount'), '+ ' + money(accountPurchase), 17, '400', '#333');
       if (accountPayment > 0) pair(t('paymentReceived'), '- ' + money(accountPayment), 17, '400', '#333');
@@ -1483,6 +1485,11 @@ function drawBillImage(sale, settings, customer, labels, options) {
       pair(t('newBalance'), money(accountFinal), 19, '700');
       y += stepOf(6);
       divider();
+      if (printBalanceOrder) {
+        pair(t('grandTotalLabel'), money(grandTotal), 20, '700');
+        y += stepOf(6);
+        divider();
+      }
     }
 
     // Delivery

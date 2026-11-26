@@ -541,3 +541,15 @@ test('the customers table numbers each row and searches by that number', () => {
   assert.ok(/\$\{serialById\.get\(row\.id\) \|\| ''\} \$\{row\.name/.test(appJs),
     'the search filter must match the serial number as well as the name and phone');
 });
+
+test('the printed udhar bill reads old balance, new balance, grand total', () => {
+  const start = appJs.indexOf('function drawBillImage(');
+  const body = appJs.slice(start, appJs.indexOf('\nfunction outstandingUdhar(', start));
+  assert.ok(/oldBalance:/.test(appJs), 'the bill labels must include an old balance line');
+  assert.ok(/const printBalanceOrder = printMode && showAccount;/.test(body), 'print must reorder only udhar bills');
+  const oldIndex = body.indexOf("pair(printMode ? t('oldBalance')");
+  const newIndex = body.indexOf("pair(t('newBalance')");
+  const grandIndex = body.lastIndexOf("pair(t('grandTotalLabel')");
+  assert.ok(oldIndex > -1 && newIndex > oldIndex && grandIndex > newIndex,
+    'the printed account block must run old balance -> new balance -> grand total');
+});

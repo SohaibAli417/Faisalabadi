@@ -1500,14 +1500,47 @@ function csv(rows) {
 }
 
 async function handleApi(request, response) {
+  const url = new URL(request.url, `http://${request.headers.host}`);
+  const method = request.method;
+  const cloudMode = MODE === 'cloud' && useSupabase;
+  const isLogin = method === 'POST' && url.pathname === '/api/auth/login';
+  let authSnapshot = null;
+  let loginBody = null;
+
+  if (cloudMode) {
+    try { authSnapshot = await readAuthData(); } catch (_) {}
+  }
+
+  if (isLogin) {
+    const rateKey = `${request.socket.remoteAddress || 'local'}:${String(request.headers['user-agent'] || '').slice(0, 80)}`;
+    if (!loginAllowed(rateKey)) return json(response, 429, { error: 'Too many login attempts. Try again later.' });
+    loginBody = await parseBody(request);
+    if (authSnapshot && Array.isArray(authSnapshot.users)) {
+      const loginRaw = String(loginBody.login || '').trim();
+      const loginEmail = loginRaw.toLowerCase();
+      const loginPhone = loginRaw.replace(/[\s-]/g, '');
+      const user = authSnapshot.users.find(item => item.active && (
+        String(item.email).toLowerCase() === loginEmail ||
+        String(item.phone || '').replace(/[\s-]/g, '') === loginPhone && loginPhone.length > 0
+      ));
+      if (!user || !verifyPassword(String(loginBody.password || ''), user.passwordHash)) {
+        return json(response, 401, { error: 'Invalid login credentials. Check your email/phone and password.' });
+      }
+    }
+  } else if (authSnapshot && Array.isArray(authSnapshot.users) && authSnapshot.sessions) {
+    const actor = getActor(request, { users: authSnapshot.users, sessions: authSnapshot.sessions });
+    if (!actor) return json(response, 401, { error: 'Authentication required' });
+  }
+
   let db;
   try {
     db = await readDb();
   } catch (error) {
     db = null;
-    for (const fallback of [readAuthData, recallLastGoodAuth]) {
+    for (const fallback of [authSnapshot, readAuthData, recallLastGoodAuth]) {
       try {
-        const auth = await fallback();
+        if (!fallback) continue;
+        const auth = typeof fallback === 'function' ? await fallback() : fallback;
         if (auth && Array.isArray(auth.users) && auth.users.length) {
           db = {
             meta: { invoiceSeq: 0 },
@@ -1535,18 +1568,14 @@ async function handleApi(request, response) {
   if (ensureCoreAccounts(db) || ensureSchema(db)) {
     try { await saveDb(db); } catch (_) {}
   }
-  const url = new URL(request.url, `http://${request.headers.host}`);
-  const method = request.method;
   const authOnlyPaths = ['/api/auth/login', '/api/auth/logout', '/api/auth/password', '/api/health'];
   if (readOnlyMode && !authOnlyPaths.includes(url.pathname)) {
     return json(response, 503, { error: 'Store database connection is weak right now. Sign in again - data will appear once the connection recovers.' });
   }
 
   try {
-    if (method === 'POST' && url.pathname === '/api/auth/login') {
-      const rateKey = `${request.socket.remoteAddress || 'local'}:${String(request.headers['user-agent'] || '').slice(0, 80)}`;
-      if (!loginAllowed(rateKey)) return json(response, 429, { error: 'Too many login attempts. Try again later.' });
-      const body = await parseBody(request);
+    if (isLogin) {
+      const body = loginBody;
       const loginRaw = String(body.login || '').trim();
       const loginEmail = loginRaw.toLowerCase();
       const loginPhone = loginRaw.replace(/[\s-]/g, '');

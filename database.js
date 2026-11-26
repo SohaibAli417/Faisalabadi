@@ -128,6 +128,9 @@ function recallCloud() {
 
 let lastGoodCloud = null;
 let lastGoodAuth = null;
+let authCache = null;
+let authCacheAt = 0;
+const AUTH_CACHE_MS = Number(process.env.AUTH_CACHE_MS || 3000);
 
 async function recallLastGoodAuth() {
   if (lastGoodAuth && Array.isArray(lastGoodAuth.users)) return lastGoodAuth;
@@ -169,17 +172,25 @@ async function readCloudDb() {
 }
 
 async function fetchAuthRow() {
-  const query = supabase.from('pos_auth').select('data').eq('id', 'main').single();
+  const query = supabase.from('pos_auth').select('data, users, sessions, settings').eq('id', 'main').single();
   const { data, error } = await withTimeout(query, 6000, 'Auth read');
   if (error && (error.code === 'PGRST116' || error.code === '42P01' || /does not exist/i.test(error.message || ''))) return null;
   if (error) throw new Error(error.message);
-  return data ? data.data : null;
+  if (!data) return null;
+  if (data.data && Array.isArray(data.data.users)) return data.data;
+  if (Array.isArray(data.users)) return { users: data.users, sessions: data.sessions || {}, settings: data.settings || {} };
+  return null;
 }
 
 async function readAuthData() {
   if (!useSupabase) return null;
+  if (authCache && Date.now() - authCacheAt < AUTH_CACHE_MS) return authCache;
   const auth = await withRetry(fetchAuthRow, 'Auth read', 2);
-  if (auth && Array.isArray(auth.users) && auth.users.length) lastGoodAuth = auth;
+  if (auth && Array.isArray(auth.users) && auth.users.length) {
+    lastGoodAuth = auth;
+    authCache = auth;
+    authCacheAt = Date.now();
+  }
   return auth;
 }
 
@@ -197,6 +208,8 @@ async function writeAuthData(db, options = {}) {
   const signature = authSignature(db);
   if (!options.force && signature === lastAuthSignature) return;
   const payload = { id: 'main', users: db.users, sessions: db.sessions || {}, settings: db.settings || {}, updated_at: new Date().toISOString() };
+  authCache = JSON.parse(JSON.stringify({ users: db.users, sessions: db.sessions || {}, settings: db.settings || {} }));
+  authCacheAt = Date.now();
   await withRetry(() => withTimeout(
     supabase.from('pos_auth').upsert(payload, { onConflict: 'id' }).then(({ error }) => { if (error) throw new Error(error.message); }),
     8000,
