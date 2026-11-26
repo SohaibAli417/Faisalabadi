@@ -424,15 +424,14 @@ td {
 .khata-btn:hover { background: #f0f4f1; border-color: var(--green); }
 .khata-btn.danger-btn:hover { background: #fce4e4; color: var(--red); }
 
-/* Customer row action buttons: equal size, responsive wrap */
-.action-cell { white-space: nowrap; }
-.action-group { display: inline-flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-.action-group .khata-btn { flex: none; }
+/* Customer row action buttons: one equal-width column on every screen */
+.action-cell { white-space: normal; }
+.action-group { display: flex; flex-direction: column; gap: 6px; width: 100%; min-width: 84px; }
+.action-group .khata-btn { flex: none; width: 100%; min-height: 34px; text-align: center; }
 
 @media (max-width: 760px) {
   .action-cell { white-space: normal; }
-  .action-group { width: 100%; }
-  .action-group .khata-btn { flex: 1 1 48%; min-width: 78px; }
+  .action-group .khata-btn { min-height: 42px; font-size: 14px !important; }
 }
 
 /* CUSTOMER PROFILE */

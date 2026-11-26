@@ -89,7 +89,8 @@ test('one product word completes the matching product name', () => {
   assert.equal(match(products, 'milo').id, 'milo');
   assert.equal(match(products, 'tapal').id, 'tea');
   assert.equal(match(products, 'chai').id, 'tea');
-  assert.equal(match(products, 'ch'), null);
+  assert.equal(match(products, 'ch').id, 'choc');
+  assert.equal(match(products, 'c').id, 'choc');
   assert.equal(match(products, 'x'), null);
   assert.ok(/const pick = exactCode \? null : productWordMatch\(activeProducts, typed\);/.test(appJs), 'the search box must use word completion');
   assert.ok(/input\.setSelectionRange\(typed\.length, completed\.length\)/.test(appJs), 'completion must leave the rest selected for the next keystroke');
@@ -210,11 +211,36 @@ test('the khata statement also mentions the payments the customer has made', () 
 
   const drawer = appJs.slice(appJs.indexOf('function drawKhataStatementImage('), appJs.indexOf('function shareCanvasAsImage('));
   assert.ok(/paidUdhar\(entries\)/.test(drawer), 'the picture must list the payments received');
-  assert.ok(/L\.totalPaid/.test(drawer), 'the picture must print a total paid line');
+  assert.ok(!/L\.totalPaid/.test(drawer), 'the summary must no longer print a separate total paid line');
 
   const caption = appJs.slice(appJs.indexOf('function khataStatementText('), appJs.indexOf('function ScanCamera('));
   assert.ok(/paidUdhar\(entries\)/.test(caption), 'the caption must list the payments received');
   assert.ok(/TOTAL PAID/.test(caption), 'the caption must print a total paid line');
+});
+
+test('the khata print summary is only old udhar, new udhar and total', () => {
+  const drawer = appJs.slice(appJs.indexOf('function drawKhataStatementImage('), appJs.indexOf('function shareCanvasAsImage('));
+  assert.ok(/pair\(L\.oldUdhar, money\(oldUdhar\)/.test(drawer));
+  assert.ok(/pair\(L\.newUdhar, money\(newUdhar\)/.test(drawer));
+  assert.ok(/pair\(L\.total, money\(remaining\)/.test(drawer));
+  assert.ok(!/L\.carriedIn|L\.monthCredit|L\.monthPaid|L\.closingBalance/.test(drawer));
+
+  const monthPrint = appJs.slice(appJs.indexOf('async function printMonthStatement('), appJs.indexOf('useEffect(() => { loadLedger(true)', appJs.indexOf('async function printMonthStatement(')));
+  assert.ok(/periodMonth: monthKey/.test(monthPrint));
+});
+
+test('the khata month filter lists real months on the first paint', () => {
+  const modalStart = appJs.indexOf('function KhataModal(');
+  const modal = appJs.slice(modalStart, appJs.indexOf('\nfunction ', modalStart + 1));
+  assert.ok(/const nextEntries = payload\.entries \|\| \[\];/.test(modal), 'reopening a khata must not repaint the entire history');
+  assert.ok(/payload\.history \|\| \(khataLedgerCache\[customer\.id\] && khataLedgerCache\[customer\.id\]\.history\)/.test(modal), 'a fast refresh must keep the full history already loaded');
+  assert.ok(/monthKeys\(history\.length > 0 \? history : entries\)/.test(modal), 'the month select must use current rows until the full history loads');
+});
+
+test('customer row actions stack in one equal-size column', () => {
+  assert.ok(/\.action-group \{[^}]*flex-direction: column/.test(stylesCss));
+  assert.ok(/\.action-group \.khata-btn \{[^}]*width: 100%/.test(stylesCss));
+  assert.ok(/\.action-group \.khata-btn \{[^}]*min-height: 42px/.test(stylesCss.slice(stylesCss.indexOf('@media (max-width: 760px)', stylesCss.indexOf('.action-group')))));
 });
 
 test('every WhatsApp bill image prints a grand total', () => {
@@ -467,8 +493,8 @@ test('a cleared khata hides old money by default but a chosen month still opens 
   const body = appJs.slice(appJs.indexOf('function KhataModal('), appJs.indexOf('function QuickAddCustomerModal('));
   assert.ok(/setEntries\(payload\.entries \|\| \[\]\)/.test(body),
     'the popup stores current book entries separately');
-  assert.ok(/setHistory\(payload\.history \|\| \[\]\)/.test(body),
-    'the popup keeps the full history the server sends');
+  assert.ok(/setHistory\(nextHistory\)/.test(body) && /const nextHistory = payload\.history \|\|/.test(body),
+    'the popup keeps the full history the server sends, including across fast refreshes');
   assert.ok(/const nextBalanceAfter = payload\.historyBalanceAfter \|\| payload\.balanceAfter \|\| \{\}/.test(body)
     && /setBalanceAfter\(nextBalanceAfter\)/.test(body),
     'running balances must come from the history map when present');

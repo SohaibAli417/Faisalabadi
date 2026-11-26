@@ -2045,14 +2045,15 @@ async function handleApi(request, response) {
           reference: entry.reference || '',
           createdBy: cashierNameOf(entry.createdBy, entry.createdByName)
         }));
-      const allEntries = [...creditSales, ...payments, ...udharEntries].sort((a, b) => new Date(a.at) - new Date(b.at));
+      const allEntries = [...creditSales, ...payments, ...udharEntries];
       // A khata that has been paid off in full starts a fresh book. Everything recorded at or before
       // the clearing moment is dropped from this view (the rows stay in the database for backups and
       // reports), so the next udhar does not sit on top of a history the counter has already settled.
       const clearedAt = customer.khataClearedAt ? new Date(customer.khataClearedAt).getTime() : null;
       const periodEntries = clearedAt == null
-        ? allEntries
+        ? allEntries.slice()
         : allEntries.filter(entry => new Date(entry.at).getTime() > clearedAt);
+      periodEntries.sort((a, b) => new Date(a.at) - new Date(b.at));
       let running = 0;
       const balanceAfter = {};
       const balanceBefore = {};
@@ -2078,7 +2079,8 @@ async function handleApi(request, response) {
       let historyReset = clearedAt == null;
       const historyBalanceAfter = {};
       const historyBalanceBefore = {};
-      for (const entry of allEntries) {
+      const historyEntries = allEntries.slice().sort((a, b) => new Date(a.at) - new Date(b.at));
+      for (const entry of historyEntries) {
         if (!historyReset && new Date(entry.at).getTime() > clearedAt) { historyRunning = 0; historyReset = true; }
         historyBalanceBefore[entry.id] = money(historyRunning);
         if (entry.type === 'sale') historyRunning += money(entry.udharAdded);
@@ -2086,7 +2088,7 @@ async function handleApi(request, response) {
         else historyRunning += money(entry.amount);
         historyBalanceAfter[entry.id] = money(historyRunning);
       }
-      const history = allEntries.slice().reverse();
+      const history = historyEntries.slice().reverse();
       return json(response, 200, { customer: { ...customer, cnicMasked: maskCnic(customer.cnic), cnic: undefined }, entries, balanceAfter, balanceBefore, history, historyBalanceAfter, historyBalanceBefore, clearedAt: customer.khataClearedAt || null });
     }
 
