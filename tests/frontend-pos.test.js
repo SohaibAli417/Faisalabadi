@@ -555,7 +555,7 @@ test('the printed udhar bill reads old balance, new balance, grand total', () =>
     'the printed account block must run old balance -> new balance -> grand total');
 });
 
-test('a month print carries in old udhar once instead of doubling the balance', () => {
+test('a month print carries in the open book once instead of doubling the balance', () => {
   const pad2 = (appJs.match(/const pad2 =[^\n]*/) || [''])[0];
   const dateValue = appJs.slice(appJs.indexOf('const toDateInputValue ='), appJs.indexOf('\nconst toTimeInputValue ='));
   const round = (appJs.match(/function round3\([^\n]*/) || [''])[0];
@@ -564,20 +564,34 @@ test('a month print carries in old udhar once instead of doubling the balance', 
   const totalsFor = new Function(`${pad2}\n${dateValue}\n${round}\n${helper}\n; return monthStatementTotals;`)();
 
   const thisMonth = { id: 'bill', type: 'sale', at: '2026-11-06T10:00:00', amount: 900, udharAdded: 900 };
-  const firstEver = totalsFor([thisMonth], '2026-11', {}, {});
+  const firstEver = totalsFor([thisMonth], '2026-11', null);
   assert.deepEqual(firstEver.entries.map(entry => entry.id), ['bill']);
   assert.equal(firstEver.carriedIn, 0);
   assert.equal(firstEver.closing, 900);
 
   const lastMonth = { id: 'old', type: 'udhar', at: '2026-10-05T10:00:00', amount: 900 };
   const thisMonthBill = { id: 'bill2', type: 'sale', at: '2026-11-06T10:00:00', amount: 500, udharAdded: 500 };
-  const carried = totalsFor([thisMonthBill, lastMonth], '2026-11', { bill2: 900 }, { old: 900 });
+  const carried = totalsFor([thisMonthBill, lastMonth], '2026-11', null);
   assert.equal(carried.carriedIn, 900);
   assert.equal(carried.monthCredit, 500);
   assert.equal(carried.closing, 1400);
 
+  const clearing = '2026-10-17T18:06:00';
+  const settledOld = { id: 'settled', type: 'udhar', at: '2026-10-16T10:00:00', amount: 50120 };
+  const postClearOctober = { id: 'oct', type: 'udhar', at: '2026-10-20T10:00:00', amount: 49300 };
+  const november = { id: 'nov', type: 'sale', at: '2026-11-06T10:00:00', amount: 54217, udharAdded: 54217 };
+  const openBook = totalsFor([november, postClearOctober, settledOld], '2026-11', clearing);
+  assert.equal(openBook.carriedIn, 49300);
+  assert.equal(openBook.monthCredit, 54217);
+  assert.equal(openBook.closing, 103517);
+
+  const anchored = totalsFor([november, settledOld], '2026-11', clearing, 103517);
+  assert.equal(anchored.carriedIn, 49300);
+  assert.equal(anchored.monthCredit, 54217);
+  assert.equal(anchored.closing, 103517);
+
   const olderThisMonth = { id: 'early', type: 'udhar', at: '2026-11-02T10:00:00', amount: 100 };
   const newerThisMonth = { id: 'late', type: 'sale', at: '2026-11-06T10:00:00', amount: 200, udharAdded: 200 };
-  const ordered = totalsFor([newerThisMonth, olderThisMonth], '2026-11', {}, {});
+  const ordered = totalsFor([newerThisMonth, olderThisMonth], '2026-11', null);
   assert.deepEqual(ordered.entries.map(entry => entry.id), ['late', 'early']);
 });

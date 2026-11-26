@@ -1,5 +1,5 @@
 /* global React, ReactDOM */
-const APP_VERSION = 'v72';
+const APP_VERSION = 'v73';
 const APP_CHECKSUM = 'cart-persist-scan-history-bill-v43';
 (function() {
   var stored = null;
@@ -1555,9 +1555,10 @@ function paidUdhar(entries) {
     .filter(row => row.paid > 0);
 }
 
-function monthStatementTotals(allEntries, monthKey, balanceBeforeMap, balanceAfterMap) {
+function monthStatementTotals(allEntries, monthKey, clearedAt, anchorBalance) {
   const [year, month] = monthKey.split('-').map(Number);
   const monthStart = new Date(year, month - 1, 1).getTime();
+  const clearedMs = clearedAt ? new Date(clearedAt).getTime() : null;
   const keyOf = entry => toDateInputValue(entry.at || entry.createdAt || 0).slice(0, 7);
   const atOf = entry => new Date(entry.at || entry.createdAt || 0).getTime();
   const ordered = (allEntries || [])
@@ -1565,24 +1566,21 @@ function monthStatementTotals(allEntries, monthKey, balanceBeforeMap, balanceAft
     .slice()
     .sort((a, b) => atOf(a) - atOf(b));
   const monthEntries = ordered.filter(entry => keyOf(entry) === monthKey);
-  const before = ordered.filter(entry => atOf(entry) < monthStart);
+  const before = ordered.filter(entry => atOf(entry) < monthStart && (clearedMs == null || atOf(entry) > clearedMs));
   const creditDelta = entry => {
     if (entry.type === 'payment') return 0;
     if (entry.type === 'sale') return Math.max(0, Number(entry.udharAdded != null ? entry.udharAdded : (Number(entry.amount) || 0) - (Number(entry.paidAtBilling) || 0)));
     return Math.max(0, Number(entry.amount) || 0);
   };
   const paidDelta = entry => entry.type === 'payment' && !entry.paidAtBilling ? Math.max(0, Number(entry.amount) || 0) : 0;
-  const computedBefore = before.reduce((sum, entry) => sum + creditDelta(entry) - paidDelta(entry), 0);
-  const beforeMap = balanceBeforeMap || {};
-  const afterMap = balanceAfterMap || {};
-  const first = monthEntries[0] || null;
-  const lastBefore = before[before.length - 1] || null;
-  const mappedBefore = first ? Number(beforeMap[first.id]) : NaN;
-  const mappedAfter = lastBefore ? Number(afterMap[lastBefore.id]) : NaN;
-  const carriedIn = round3(Number.isFinite(mappedBefore) ? mappedBefore : (Number.isFinite(mappedAfter) ? mappedAfter : computedBefore));
+  let carriedIn = round3(before.reduce((sum, entry) => sum + creditDelta(entry) - paidDelta(entry), 0));
   const monthCredit = round3(monthEntries.reduce((sum, entry) => sum + creditDelta(entry), 0));
   const monthPaid = round3(monthEntries.reduce((sum, entry) => sum + paidDelta(entry), 0));
-  const closing = round3(Math.max(0, carriedIn + monthCredit - monthPaid));
+  let closing = round3(Math.max(0, carriedIn + monthCredit - monthPaid));
+  if (anchorBalance != null && Number.isFinite(Number(anchorBalance))) {
+    closing = round3(Math.max(0, Number(anchorBalance)));
+    carriedIn = round3(Math.max(0, closing - monthCredit + monthPaid));
+  }
   return { entries: monthEntries.slice().reverse(), carriedIn, monthCredit, monthPaid, closing, monthLabel: new Date(year, month - 1, 1).toLocaleDateString('en-PK', { month: 'long', year: 'numeric' }) };
 }
 
@@ -4086,7 +4084,6 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
   const cachedLedger = khataLedgerCache[customer.id];
   const [entries, setEntries] = useState(cachedLedger ? cachedLedger.entries : null);
   const [history, setHistory] = useState(cachedLedger ? cachedLedger.history : []);
-  const [balanceBefore, setBalanceBefore] = useState(cachedLedger ? cachedLedger.balanceBefore : {});
   const [balanceAfter, setBalanceAfter] = useState(cachedLedger ? cachedLedger.balanceAfter : {});
   const [clearedAt, setClearedAt] = useState(cachedLedger ? cachedLedger.clearedAt : null);
   const [monthFilter, setMonthFilter] = useState('all');
@@ -4115,13 +4112,11 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
       // popup keeps the full history on hand so an old month can still be opened, then hides anything
       // at or before the last clearing in the default view.
       const nextEntries = payload.history || payload.entries;
-      const nextBalanceBefore = payload.historyBalanceBefore || payload.balanceBefore || {};
       const nextBalanceAfter = payload.historyBalanceAfter || payload.balanceAfter || {};
       const nextClearedAt = payload.clearedAt || (payload.customer && payload.customer.khataClearedAt) || null;
       const nextBalance = payload.customer.balance;
       setEntries(payload.entries || []);
       setHistory(payload.history || []);
-      setBalanceBefore(nextBalanceBefore);
       setBalanceAfter(nextBalanceAfter);
       setClearedAt(payload.clearedAt || (payload.customer && payload.customer.khataClearedAt) || null);
       setBalance(payload.customer.balance);
@@ -4144,7 +4139,7 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
         return sum;
       }, 0);
       setSummary({ creditPurchases: round3(computedCredit), totalPaid: round3(computedPaid) });
-      khataLedgerCache[customer.id] = { entries: nextEntries, history: payload.history, balanceBefore: nextBalanceBefore, balanceAfter: nextBalanceAfter, clearedAt: nextClearedAt, balance: nextBalance };
+      khataLedgerCache[customer.id] = { entries: nextEntries, history: payload.history, balanceAfter: nextBalanceAfter, clearedAt: nextClearedAt, balance: nextBalance };
     } catch (err) {
       setMessage(friendlyError(err));
     }
@@ -4168,7 +4163,9 @@ function KhataModal({ customer, client, settings, user, onClose, refresh }) {
       // Need full history to compute carried-in balance from before the month.
       await loadFullHistory();
       const ledger = khataLedgerCache[customer.id] || {};
-      const totals = monthStatementTotals(ledger.history || [], monthKey, ledger.balanceBefore || balanceBefore, ledger.balanceAfter || balanceAfter);
+      const currentMonthKey = toDateInputValue(new Date()).slice(0, 7);
+      const anchor = monthKey === currentMonthKey ? balance : null;
+      const totals = monthStatementTotals(ledger.history || [], monthKey, ledger.clearedAt || clearedAt, anchor);
       const monthEntries = totals.entries;
       if (monthEntries.length === 0) {
         setMessage(LANG === 'ur' ? `اس ماہ میں کوئی ریکارڈ نہیں۔` : `No entries for this month.`);
